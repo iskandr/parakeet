@@ -120,7 +120,6 @@ def record_type(obj):
   if (
     not isinstance(obj, type)
     and is_dataclass(obj)
-    and cls.__dataclass_params__.frozen
     and (
       not cls.__module__.startswith("parakeet.")
       or (cls.__module__ == "parakeet.ragged" and cls.__name__ == "RaggedArray")

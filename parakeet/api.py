@@ -514,7 +514,7 @@ def _passed_leaves(key, leaves: list, pos: list[int], out: list) -> None:
     pos[0] += 3
   elif tag == "rec":
     _passed_leaves(key[2], leaves, pos, out)
-  elif tag in ("t", "sl"):
+  elif tag in ("t", "sl", "bm", "partial"):
     for k in key[1:]:
       _passed_leaves(k, leaves, pos, out)
   elif tag == "fn" and isinstance(key[3], tuple):
@@ -605,11 +605,6 @@ class jit:  # noqa: N801 - decorator, lower-case by convention
     except TypeError as e:
       raise TypeError(f"{self.fn.__name__}() {e}") from None
     bound.apply_defaults()
-    for p in self._signature.parameters.values():
-      if p.kind is p.VAR_KEYWORD:
-        if bound.arguments.get(p.name):
-          raise TypeError(f"{self.fn.__name__}() got unsupported **{p.name} arguments")
-        bound.arguments.pop(p.name, None)
     return tuple(bound.arguments), list(bound.arguments.values())
 
   def _options(self) -> Options:

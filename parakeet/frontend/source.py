@@ -187,6 +187,15 @@ class _AssignedNames(ast.NodeVisitor):
     if isinstance(node.ctx, (ast.Store, ast.Del)):
       self.names.add(node.id)
 
+  def visit_Attribute(self, node: ast.Attribute) -> None:
+    if isinstance(node.ctx, (ast.Store, ast.Del)):
+      cur = node.value
+      while isinstance(cur, ast.Attribute):
+        cur = cur.value
+      if isinstance(cur, ast.Name):
+        self.names.add(cur.id)
+    self.generic_visit(node)
+
   def visit_MatchAs(self, node: ast.MatchAs) -> None:
     if node.name is not None:
       self.names.add(node.name)

@@ -12,7 +12,7 @@ code deliberately differs from running the same function in CPython.
 | NumPy scalars (`np.float32(1)`, ...) | scalars of exactly that dtype |
 | NumPy arrays | bool, int8–int64, uint8–uint64, float32, float64; any number of dimensions, any strides |
 | tuples (also nested) | compile-time structures of the above |
-| NamedTuples and plain frozen dataclasses | fields can hold scalar and array leaves and are accessible by name |
+| NamedTuples and `@dataclass` objects (frozen or non-frozen) | fields hold scalar, array, or nested record leaves; supports pure methods, `@property`, `__call__`, and local functional field rebinding (`obj.x = v`) |
 | dictionaries with fixed string keys | key order is part of the structure, with lookup by literal key |
 | lists, list comprehensions | **arrays** (there are no Python lists in compiled code) |
 | `None`, strings, dtypes, functions, modules | compile-time constants |
@@ -51,8 +51,9 @@ reduction. Inner iterators with observable setup and dependent domains such as
 
 * Any Python function called from compiled code is **inlined** — helpers do not
   need `@jit`. Recursion is therefore not possible and is reported as an error.
-* Positional, keyword, default, keyword-only and `*args` arguments work;
-  `**kwargs` does not.
+* Positional, keyword, default, keyword-only, `*args`, and `**kwargs` arguments
+  (as well as `**d` unpacking from compile-time dicts, `functools.partial`, and
+  `operator.*` callables) all work cleanly.
 * Functions are first-class at compile time: pass them as arguments, store them
   in variables, close over local variables.
 * **Globals and closure variables are read on every call**, like in Python. If a
@@ -128,9 +129,13 @@ Parallel side effects
 
 ## Fixed records at the call boundary
 
-Named tuples preserve their field names and result type. Plain frozen dataclasses
-and dictionaries with fixed string keys can contain arrays or nested records.
-Fields and keys are part of the specialization, while array data and scalar
-fields remain ordinary runtime arguments. A dictionary lookup in compiled code
-requires a known string key. Returning these containers reconstructs their
-structure and keeps the usual array view semantics.
+Named tuples preserve their field names and result type. `@dataclass` objects
+(frozen or non-frozen) and dictionaries with fixed string keys can contain
+arrays, scalars, discrete metadata, or nested records. Pure methods,
+`@property`, `@staticmethod`, `@classmethod`, and `__call__` on dataclasses and
+named tuples are inlined directly at elaboration time with zero `PyObject`
+overhead, and local field assignments (`obj.x = v`, `obj.x += v`) on non-frozen
+dataclasses functionally rebind the compile-time record (value semantics, zero
+heap mutation). Fields and keys are part of the specialization, while array data
+and scalar fields remain ordinary runtime arguments. Returning these containers
+reconstructs their structure and keeps the usual array view semantics.

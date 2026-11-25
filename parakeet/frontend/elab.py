@@ -21,7 +21,10 @@ import ast
 import builtins
 import contextlib
 import enum
+import functools
+import inspect
 import mmap
+import operator
 import types as pytypes
 from dataclasses import MISSING, dataclass, field, fields, is_dataclass
 from typing import Any
@@ -727,6 +730,15 @@ class Elaborator(ArrayMixin):
         else:
           cell_values[cname] = self.value_from_key(ckey, source, pos, cname)
       return PyFunc(fn, cell_values)
+    if tag == "bm":
+      fn_val = self.value_from_key(key[1], source, pos, f"{name}_fn")
+      self_val = self.value_from_key(key[2], source, pos, f"{name}_self")
+      return Partial(fn_val, (self_val,), {})
+    if tag == "partial":
+      fn_val = self.value_from_key(key[1], source, pos, f"{name}_fn")
+      args_val = self.value_from_key(key[2], source, pos, f"{name}_args")
+      kw_val = self.value_from_key(key[3], source, pos, f"{name}_kw")
+      return Partial(fn_val, args_val, kw_val)
     if tag == "o":
       return key[1].obj
     raise InternalError(f"unknown key {key!r}")
@@ -797,6 +809,16 @@ class Elaborator(ArrayMixin):
       raise self.error(UnsupportedError, str(e)) from None
     if tv is not None:
       return self.type_val(tv)
+    if isinstance(obj, functools.partial):
+      return Partial(
+        self.lift(obj.func),
+        tuple(self.lift(a) for a in obj.args),
+        {k: self.lift(v) for k, v in obj.keywords.items()},
+      )
+    if isinstance(obj, pytypes.MethodType) and (
+      record_type(obj.__self__) is not None or isinstance(obj.__self__, type)
+    ):
+      return Partial(self.lift(obj.__func__), (self.lift(obj.__self__),), {})
     if hasattr(obj, "__parakeet_fn__"):
       obj = obj.__parakeet_fn__
     if isinstance(obj, pytypes.FunctionType) and obj in STAGED:
@@ -1053,15 +1075,18 @@ class Elaborator(ArrayMixin):
     if a.vararg is not None:
       env[a.vararg.arg] = tuple(args[len(positional) :])
     kwonly = [p.arg for p in a.kwonlyargs]
+    extra_kw: dict[str, Any] = {}
     for k, v in kwargs.items():
       if k in env and k in positional:
         raise self.error(TypeInferenceError, f"{name}() got multiple values for argument '{k}'", node)
       if (k in positional and positional.index(k) >= n_posonly) or k in kwonly:
         env[k] = v
+      elif a.kwarg is not None:
+        extra_kw[k] = v
       else:
         raise self.error(TypeInferenceError, f"{name}() got an unexpected keyword argument '{k}'", node)
     if a.kwarg is not None:
-      raise self.error(UnsupportedError, f"{name}() takes **{a.kwarg.arg}, which is not supported", node)
+      env[a.kwarg.arg] = extra_kw
     # defaults
     if isinstance(fnval, PyFunc):
       fn = fnval.fn
@@ -1090,7 +1115,7 @@ class Elaborator(ArrayMixin):
         node,
       )
     # parameters are variables: bind them like assignments
-    order = positional + ([a.vararg.arg] if a.vararg else []) + kwonly
+    order = positional + ([a.vararg.arg] if a.vararg else []) + kwonly + ([a.kwarg.arg] if a.kwarg else [])
     return {p: self.bindable(env[p], p) for p in order}
 
   def _default(self, fn, index, kwname):
@@ -1146,10 +1171,34 @@ class Elaborator(ArrayMixin):
       isinstance(fn, type)
       and is_dataclass(fn)
       and getattr(fn, "__dataclass_params__", None) is not None
-      and fn.__dataclass_params__.frozen
       and not fn.__module__.startswith("parakeet.")
     ):
       return self._construct_dataclass(fn, args, kwargs, node)
+    if isinstance(fn, operator.itemgetter):
+      if len(args) != 1 or kwargs:
+        raise self.error(TypeInferenceError, "itemgetter expected 1 positional argument", node)
+      items = fn.__reduce__()[1]
+      if len(items) == 1:
+        return self.getitem(args[0], self.lift(items[0]), node)
+      return tuple(self.getitem(args[0], self.lift(it), node) for it in items)
+    if isinstance(fn, operator.attrgetter):
+      if len(args) != 1 or kwargs:
+        raise self.error(TypeInferenceError, "attrgetter expected 1 positional argument", node)
+      attrs = fn.__reduce__()[1]
+
+      def _get_path(obj, path: str):
+        cur = obj
+        for part in path.split("."):
+          cur = self.getattr(cur, part, node)
+        return cur
+
+      if len(attrs) == 1:
+        return _get_path(args[0], attrs[0])
+      return tuple(_get_path(args[0], a) for a in attrs)
+    if (rec := record_type(fn)) is not None and rec.cls is not dict:
+      raw_call = inspect.getattr_static(rec.cls, "__call__", None)
+      if isinstance(raw_call, pytypes.FunctionType):
+        return self.call_user(self.lift(raw_call), [fn, *args], kwargs, node)
     if isinstance(fn, type) and issubclass(fn, enum.IntEnum):
       if len(args) != 1 or kwargs:
         raise self.error(TypeInferenceError, f"{fn.__name__}() takes 1 positional argument", node)
@@ -1184,7 +1233,7 @@ class Elaborator(ArrayMixin):
     if hasattr(cls, "__post_init__"):
       raise self.error(
         UnsupportedError,
-        f"frozen dataclass {cls.__name__} with __post_init__ cannot be constructed inside compiled code",
+        f"dataclass {cls.__name__} with __post_init__ cannot be constructed inside compiled code",
         node,
       )
     dc_fields = fields(cls)
@@ -1305,9 +1354,49 @@ class Elaborator(ArrayMixin):
       else:
         raise self.error(TypeInferenceError, f"{describe(obj)} does not support item assignment", target)
     elif isinstance(target, ast.Attribute):
-      raise self.error(UnsupportedError, "assigning to attributes is not supported", target)
+      self._assign_attribute(target, v)
     else:
       raise self.error(UnsupportedError, "unsupported assignment target", target)
+
+  def _assign_attribute(self, target: ast.Attribute, v) -> None:
+    """Functional local field rebinding on non-frozen dataclasses:
+    ``obj.x = v`` or ``obj.a.b = v`` rebuilds the compile-time Record chain
+    and rebinds the local root variable (value semantics, zero heap mutation)."""
+    attrs: list[str] = []
+    cur: ast.expr = target
+    while isinstance(cur, ast.Attribute):
+      attrs.append(cur.attr)
+      cur = cur.value
+    if not isinstance(cur, ast.Name):
+      raise self.error(
+        UnsupportedError, "assigning to attributes is only supported on local dataclass variables", target
+      )
+    attrs.reverse()
+    root_name = cur.id
+    root_val = self.load_name(root_name, cur)
+
+    def _rebuild(obj, path: list[str], new_leaf):
+      rec = record_type(obj)
+      if rec is None or not is_dataclass(rec.cls):
+        raise self.error(
+          TypeInferenceError,
+          f"cannot assign to attribute {path[0]!r} of {describe(obj)}; attribute assignment is supported on non-frozen dataclasses",
+          target,
+        )
+      if rec.cls.__dataclass_params__.frozen:
+        raise self.error(
+          TypeInferenceError,
+          f"cannot assign to field {path[0]!r} of frozen dataclass {rec.cls.__name__}",
+          target,
+        )
+      fname = path[0]
+      if fname not in rec.names:
+        raise self.error(TypeInferenceError, f"{rec.cls.__name__} has no field {fname!r}", target)
+      updated = new_leaf if len(path) == 1 else _rebuild(getattr(obj, fname), path[1:], new_leaf)
+      vals = [updated if n == fname else getattr(obj, n) for n in rec.names]
+      return rec.build(vals)
+
+    self.bind(root_name, _rebuild(root_val, attrs, v))
 
   def unpack(self, v, n: int, node=None) -> list:
     if isinstance(v, tuple):
@@ -1379,6 +1468,11 @@ class Elaborator(ArrayMixin):
       rhs = self.eval(node.value)
       new = self.matmul(cur, rhs) if op is None else self.binop(op, cur, rhs)
       self.setitem(obj, index, new)
+    elif isinstance(target, ast.Attribute):
+      cur = self.eval(target)
+      rhs = self.eval(node.value)
+      new = self.matmul(cur, rhs) if op is None else self.binop(op, cur, rhs)
+      self._assign_attribute(target, new)
     else:
       raise self.error(UnsupportedError, "unsupported augmented assignment target", target)
     return False
@@ -1719,7 +1813,32 @@ class Elaborator(ArrayMixin):
       return self._match_sequence(pat, subject)
     if isinstance(pat, ast.MatchClass):
       return self._match_class(pat, subject)
+    if isinstance(pat, ast.MatchMapping):
+      return self._match_mapping(pat, subject)
     raise self.error(UnsupportedError, f"pattern '{type(pat).__name__}' is not supported in match statements", pat)
+
+  def _match_mapping(self, pat: ast.MatchMapping, subject) -> tuple[Expr, list[tuple[str, Any]]]:
+    if not isinstance(subject, dict):
+      return ops.FALSE, []
+    matched_keys: set[str] = set()
+    cond: Expr = ops.TRUE
+    binds: list[tuple[str, Any]] = []
+    for k_node, sub_p in zip(pat.keys, pat.patterns):
+      kv = self.eval(k_node)
+      if not isinstance(kv, str):
+        return ops.FALSE, []
+      if kv not in subject:
+        return ops.FALSE, []
+      matched_keys.add(kv)
+      c, b = self._match_pattern(sub_p, subject[kv])
+      if isinstance(c, Const) and not c.value:
+        return ops.FALSE, []
+      cond = ops.land(cond, c)
+      binds.extend(b)
+    if pat.rest is not None:
+      rest_dict = {k: v for k, v in subject.items() if k not in matched_keys}
+      binds.append((pat.rest, rest_dict))
+    return cond, binds
 
   def _match_sequence(self, pat: ast.MatchSequence, subject) -> tuple[Expr, list[tuple[str, Any]]]:
     star_idx = next((i for i, p in enumerate(pat.patterns) if isinstance(p, ast.MatchStar)), None)
@@ -1751,22 +1870,43 @@ class Elaborator(ArrayMixin):
         binds.extend(b)
       return cond, binds
     if isinstance(subject, ArrayVal) and subject.rank >= 1:
-      if star_idx is not None:
-        raise self.error(UnsupportedError, "starred sequence patterns on arrays are not supported", pat)
       dim = subject.shape[0]
-      if not isinstance(dim, Const):
-        raise self.error(
-          StaticValueError,
-          "matching an array with a sequence pattern requires a compile-time length",
-          pat,
-        )
-      if dim.value != len(pat.patterns):
+      dim_val = dim.value if isinstance(dim, Const) else self.static_int(dim, "sequence pattern array length")
+      if star_idx is None:
+        if dim_val != len(pat.patterns):
+          return ops.FALSE, []
+        cond = ops.TRUE
+        binds = []
+        for k, sub_p in enumerate(pat.patterns):
+          elem = self.getitem(subject, Const(k, I))
+          c, b = self._match_pattern(sub_p, elem)
+          if isinstance(c, Const) and not c.value:
+            return ops.FALSE, []
+          cond = ops.land(cond, c)
+          binds.extend(b)
+        return cond, binds
+      n_before = star_idx
+      n_after = len(pat.patterns) - star_idx - 1
+      if dim_val < n_before + n_after:
         return ops.FALSE, []
+      star_pat = pat.patterns[star_idx]
+      assert isinstance(star_pat, ast.MatchStar)
       cond = ops.TRUE
       binds = []
-      for k, sub_p in enumerate(pat.patterns):
+      for k in range(n_before):
         elem = self.getitem(subject, Const(k, I))
-        c, b = self._match_pattern(sub_p, elem)
+        c, b = self._match_pattern(pat.patterns[k], elem)
+        if isinstance(c, Const) and not c.value:
+          return ops.FALSE, []
+        cond = ops.land(cond, c)
+        binds.extend(b)
+      if star_pat.name is not None:
+        mid = self._slice_leading(subject, Const(n_before, I), Const(dim_val - n_after, I))
+        binds.append((star_pat.name, mid))
+      for offset in range(n_after):
+        k = dim_val - n_after + offset
+        elem = self.getitem(subject, Const(k, I))
+        c, b = self._match_pattern(pat.patterns[star_idx + 1 + offset], elem)
         if isinstance(c, Const) and not c.value:
           return ops.FALSE, []
         cond = ops.land(cond, c)
@@ -1791,6 +1931,43 @@ class Elaborator(ArrayMixin):
       if pat.kwd_attrs or len(pat.patterns) > 1:
         raise self.error(UnsupportedError, "scalar class patterns take at most one positional sub-pattern", pat)
       if pat.patterns:
+        return self._match_pattern(pat.patterns[0], subject)
+      return ops.TRUE, []
+    if cls is np.ndarray:
+      if not isinstance(subject, ArrayVal):
+        return ops.FALSE, []
+      if pat.patterns:
+        if len(pat.patterns) > 1:
+          raise self.error(UnsupportedError, "np.ndarray class pattern takes at most one positional sub-pattern", pat)
+        return self._match_pattern(pat.patterns[0], subject)
+      cond_a: Expr = ops.TRUE
+      binds_a: list[tuple[str, Any]] = []
+      for attr, sub_p in zip(pat.kwd_attrs, pat.kwd_patterns):
+        val = self.getattr(subject, attr, pat)
+        c, b = self._match_pattern(sub_p, val)
+        if isinstance(c, Const) and not c.value:
+          return ops.FALSE, []
+        cond_a = ops.land(cond_a, c)
+        binds_a.extend(b)
+      return cond_a, binds_a
+    if cls is tuple:
+      if not isinstance(subject, tuple):
+        return ops.FALSE, []
+      if pat.kwd_attrs:
+        return ops.FALSE, []
+      if pat.patterns:
+        if len(pat.patterns) > 1:
+          raise self.error(UnsupportedError, "tuple class pattern takes at most one positional sub-pattern", pat)
+        return self._match_pattern(pat.patterns[0], subject)
+      return ops.TRUE, []
+    if cls is dict:
+      if not isinstance(subject, dict):
+        return ops.FALSE, []
+      if pat.kwd_attrs:
+        return ops.FALSE, []
+      if pat.patterns:
+        if len(pat.patterns) > 1:
+          raise self.error(UnsupportedError, "dict class pattern takes at most one positional sub-pattern", pat)
         return self._match_pattern(pat.patterns[0], subject)
       return ops.TRUE, []
     rec = record_type(subject)
@@ -3067,6 +3244,16 @@ class Elaborator(ArrayMixin):
         record.cls.__name__ == "FrozenHashTable" and name == "get"
       ):
         return BoundMethod(obj, name)
+    if record is not None and record.cls is not dict:
+      raw_attr = inspect.getattr_static(record.cls, name, _MISSING)
+      if isinstance(raw_attr, property) and raw_attr.fget is not None:
+        return self.call_user(self.lift(raw_attr.fget), [obj], {}, node)
+      if isinstance(raw_attr, staticmethod):
+        return self.lift(raw_attr.__func__)
+      if isinstance(raw_attr, classmethod):
+        return Partial(self.lift(raw_attr.__func__), (record.cls,), {})
+      if isinstance(raw_attr, pytypes.FunctionType):
+        return Partial(self.lift(raw_attr), (obj,), {})
     if isinstance(obj, dict) or record is not None:
       raise self.error(TypeInferenceError, f"unsupported record attribute {name!r}", node)
     if isinstance(obj, (tuple, PyFunc, Closure, BoundMethod, RangeVal, TypeVal)) or obj is None:
@@ -3087,6 +3274,17 @@ class Elaborator(ArrayMixin):
   def eval_BinOp(self, node: ast.BinOp):
     a = self.eval(node.left)
     b = self.eval(node.right)
+    if (
+      isinstance(node.op, ast.BitOr)
+      and isinstance(a, (type, TypeVal, pytypes.UnionType, tuple))
+      and isinstance(b, (type, TypeVal, pytypes.UnionType, tuple))
+    ):
+      if isinstance(a, (type, TypeVal, pytypes.UnionType)) or isinstance(b, (type, TypeVal, pytypes.UnionType)):
+        if isinstance(a, (type, pytypes.UnionType)) and isinstance(b, (type, pytypes.UnionType)):
+          return a | b
+        ta = a if isinstance(a, tuple) else (a,)
+        tb = b if isinstance(b, tuple) else (b,)
+        return (*ta, *tb)
     if isinstance(node.op, ast.MatMult):
       return self.matmul(a, b)
     return self.binop(_BINOPS[type(node.op)], a, b)
@@ -3354,8 +3552,19 @@ class Elaborator(ArrayMixin):
     kwargs = {}
     for kw in node.keywords:
       if kw.arg is None:
-        raise self.error(UnsupportedError, "'**' argument unpacking is not supported", node)
-      kwargs[kw.arg] = self.eval(kw.value)
+        mapping = self.eval(kw.value)
+        if not isinstance(mapping, dict):
+          raise self.error(
+            TypeInferenceError, f"'**' argument unpacking requires a compile-time dict, got {describe(mapping)}", node
+          )
+        for mk, mv in mapping.items():
+          if mk in kwargs:
+            raise self.error(TypeInferenceError, f"got multiple values for keyword argument {mk!r}", node)
+          kwargs[mk] = mv
+      else:
+        if kw.arg in kwargs:
+          raise self.error(TypeInferenceError, f"got multiple values for keyword argument {kw.arg!r}", node)
+        kwargs[kw.arg] = self.eval(kw.value)
     return self.call(fn, args, kwargs, node)
 
   def _direct_1d_range_slice(self, expr_n: ast.AST, target: ast.AST, source, n_len: Expr) -> ArrayVal | None:

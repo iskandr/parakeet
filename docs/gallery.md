@@ -273,6 +273,18 @@ so all `G` query heads reuse one shared-memory load of `k` and `v`.
 
 ## 6. End-to-end training and inspecting rewrites
 
+### Dataclasses, methods, and polymorphic dispatch
+
+Parakeet lowers `@dataclass` records (frozen or non-frozen), pure methods,
+`@property`, `__call__`, structural `match`/`case`, compile-time `isinstance`,
+`functools.partial`, and `*args`/`**kwargs` away completely during elaboration
+— letting you write idiomatic scientific Python types that still compile to
+fused, tiled, differentiable native code (`examples/protein_and_layers.py`):
+
+```python
+--8<-- "examples/protein_and_layers.py:protein_and_layers"
+```
+
 ### nanoGPT end-to-end training
 
 Train a two-layer character-level transformer from scratch in pure NumPy +
