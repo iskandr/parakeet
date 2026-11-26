@@ -1416,6 +1416,28 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#parakeet.jvp_for" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        jvp_for
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#parakeet.vjp_for" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        vjp_for
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#parakeet.custom_vjp" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2379,6 +2401,28 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#parakeet.jvp_for" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        jvp_for
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#parakeet.vjp_for" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        vjp_for
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#parakeet.custom_vjp" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3252,19 +3296,18 @@ over index spaces, before the passes of :mod:<code>parakeet.transforms.pipeline<
 
 
 <h3 id="parakeet.grad" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">parakeet</span><span class="o">.</span><span class="n">grad</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">argnum</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">parakeet</span><span class="o">.</span><span class="n">grad</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">argnum</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">wrt</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
 <a href="#parakeet.grad" class="headerlink" title="Permanent link">&para;</a></h3>
 
 
     <div class="doc doc-contents first">
 
-        <p>The gradient of the scalar-valued function <code>f</code> with respect to its
-argument number <code>argnum</code> (or, for a tuple, to each of those arguments).</p>
-<p><code>grad(f)(*args)</code> takes the arguments of <code>f</code> and returns an array shaped
-like the differentiated argument (a tuple of arrays for a tuple of
-argument numbers; nested tuples of parameters give nested tuples of
-gradients).  Works inside compiled code and from plain Python.</p>
+        <p>The gradient of the scalar-valued function <code>f</code> with respect to <code>argnum</code> / <code>wrt</code>.</p>
+<p><code>argnum</code> (or its keyword alias <code>wrt</code>) may be a positional index (<code>0</code>),
+a parameter name (<code>"w"</code>), or a tuple of indices/names (<code>(0, 1)</code>,
+<code>("w", "b")</code>). Works inside compiled code and from plain Python, including
+when calling the gradient function with keyword arguments.</p>
 
 
     </div>
@@ -3275,7 +3318,7 @@ gradients).  Works inside compiled code and from plain Python.</p>
 
 
 <h3 id="parakeet.value_and_grad" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">parakeet</span><span class="o">.</span><span class="n">value_and_grad</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">argnum</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">parakeet</span><span class="o">.</span><span class="n">value_and_grad</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">argnum</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">wrt</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
 <a href="#parakeet.value_and_grad" class="headerlink" title="Permanent link">&para;</a></h3>
 
@@ -3470,6 +3513,42 @@ for arbitrary scalar, array, tuple, record, or <code>RaggedArray</code> outputs.
     <div class="doc doc-contents first">
 
         <p>Drop forward intermediates of <code>fn</code> and recompute them during <code>grad</code>.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="parakeet.jvp_for" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">parakeet</span><span class="o">.</span><span class="n">jvp_for</span><span class="p">(</span><span class="n">target</span><span class="p">)</span></code>
+
+<a href="#parakeet.jvp_for" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents first">
+
+        <p>Decorator registering a forward-mode JVP rule <code>(*primals, *tangents) -&gt; (y, dy)</code> for <code>target</code>.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="parakeet.vjp_for" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">parakeet</span><span class="o">.</span><span class="n">vjp_for</span><span class="p">(</span><span class="n">target</span><span class="p">)</span></code>
+
+<a href="#parakeet.vjp_for" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents first">
+
+        <p>Decorator registering a reverse-mode VJP rule <code>(*args) -&gt; (y, pullback)</code> for <code>target</code>.</p>
 
 
     </div>

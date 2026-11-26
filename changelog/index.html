@@ -1182,6 +1182,45 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#1100-november-26-2026" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.10.0 (November 26, 2026)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1.10.0 (November 26, 2026)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#automatic-differentiation-ergonomics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Automatic differentiation ergonomics
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#differentiable-compiled-linear-algebra-compiler-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Differentiable compiled linear algebra &amp; compiler documentation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#190-november-26-2026" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1625,6 +1664,45 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#1100-november-26-2026" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.10.0 (November 26, 2026)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1.10.0 (November 26, 2026)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#automatic-differentiation-ergonomics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Automatic differentiation ergonomics
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#differentiable-compiled-linear-algebra-compiler-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Differentiable compiled linear algebra &amp; compiler documentation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#190-november-26-2026" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2046,6 +2124,40 @@
 
 
 <h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Permanent link">&para;</a></h1>
+<h2 id="1100-november-26-2026">1.10.0 (November 26, 2026)<a class="headerlink" href="#1100-november-26-2026" title="Permanent link">&para;</a></h2>
+<p>Pythonic custom derivative syntax (<code>@par.jit(jvp=..., vjp=...)</code>,
+<code>@par.jvp_for</code>, <code>@par.vjp_for</code>), parameter-name differentiation (<code>wrt="w"</code>),
+differentiable compiled <code>np.linalg.*</code> decompositions and solvers (including
+differentiable Kabsch 3D protein RMSD), and expanded docstrings across
+<code>parakeet/transforms/</code>.</p>
+<h3 id="automatic-differentiation-ergonomics">Automatic differentiation ergonomics<a class="headerlink" href="#automatic-differentiation-ergonomics" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Inline &amp; external custom rules (<code>parakeet/api.py</code>, <code>parakeet/lib/adverbs.py</code>):</strong>
+  <code>@par.jit(jvp=..., vjp=...)</code> and <code>@par.jvp_for(fn)</code> / <code>@par.vjp_for(fn)</code> let
+  you attach custom derivatives without boilerplate wrapper decorators or tuple
+  unpacking: <code>jvp</code> receives flat <code>(*primals, *tangents)</code> arguments, and <code>vjp</code>
+  supports closure-style <code>vjp(*primals) -&gt; (output, pullback)</code> (as well as
+  explicit <code>(fwd, bwd)</code> pairs). Legacy <code>@par.custom_jvp</code> and <code>@par.custom_vjp</code>
+  remain supported.</li>
+<li><strong>Parameter-name differentiation &amp; keyword arguments (<code>parakeet/transforms/autodiff.py</code>):</strong>
+  <code>par.grad(loss, "w")</code>, <code>par.grad(loss, wrt=("w", "b"))</code>, and
+  <code>par.value_and_grad(loss, wrt=...)</code> accept parameter names, positional
+  indices, or tuples mixing both, and support calling the differentiated
+  function with keyword arguments from Python or inside <code>@par.jit</code>.</li>
+</ul>
+<h3 id="differentiable-compiled-linear-algebra-compiler-documentation">Differentiable compiled linear algebra &amp; compiler documentation<a class="headerlink" href="#differentiable-compiled-linear-algebra-compiler-documentation" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Analytical VJP/JVP rules for compiled <code>np.linalg.*</code> (<code>parakeet/lib/linalg_lib.py</code>):</strong>
+  Added analytical reverse-mode and forward-mode derivatives for <code>det</code>, <code>inv</code>,
+  <code>solve</code> (1D and 2D RHS), and <code>cholesky</code>, plus analytical reverse-mode rules
+  for <code>eigh</code>, <code>eigvalsh</code>, <code>svd</code> (square, tall, wide, <code>compute_uv=True/False</code>),
+  and <code>pinv</code>. Unlocks end-to-end differentiation through Gaussian process
+  log-marginal likelihoods and branchless 3D Kabsch protein superposition
+  (<code>examples/bio_algorithms.py::kabsch_rmsd</code>).</li>
+<li><strong>Compiler transform docstrings:</strong> Added concise docstrings and invariant
+  comments across <code>derivatives.py</code>, <code>verify.py</code>, <code>ad_loops.py</code>,
+  <code>algebraic_vjp.py</code>, <code>pairwise_fold.py</code>, and <code>tile_scan.py</code>.</li>
+</ul>
 <h2 id="190-november-26-2026">1.9.0 (November 26, 2026)<a class="headerlink" href="#190-november-26-2026" title="Permanent link">&para;</a></h2>
 <p>Pythonic string sequences, constant char-dict lookup tables, multi-output and
 ragged <code>par.map</code>, compiled block-parallel BGZF DEFLATE inflate, overlapped
