@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <rect x="2" y="2" width="60" height="60" rx="14" fill="#245744"/>
+  <!-- Simple stylized parakeet silhouette in cream + leaf green -->
+  <path d="M18 46 C18 30, 26 16, 40 16 C47 16, 51 20, 51 26 C51 31, 47 35, 42 36 L34 38 C31 39, 29 42, 28 48 L18 48 Z" fill="#edf4ef"/>
+  <path d="M23 46 C24 36, 30 29, 39 28 C35 33, 32 39, 31 46 Z" fill="#6cc08b"/>
+  <!-- Beak -->
+  <path d="M50 22 L57 25 L50 29 Z" fill="#e9b949"/>
+  <!-- Eye -->
+  <circle cx="43" cy="23" r="2.6" fill="#203a30"/>
+</svg>

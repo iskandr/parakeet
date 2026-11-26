@@ -34,11 +34,11 @@ import parakeet as par
 
 ### Exact nearest neighbor
 
-Exact nearest-neighbor search finds, for each of `Q` query vectors in
-$\mathbb{R}^D$, the index of the closest vector among `R` reference vectors
-under Euclidean distance. Writing this with broadcasting NumPy is two lines,
-but executing it eagerly allocates a full `Q × R` distance matrix; `64 MiB`
-at `Q = 1,024, R = 16,384`; that thrashes cache and GPU memory.
+Exact nearest-neighbor search finds, for each of `Q` query vectors in `R^D`,
+the index of the closest vector among `R` reference vectors under Euclidean
+distance. Writing this with broadcasting NumPy is two lines, but executing it
+eagerly allocates a full `Q × R` distance matrix (`64 MiB` at `Q = 1,024,
+R = 16,384`) that thrashes cache and GPU memory.
 
 Parakeet fuses the distance calculation directly into an ordered tiled
 reduction across `R`, keeping only a small score tile in L1 cache or GPU shared
@@ -83,7 +83,7 @@ and CUDA without allocating the `Q × R` distance matrix.
 
 Swap the fold state from `(min_distance, index)` to `(weight_sum, weighted_sum)`
 and the same squared distances predict a smoothed scalar observation at each
-query with weight $w_{ij} = 1 / (1 + \|q_i - r_j\|^2)$. Parakeet computes each
+query with weight `w[i, j] = 1 / (1 + ||q[i] - r[j]||²)`. Parakeet computes each
 distance once, sums both fields inside each tile, and divides the totals after
 the final merge.
 
@@ -105,10 +105,10 @@ the final merge.
 
 Nadaraya-Watson kernel regression predicts each query's target vector by
 weighting reference observations with a Gaussian kernel
-$\exp(-\gamma \|q_i - x_j\|^2)$. Because the running maximum, weight sum, and
+`exp(-gamma * ||q[i] - x[j]||²)`. Because the running maximum, weight sum, and
 weighted output form an associative
 [rescaled monoid](algebra.md#law-1-rescaled-semiring-monoids), Parakeet streams
-references in tiles instead of allocating an `N × M` weight matrix; the exact
+references in tiles instead of allocating an `N × M` weight matrix, using the
 same online monoidal pass that powers tiled attention below.
 
 ```python
@@ -126,7 +126,7 @@ feature bins, scan cumulative left/right sums, and pick the split bin with the
 highest gain. You can write the bin accumulations as a declarative NumPy
 comprehension, with `np.add.at`, as a plain Python `for` loop, or with explicit
 `par.scatter_add` (including keyed generator expressions); all four lower to
-Parakeet's $O(N)$ `IndexScatter` operator. Because both accumulations share the
+Parakeet's `O(N)` `IndexScatter` operator. Because both accumulations share the
 same `bin_ids` array, Parakeet fuses them into a single
 [thread-privatized traversal](algebra.md#law-6-privatized-scatter-multi-state-carries)
 over the observations.
@@ -135,8 +135,8 @@ over the observations.
 
     A pull-style comprehension `[np.sum(grads[bin_ids == b]) for b in range(nbins)]`
     (or `[sum(grads[i] for i in range(len(bin_ids)) if bin_ids[i] == b) for b in range(nbins)]`)
-    would cost $O(\text{nbins} \cdot N)$ naively. Parakeet inverts it
-    automatically to an $O(N)$ `IndexScatter` and fuses both histograms into
+    would cost `O(nbins * N)` naively. Parakeet inverts it
+    automatically to an `O(N)` `IndexScatter` and fuses both histograms into
     one pass.
 
     ```python
@@ -173,7 +173,7 @@ over the observations.
 ### Min-plus matrix product
 
 In shortest-path and tropical algebra, matrix multiplication replaces `(*, +)`
-with `(+, min)`: $C_{ij} = \min_r (A_{ir} + B_{rj})$. Writing the index space
+with `(+, min)`: `C[i, j] = min_r (A[i, r] + B[r, j])`. Writing the index space
 explicitly with `par.imap` and `par.ireduce(..., combine=np.minimum)` avoids an
 `m × n × k` broadcast tensor and triggers the same cache and register tiling as
 standard matrix multiplication.

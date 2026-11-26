@@ -150,8 +150,9 @@ Current boundaries:
 
 * **Elaboration-time tape & symbolic JVP:** reverse-mode differentiation
   records operators on a tape during elaboration (with an algebraic tape
-  optimizer for zero-$O(T^2)$ attention VJP/HVP, linear cross-entropy, softmax,
-  and norms) rather than running as a separate IR-to-IR pass over lowered loops.
+  optimizer that recomputes attention score tiles, linear cross-entropy,
+  softmax, and norms instead of saving quadratic intermediates) rather than
+  running as a separate IR-to-IR pass over lowered loops.
 * **Loops over differentiated values:** small static `for` loops (`<= 32`)
   unroll for cross-iteration fusion; runtime-bound and long `for` loops use
   IR-level `O(sqrt(T))` checkpointed reverse loops; data-dependent `while`
@@ -169,7 +170,7 @@ Current boundaries:
   overwriting an array still needed by an earlier backward rule.
 * **Higher-order derivatives:** forward-over-reverse `par.hvp` and
   `par.hessian` compose through element-wise ops, reductions, `@`, views,
-  checkpointed loops, LayerNorm, and zero-$O(T^2)$ attention; reverse-over-reverse
+  checkpointed loops, LayerNorm, and rematerialized attention; reverse-over-reverse
   `grad(grad(...))` also supports `np.stack`, `np.cumsum`, gather indexing,
   scatter-add, and scalar 1-to-1 `par.map`, while refusing non-scalar user
   `map` bodies loudly.

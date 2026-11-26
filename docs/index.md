@@ -57,11 +57,22 @@ Requires Python 3.11+, NumPy 2, and a system C compiler. For GPU backends,
 install `parakeet[metal]` on Apple Silicon or `parakeet[cuda12]` with an NVIDIA
 GPU.
 
-## One algebra underneath
+## Algebraic primitives
 
-Most numerical Python (NumPy expressions, comprehensions, or explicit parallel
-operators) expresses the same handful of array computations: maps, reductions,
-scans, filters, and scatters.
+Rather than building hundreds of one-off C or GPU kernels for individual NumPy
+functions, Parakeet lowers array expressions, comprehensions, matrix products,
+and explicit parallel operators onto a small set of composable array
+primitives:
+
+| Primitive | What it expresses | Examples in Python / NumPy |
+|---|---|---|
+| **Map (`IndexMap`)** | Independent per-element computation over an N-D index space | Element-wise NumPy, broadcasting, comprehensions, `par.map`, `par.allpairs` |
+| **Reduce / Fold (`IndexReduce`)** | Associative or ordered reductions, including multi-field carries | `np.sum`, `np.argmin`, `logsumexp`, Welford variance, `par.fold` |
+| **Scan (`IndexScan`)** | Prefix accumulations and associative recurrences | `np.cumsum`, `par.scan`, affine/bilinear `for` loops (IIR filters, SSMs) |
+| **Filter & Expand (`IndexFilter`, `IndexExpand`)** | Stream compaction (1-to-0/1) and ragged expansion (1-to-K) | Boolean masking `x[x > 0]`, `par.flatmap`, `par.filter_pairs` |
+| **Scatter (`IndexScatter`)** | Associative accumulation into shared bins | `np.bincount`, `np.add.at`, indexed `+=` loops, `par.scatter_add` |
+| **Wavefront (`IndexWavefront`)** | Anti-diagonal and banded 2D dynamic programming | `par.wavefront`, `par.soft_align` |
+| **Tile (`IndexTile`)** | Cache and GPU shared-memory staging emitted by the middle end | Matrix products, `einsum`, tiled pairwise folds, online softmax / attention |
 
 ```python
 @par.jit
@@ -74,23 +85,24 @@ def scaled_tanh_comp(x, alpha=0.5, beta=0.3):
   return np.array([np.tanh(xi * alpha) + beta for xi in x])
 ```
 
-Both lower to the same single fused parallel loop with no temporary arrays.
-Keeping that operator algebra intact through the middle end lets a small set of
-general passes do the heavy lifting:
+Both versions lower to the same single fused parallel loop with no temporary
+arrays. Because programs stay in this operator representation until code
+generation, a small set of general passes does the optimization work across
+domains:
 
-- **Fusion.** Chained array expressions, filtered reductions (`np.sum(x[x > 0])`),
-  and sibling histograms sharing the same bin IDs merge into one pass.
+- **Fusion.** Producer-consumer chains, filtered reductions (`np.sum(x[x > 0])`),
+  and sibling histograms sharing the same bin IDs merge into one traversal.
   [See the tree-split example](gallery.md#histograms-and-tree-splits).
 - **Tiling and single-pass reductions.** Associative reductions and bilinear
-  products tile into cache or GPU shared memory, so Gaussian kernel regression,
-  nearest-neighbor search, and attention stream blocks instead of allocating
-  giant pairwise matrices. [Read the algebraic laws](algebra.md).
-- **Gradients.** `parakeet.grad` and `parakeet.value_and_grad` differentiate
-  the array operators directly, compiling a training step into one native
-  function. [Learn about gradients](autodiff.md).
+  products tile into CPU cache or GPU shared memory, so Gaussian kernel
+  regression, nearest-neighbor search, and attention stream blocks instead of
+  allocating giant pairwise matrices. [Read the algebraic laws](algebra.md).
+- **Differentiation.** `par.grad`, `par.value_and_grad`, and `par.jvp`
+  differentiate the primitives directly, compiling a full training step into
+  one native function. [Learn about gradients](autodiff.md).
 - **Inspection.** Every stage is visible: inspect the operator IR, see which
-  rewrites fired with `parakeet.show_rewrite`, or read the generated C,
-  Metal, or CUDA source. [Inspect a rewrite](gallery.md#inspecting-algebraic-rewrites).
+  rewrites fired with `par.show_rewrite`, or read the generated C, Metal, or
+  CUDA source. [Inspect a rewrite](gallery.md#inspecting-algebraic-rewrites).
 
 ## Where to go next
 
