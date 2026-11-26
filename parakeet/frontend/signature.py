@@ -239,6 +239,20 @@ def classify(value: Any, leaves: list, fixups: list | None = None) -> Key:
   if t is str:
     return ("str", value)
   if t is list:
+    if value and all(isinstance(s, (str, bytes)) for s in value):
+      try:
+        raw = [s.encode("ascii") if isinstance(s, str) else s for s in value]
+      except UnicodeEncodeError as e:
+        raise Unsupported(f"string sequence arguments must be ASCII: {e}") from None
+      lens = {len(b) for b in raw}
+      if len(lens) == 1:
+        seq_len = next(iter(lens))
+        arr = np.frombuffer(b"".join(raw), dtype=np.uint8).reshape(len(raw), seq_len).copy()
+        return classify(arr, leaves, fixups)
+      from ..ragged import RaggedArray
+
+      rag = RaggedArray.from_sequences([np.frombuffer(b, dtype=np.uint8).copy() for b in raw])
+      return classify(rag, leaves, fixups)
     try:
       arr = np.asarray(value)
     except ValueError as e:

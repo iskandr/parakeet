@@ -251,33 +251,21 @@ def stream_map_long_reads(
   where ``tx_compat_matrix[r, t]`` holds the compatibility weight (``> 0`` iff isoform ``t``
   is within the delta window for read ``r``).
   """
-  n_reads = len(reads_ragged)
-  best_tx = np.full(n_reads, np.int64(-1), dtype=np.int64)
-  best_score = np.zeros(n_reads, dtype=np.int64)
-  compat_counts = np.zeros(n_reads, dtype=np.int64)
-  ext_counts = np.zeros(n_reads, dtype=np.int64)
-  probe_counts = np.zeros(n_reads, dtype=np.int64)
-  tx_scores = np.zeros((n_reads, n_tx), dtype=np.int64)
-  tx_last_diag = np.full((n_reads, n_tx), np.int64(-1_000_000_000), dtype=np.int64)
-  tx_last_rpos = np.full((n_reads, n_tx), np.int64(-1_000_000_000), dtype=np.int64)
-
   mmask = (np.uint64(1) << np.uint64(2 * m)) - np.uint64(1)
 
-  def _map_one(r_idx):
-    read = reads_ragged[r_idx]
+  def map_read(read):
     rlen = len(read)
-    if rlen < k:
-      return
+    scores = np.zeros(n_tx, dtype=np.int64)
+    last_diag = np.full(n_tx, -1_000_000_000, dtype=np.int64)
+    last_rpos = np.full(n_tx, -1_000_000_000, dtype=np.int64)
+    n_ext = 0
+    n_probe = 0
+    rpos = 0
 
-    n_ext = np.int64(0)
-    n_probe = np.int64(0)
-
-    # Walk the read with SSHash streaming contiguity!
-    rpos = np.int64(0)
     while rpos <= rlen - k:
       # Find m-mer minimizer inside read[rpos : rpos + k]
       best_h = ~np.uint64(0)
-      best_off = np.int64(0)
+      best_off = 0
       mv = np.uint64(0)
       for j in range(k):
         mv = ((mv << np.uint64(2)) | np.uint64(read[rpos + j])) & mmask
@@ -289,17 +277,15 @@ def stream_map_long_reads(
 
       # Single FrozenHashTable probe for this anchor
       n_probe += 1
-      bid = min_table.get(np.int64(best_h), np.int64(-1))
+      bid = min_table.get(np.int64(best_h), -1)
       if bid < 0:
         rpos += 1
         continue
 
       # Verify exact k-mer match against the small minimizer bucket
-      b_lo = b_offs[bid]
-      b_hi = b_offs[bid + 1]
-      matched_uid = np.int64(-1)
-      matched_upos = np.int64(-1)
-      for bi in range(b_lo, b_hi):
+      matched_uid = -1
+      matched_upos = -1
+      for bi in range(b_offs[bid], b_offs[bid + 1]):
         uid = b_uid[bi]
         u_start = u_offs[uid]
         u_len = u_offs[uid + 1] - u_start
@@ -312,18 +298,17 @@ def stream_map_long_reads(
             ok = False
             break
         if ok:
-          matched_uid = uid
-          matched_upos = upos
+          matched_uid, matched_upos = uid, upos
           break
 
       if matched_uid < 0:
         rpos += 1
         continue
 
-      # SSHash FAST PATH: extend match along unitig with ZERO hash lookups!
+      # SSHash fast path: extend match along unitig with zero hash lookups
       u_start = u_offs[matched_uid]
       u_len = u_offs[matched_uid + 1] - u_start
-      mem_len = np.int64(k)
+      mem_len = k
       while (rpos + mem_len) < rlen and (matched_upos + mem_len) < u_len:
         if read[rpos + mem_len] == u_vals[u_start + matched_upos + mem_len]:
           mem_len += 1
@@ -331,59 +316,41 @@ def stream_map_long_reads(
         else:
           break
 
-      # Project this unitig MEM anchor to all transcripts sharing matched_uid (Spearfish core-graph sharing!)
-      p_lo = p_offs[matched_uid]
-      p_hi = p_offs[matched_uid + 1]
-      for pi in range(p_lo, p_hi):
+      # Project unitig MEM anchor to all transcripts sharing matched_uid (Spearfish core-graph sharing)
+      for pi in range(p_offs[matched_uid], p_offs[matched_uid + 1]):
         tid = p_tx[pi]
-        tpos = p_pos[pi] + matched_upos
-        diag = tpos - rpos
-        prev_r = tx_last_rpos[r_idx, tid]
-        if prev_r < -1000:
-          tx_scores[r_idx, tid] = mem_len
+        diag = (p_pos[pi] + matched_upos) - rpos
+        if last_rpos[tid] < -1000:
+          scores[tid] = mem_len
         else:
-          # Co-linear chaining: reward matched bases, penalize diagonal shift (indels / skipped cassette exons)
-          d_shift = abs(diag - tx_last_diag[r_idx, tid])
-          pen = d_shift if d_shift < 250 else np.int64(250)
-          add_sc = mem_len - pen
-          if add_sc > 0:
-            tx_scores[r_idx, tid] = tx_scores[r_idx, tid] + add_sc
-        tx_last_diag[r_idx, tid] = diag
-        tx_last_rpos[r_idx, tid] = rpos + mem_len
+          pen = min(abs(diag - last_diag[tid]), 250)
+          if mem_len > pen:
+            scores[tid] += mem_len - pen
+        last_diag[tid] = diag
+        last_rpos[tid] = rpos + mem_len
 
-      # Jump past the mismatch / unitig boundary (avoids k-1 wasted probes across an error base!)
+      # Jump past mismatch or unitig boundary (avoids k-1 wasted probes across an error base)
       if (rpos + mem_len) < rlen and (matched_upos + mem_len) < u_len:
-        rpos = rpos + mem_len + np.int64(1)
+        rpos += mem_len + 1
       else:
-        rpos = rpos + mem_len - np.int64(k) + np.int64(1)
-        if mem_len == k:
-          rpos += 1
+        rpos += mem_len - k + (2 if mem_len == k else 1)
 
-    # Delta-mapping: find best transcript score and zero out non-competitive isoforms
-    top_s = np.int64(0)
-    top_t = np.int64(-1)
-    for t in range(n_tx):
-      sc = tx_scores[r_idx, t]
-      if sc > top_s:
-        top_s = sc
-        top_t = np.int64(t)
-
-    best_tx[r_idx] = top_t
-    best_score[r_idx] = top_s
-    ext_counts[r_idx] = n_ext
-    probe_counts[r_idx] = n_probe
-
+    # Delta-mapping: keep isoforms within delta_frac of the top score
+    top_t = np.argmax(scores)
+    top_s = scores[top_t]
+    cc = 0
     if top_s > 0:
-      min_keep = top_s - np.int64(float(top_s) * delta_frac)
-      cc = np.int64(0)
+      min_keep = top_s - int(float(top_s) * delta_frac)
       for t in range(n_tx):
-        if tx_scores[r_idx, t] >= min_keep:
+        if scores[t] >= min_keep:
           cc += 1
         else:
-          tx_scores[r_idx, t] = np.int64(0)
-      compat_counts[r_idx] = cc
+          scores[t] = 0
+    else:
+      top_t = -1
+    return top_t, top_s, cc, n_ext, n_probe, scores
 
-  par.parfor(_map_one, n_reads)
+  best_tx, best_score, compat_counts, ext_counts, probe_counts, tx_scores = par.map(map_read, reads_ragged)
   return best_tx, best_score, compat_counts, np.sum(ext_counts), np.sum(probe_counts), tx_scores
 
 

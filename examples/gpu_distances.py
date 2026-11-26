@@ -8,7 +8,6 @@ import sys
 
 import numpy as np
 
-import parakeet
 import parakeet as par
 
 
@@ -17,11 +16,11 @@ def sqr_dist(a, b):
 
 
 def all_distances(X, C):
-  return parakeet.allpairs(sqr_dist, X, C)
+  return par.allpairs(sqr_dist, X, C)
 
 
 def pick_backend() -> str:
-  available = parakeet.available_backends()
+  available = par.available_backends()
   for name in ("cuda", "metal"):
     if available.get(name) == "ok":
       return name

@@ -1249,6 +1249,17 @@ class Elaborator(ArrayMixin):
         raise self.error(TypeInferenceError, f"{fn.__name__}() expects an integer, got {describe(val)}", node)
       return cast(val, WeakInt)
     if isinstance(fn, BoundMethod):
+      if isinstance(fn.obj, dict) and fn.name == "get":
+        if not 1 <= len(args) <= 2 or kwargs:
+          raise self.error(TypeInferenceError, "dict.get() takes 1 or 2 positional arguments", node)
+        key_arg = args[0]
+        default_arg = args[1] if len(args) == 2 else None
+        if isinstance(key_arg, str):
+          return fn.obj.get(key_arg, default_arg)
+        lut = self._char_dict_lut(fn.obj, key_arg, default=default_arg, node=node)
+        if lut is not None:
+          return lut
+        raise self.error(StaticValueError, "dictionary lookup requires a known string key", node)
       impl = lib.lookup_method(fn.obj, fn.name)
       if impl is None:
         raise self.error(UnsupportedError, f"method '{fn.name}' of {describe(fn.obj)} is not supported", node)
@@ -3530,9 +3541,12 @@ class Elaborator(ArrayMixin):
     if isinstance(obj, RaggedArray):
       return self._ragged_getitem(obj, index, node)
     if isinstance(obj, dict):
-      if not isinstance(index, str) or index not in obj:
-        raise self.error(StaticValueError, "dictionary lookup requires a known string key", node)
-      return obj[index]
+      if isinstance(index, str) and index in obj:
+        return obj[index]
+      lut = self._char_dict_lut(obj, index, default=None, node=node)
+      if lut is not None:
+        return lut
+      raise self.error(StaticValueError, "dictionary lookup requires a known string key", node)
     if isinstance(obj, ListVal):
       if isinstance(index, slice):
         parts = [
@@ -3776,7 +3790,11 @@ class Elaborator(ArrayMixin):
         return Partial(self.lift(raw_attr.__func__), (record.cls,), {})
       if isinstance(raw_attr, pytypes.FunctionType):
         return Partial(self.lift(raw_attr), (obj,), {})
-    if isinstance(obj, dict) or record is not None:
+    if isinstance(obj, dict):
+      if name == "get":
+        return BoundMethod(obj, "get")
+      raise self.error(TypeInferenceError, f"unsupported record attribute {name!r}", node)
+    if record is not None:
       raise self.error(TypeInferenceError, f"unsupported record attribute {name!r}", node)
     if isinstance(obj, (ListVal, VecVal, FixedListVal)):
       if name in ("append", "extend", "pop", "clear"):
@@ -4045,6 +4063,52 @@ class Elaborator(ArrayMixin):
       return ops.prim("and", (ta, tb), WeakBool if (ta.type.weak and tb.type.weak) else Bool)
     return self.apply_ufunc(prims.UFUNCS["logical_and"], [a, b])
 
+  @staticmethod
+  def _is_byte_value(v) -> bool:
+    """True when ``v`` is a ``uint8`` scalar expression or ``uint8`` array."""
+    return (isinstance(v, Expr) and v.type.name == "uint8") or (isinstance(v, ArrayVal) and v.elt.name == "uint8")
+
+  def _char_dict_lut(self, mapping: dict, index, default=None, node=None):
+    """Lower a constant single-ASCII-char dict lookup ``d[ch]`` / ``d.get(ch, default)``
+    over a ``uint8`` scalar or array to a static 256-entry L1-resident lookup table."""
+    if not mapping or not self._is_byte_value(index):
+      return None
+    if not all(isinstance(k, str) and len(k) == 1 and ord(k) < 128 for k in mapping):
+      return None
+    pairs: list[tuple[int, int | float]] = []
+    has_float = False
+    for k, raw_v in mapping.items():
+      v = self.require_static(raw_v, "character lookup table value")
+      if isinstance(v, (float, np.floating)):
+        has_float = True
+        pairs.append((ord(k), float(v)))
+      elif isinstance(v, (bool, int, np.integer)):
+        pairs.append((ord(k), int(v)))
+      else:
+        return None
+    if default is None:
+      fill: int | float = 0.0 if has_float else 0
+    else:
+      dv = self.require_static(default, "character lookup table default")
+      if isinstance(dv, (float, np.floating)):
+        has_float = True
+        fill = float(dv)
+      elif isinstance(dv, (bool, int, np.integer)):
+        fill = int(dv)
+      else:
+        return None
+    if has_float:
+      dt = np.dtype(np.float64)
+    else:
+      all_ints = [int(fill), *(int(v) for _, v in pairs)]
+      dt = np.dtype(np.uint8) if min(all_ints) >= 0 and max(all_ints) <= 255 else np.dtype(np.int64)
+    lut = np.full(256, fill, dtype=dt)
+    for byte_val, val in pairs:
+      lut[byte_val] = val
+    cache_key = (dt.name, fill, tuple(sorted(pairs)))
+    lut_arr = self.implicit_value(("char_lut", cache_key), lambda a=lut: a, lut)
+    return self.getitem(lut_arr, index)
+
   def compare(self, op: ast.cmpop, a, b, node=None):
     if isinstance(op, (ast.Is, ast.IsNot)):
       same = self._identical(a, b)
@@ -4061,6 +4125,12 @@ class Elaborator(ArrayMixin):
 
         return complex_lib.complex_binop(self, name, a, b)
       raise self.error(TypeInferenceError, "ordering comparisons are not supported for complex numbers", node)
+    # Single-character ASCII string literal compared against uint8 byte scalar or array
+    if name in ("eq", "ne", "lt", "le", "gt", "ge"):
+      if isinstance(a, str) and len(a) == 1 and ord(a) < 128 and self._is_byte_value(b):
+        a = Const(ord(a), ScalarType("uint8"))
+      elif isinstance(b, str) and len(b) == 1 and ord(b) < 128 and self._is_byte_value(a):
+        b = Const(ord(b), ScalarType("uint8"))
     if (a is None or b is None or isinstance(a, (str, TypeVal)) or isinstance(b, (str, TypeVal))) and name in (
       "eq",
       "ne",

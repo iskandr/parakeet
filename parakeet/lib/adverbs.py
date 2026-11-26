@@ -80,14 +80,18 @@ def map(el, f, *args, axis=0):  # noqa: A001
 
   With ``axis=None`` the function is applied to every scalar element (with
   broadcasting).  Non-array arguments are passed to every call unchanged."""
+  from ..ragged import RaggedArray
+
   if not args:
     raise el.error(TypeInferenceError, "map() needs at least one array argument")
   vals = [_arrayish(el, a) for a in args]
-  arrays = [a for a in vals if isinstance(a, ArrayVal) and a.rank > 0]
+  arrays = [a for a in vals if (isinstance(a, ArrayVal) and a.rank > 0) or isinstance(a, RaggedArray)]
   if not arrays:
     return el.call(f, [el.as_scalar(v) if isinstance(v, ArrayVal) else v for v in vals])
   ax = _axis_arg(el, axis)
   if ax is None:
+    if any(isinstance(a, RaggedArray) for a in arrays):
+      raise el.error(UnsupportedError, "map(..., axis=None) is not supported for RaggedArray; use axis=0")
     shape = el.broadcast_shapes([a.shape for a in arrays], "arguments of map")
     adapted = []
     for v in vals:
@@ -109,7 +113,16 @@ def map(el, f, *args, axis=0):  # noqa: A001
   n = None
   prepared = []
   for v in vals:
-    if isinstance(v, ArrayVal) and v.rank > 0:
+    if isinstance(v, RaggedArray):
+      if ax != 0:
+        raise el.error(UnsupportedError, "map() over a RaggedArray only supports axis=0")
+      dim = el._ragged_leading_len(v)
+      if n is None:
+        n = dim
+      elif not el.dim_equal(n, dim):
+        el.check(cmp("eq", n, dim), "ValueError", "arguments of map have different lengths ({0} and {1})", n, dim)
+      prepared.append((v, "ragged"))
+    elif isinstance(v, ArrayVal) and v.rank > 0:
       k = norm_axis(el, ax, v.rank)
       v = _prepare(el, v)
       dim = v.shape[k]
@@ -124,7 +137,15 @@ def map(el, f, *args, axis=0):  # noqa: A001
       prepared.append((v, None))
 
   def at(idx):
-    return el.call(f, [v if k is None else el.axis_view(v, k, idx[0], consumed=True) for v, k in prepared])
+    return el.call(
+      f,
+      [
+        v
+        if k is None
+        else (el._ragged_getitem(v, idx[0]) if k == "ragged" else el.axis_view(v, k, idx[0], consumed=True))
+        for v, k in prepared
+      ],
+    )
 
   return build_map(el, (n,), at, "map")
 

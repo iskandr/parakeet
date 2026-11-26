@@ -2,7 +2,6 @@
 
 import numpy as np
 
-import parakeet
 import parakeet as par
 
 
@@ -13,7 +12,7 @@ def matmult_operator(X, Y):
 
 @par.jit
 def matmult_allpairs(X, Y):
-  return parakeet.allpairs(np.dot, X, Y.T)
+  return par.allpairs(np.dot, X, Y.T)
 
 
 @par.jit
