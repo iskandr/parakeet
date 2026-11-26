@@ -1407,12 +1407,12 @@ parallel loops inside it are executed.</p>
 <tr>
 <td><code>"metal"</code> / <code>"mps"</code></td>
 <td>the Apple GPU</td>
-<td><code>pip install "parakeet[metal]==1.0.0"</code></td>
+<td><code>pip install "parakeet[metal]"</code></td>
 </tr>
 <tr>
 <td><code>"cuda"</code></td>
 <td>an NVIDIA GPU</td>
-<td><code>pip install "parakeet[cuda12]==1.0.0"</code> (CuPy)</td>
+<td><code>pip install "parakeet[cuda12]"</code> (CuPy)</td>
 </tr>
 <tr>
 <td><code>"python"</code></td>
@@ -1475,7 +1475,7 @@ including <code>float64</code> are supported. The same per-loop fallback rules a
 <p>CI has no NVIDIA hardware, so there the CUDA code generator runs against a
 <em>simulator</em> (<code>PARAKEET_CUDA_SIMULATE=1</code>) that compiles the generated kernels
 as C++ and executes their thread grid on the CPU.</p>
-<p>The <a href="../release-benchmarks/">1.0 release comparison</a> ran on a physical NVIDIA A10 with strict device dispatch. Earlier checks on an A100 (Google Colab, CuPy with CUDA 13, Python 3.13) and Tesla T4 covered the whole
+<p>The <a href="../release-benchmarks/">benchmark suite</a> ran on physical NVIDIA L4 and A10 GPUs with strict device dispatch. Earlier checks on an A100 (Google Colab, CuPy with CUDA 13, Python 3.13) and Tesla T4 covered the whole
 test suite with every parallel loop forced onto the GPU (688 tests,
 including the tiled products, the gradient tests and arrays kept on the
 device between loops),

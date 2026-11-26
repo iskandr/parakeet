@@ -1585,7 +1585,7 @@ optimizations are algebraic identities rather than fragile loop-nest analyses:</
 <li><strong>Dead-operator elimination</strong> drops pure operators and allocations that
   nothing reads before loops are emitted.</li>
 </ul>
-<p>Parakeet 1.0 adds the safety conditions the 2014 thesis omitted: cost and
+<p>Parakeet adds the safety conditions the 2014 thesis omitted: cost and
 single-use guards so fusion never silently duplicates expensive work, alias
 checks, and explicit associativity checks so non-associative user folds stay
 strictly left-to-right.</p>

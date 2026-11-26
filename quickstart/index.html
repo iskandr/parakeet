@@ -1476,7 +1476,7 @@ The forward and backward passes compile together into one native function:</p>
 <a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>
 <a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="n">loss_val</span><span class="p">,</span> <span class="n">dw</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">value_and_grad</span><span class="p">(</span><span class="n">mse_loss</span><span class="p">)(</span><span class="n">w</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
 </code></pre></div>
-<p>See <a href="../autodiff/">Gradients</a> for nested parameter tuples, <code>NamedTuple</code>s, frozen
+<p>See <a href="../autodiff/">Gradients</a> for nested parameter tuples, <code>NamedTuple</code>s,
 dataclasses, and training loops.</p>
 <h2 id="picking-a-backend">Picking a backend<a class="headerlink" href="#picking-a-backend" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nd">@par</span><span class="o">.</span><span class="n">jit</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">"metal"</span><span class="p">)</span>  <span class="c1"># per function</span>
