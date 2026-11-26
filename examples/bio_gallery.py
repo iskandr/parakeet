@@ -12,6 +12,7 @@ and reverse-mode AD) without hand-writing C, CUDA, or Metal kernels.
 
 from __future__ import annotations
 
+from enum import IntEnum
 from typing import NamedTuple
 
 import numpy as np
@@ -19,51 +20,47 @@ import numpy as np
 import parakeet as par
 
 # ---------------------------------------------------------------------------
-# 1. Zero-Copy uint8 FASTQ -> 2-Bit Canonical K-mer Encoding & Read QC
+# 1. FASTQ -> 2-Bit Canonical K-mer Encoding & Read QC
 # ---------------------------------------------------------------------------
 
 
 # --8<-- [start:fastq_kmer_gc]
+class Base(IntEnum):
+  A = 0
+  C = 1
+  G = 2
+  T = 3
+
+
+BASE_CODE = {"A": Base.A, "C": Base.C, "G": Base.G, "T": Base.T}
+
+
 @par.jit
-def encode_canonical_kmers_and_gc(seq_bytes, qual_bytes, k):
-  """Encode a batch of equal-length ASCII DNA reads (N, L) uint8 into:
-  - canonical 2-bit k-mers (N, L - k + 1) uint64  [min(fwd, revcomp)]
-  - per-read GC fraction (N,) float32
-  - per-read mean Phred quality (N,) float32
+def encode_canonical_kmers_and_gc(reads, quals, k):
+  """Encode ASCII DNA reads (``list[str]`` or ``(N, L)`` uint8) into:
+  - canonical 2-bit k-mers ``(N, L - k + 1)`` uint64  [min(fwd, revcomp)]
+  - per-read GC fraction ``(N,)`` float32
+  - per-read mean Phred quality ``(N,)`` float32
   """
-  n_reads, read_len = seq_bytes.shape
-  n_kmers = read_len - k + 1
-  kmers = np.empty((n_reads, n_kmers), dtype=np.uint64)
-  gc_frac = np.empty((n_reads,), dtype=np.float32)
-  mean_q = np.empty((n_reads,), dtype=np.float32)
   mask = (~np.uint64(0)) >> np.uint64(64 - 2 * k)
   rev_shift = np.uint64(2 * (k - 1))
 
-  def process_read(r):
-    gc = np.int64(0)
-    qsum = np.int64(0)
+  def encode_read(seq, qual):
+    codes = BASE_CODE[seq]
+    gc = np.mean((codes == Base.C) | (codes == Base.G)).astype(np.float32)
+    mean_q = np.mean(qual.astype(np.float32) - 33.0)
+    out = np.empty(len(seq) - k + 1, dtype=np.uint64)
     fwd = np.uint64(0)
     rev = np.uint64(0)
-    for pos in range(read_len):
-      ch = seq_bytes[r, pos]
-      # ASCII: A=65 -> 0, C=67 -> 1, G=71 -> 2, T=84 -> 3
-      is_c = ch == np.uint8(67)
-      is_g = ch == np.uint8(71)
-      is_t = ch == np.uint8(84)
-      code = np.uint64(1) if is_c else (np.uint64(2) if is_g else (np.uint64(3) if is_t else np.uint64(0)))
-      comp = np.uint64(3) ^ code
-      if is_c or is_g:
-        gc = gc + np.int64(1)
-      qsum = qsum + np.int64(qual_bytes[r, pos]) - np.int64(33)
+    for pos, c in enumerate(codes):
+      code = np.uint64(c)
       fwd = ((fwd << np.uint64(2)) | code) & mask
-      rev = (rev >> np.uint64(2)) | (comp << rev_shift)
+      rev = (rev >> np.uint64(2)) | ((np.uint64(3) ^ code) << rev_shift)
       if pos >= k - 1:
-        kmers[r, pos - k + 1] = fwd if fwd < rev else rev
-    gc_frac[r] = np.float32(gc) / np.float32(read_len)
-    mean_q[r] = np.float32(qsum) / np.float32(read_len)
+        out[pos - k + 1] = min(fwd, rev)
+    return out, gc, mean_q
 
-  par.parfor(process_read, n_reads)
-  return kmers, gc_frac, mean_q
+  return par.map(encode_read, reads, quals)
 
 
 # --8<-- [end:fastq_kmer_gc]
@@ -79,20 +76,13 @@ def encode_canonical_kmers_and_gc(seq_bytes, qual_bytes, k):
 def single_pass_pileup(ref_pos, base_code, phred_q, is_rev, contig_len):
   """Accumulate A/C/G/T counts, quality sums, and reverse-strand counts across
   aligned base observations in one keyed IndexScatter traversal."""
-  is_a = (base_code == np.uint8(0)).astype(np.int64)
-  is_c = (base_code == np.uint8(1)).astype(np.int64)
-  is_g = (base_code == np.uint8(2)).astype(np.int64)
-  is_t = (base_code == np.uint8(3)).astype(np.int64)
-  q_i64 = phred_q.astype(np.int64)
-  rev_i64 = is_rev.astype(np.int64)
-
-  # All six histograms share `ref_pos` -> Parakeet fuses them into ONE traversal!
-  cnt_a = par.scatter_add(contig_len, ref_pos, is_a)
-  cnt_c = par.scatter_add(contig_len, ref_pos, is_c)
-  cnt_g = par.scatter_add(contig_len, ref_pos, is_g)
-  cnt_t = par.scatter_add(contig_len, ref_pos, is_t)
-  qual_sum = par.scatter_add(contig_len, ref_pos, q_i64)
-  rev_cnt = par.scatter_add(contig_len, ref_pos, rev_i64)
+  # All six histograms share `ref_pos` -> Parakeet fuses them into ONE traversal.
+  cnt_a = par.scatter_add(contig_len, ref_pos, (base_code == Base.A).astype(np.int64))
+  cnt_c = par.scatter_add(contig_len, ref_pos, (base_code == Base.C).astype(np.int64))
+  cnt_g = par.scatter_add(contig_len, ref_pos, (base_code == Base.G).astype(np.int64))
+  cnt_t = par.scatter_add(contig_len, ref_pos, (base_code == Base.T).astype(np.int64))
+  qual_sum = par.scatter_add(contig_len, ref_pos, phred_q.astype(np.int64))
+  rev_cnt = par.scatter_add(contig_len, ref_pos, is_rev.astype(np.int64))
   return cnt_a, cnt_c, cnt_g, cnt_t, qual_sum, rev_cnt
 
 
@@ -105,14 +95,6 @@ def single_pass_pileup(ref_pos, base_code, phred_q, is_rev, contig_len):
 
 
 # --8<-- [start:tanimoto_screen]
-def popcount64(x):
-  """Branchless 64-bit SWAR popcount (portable across C, multicore, Metal, CUDA)."""
-  u = x - ((x >> np.uint64(1)) & np.uint64(0x5555555555555555))
-  u = (u & np.uint64(0x3333333333333333)) + ((u >> np.uint64(2)) & np.uint64(0x3333333333333333))
-  u = (u + (u >> np.uint64(4))) & np.uint64(0x0F0F0F0F0F0F0F0F)
-  return (u * np.uint64(0x0101010101010101)) >> np.uint64(56)
-
-
 class BestHit(NamedTuple):
   sim: np.float32
   index: np.int64
@@ -127,26 +109,13 @@ def better_hit(left, right):
 def tanimoto_nearest_hit(queries, library):
   """Find the closest library compound per query over packed uint64 fingerprints
   (N, W) x (M, W) using tiled pairwise folds with zero N x M allocation."""
-  pop_q = np.sum(popcount64(queries), axis=1)
-  pop_l = np.sum(popcount64(library), axis=1)
+  pop_q = np.sum(par.popcount(queries), axis=1)
+  pop_l = np.sum(par.popcount(library), axis=1)
 
-  def inter_bits(q_row, l_row):
-    return np.sum(popcount64(q_row & l_row))
-
-  # Stream intersection counts into an ordered fold over library compounds
-  inter = par.allpairs(inter_bits, queries, library)
+  inter = par.allpairs(lambda q_row, l_row: np.sum(par.popcount(q_row & l_row)), queries, library)
   denom = pop_q[:, None] + pop_l[None, :] - inter
-  sim = np.where(
-    denom > np.uint64(0), inter.astype(np.float32) / np.maximum(denom, np.uint64(1)).astype(np.float32), np.float32(0.0)
-  )
-  return par.fold(
-    lambda score, ref_idx: BestHit(score, ref_idx),
-    better_hit,
-    sim,
-    axis=1,
-    indexed=True,
-    emit=lambda hit: hit.index,
-  )
+  sim = np.where(denom > 0, inter.astype(np.float32) / np.maximum(denom, 1).astype(np.float32), np.float32(0.0))
+  return par.fold(BestHit, better_hit, sim, axis=1, indexed=True, emit=lambda hit: hit.index)
 
 
 # --8<-- [end:tanimoto_screen]
@@ -188,40 +157,25 @@ protein_coord_grad = par.grad(protein_rbf_loss, argnum=0)
 # --8<-- [start:banded_sw_and_ssm]
 @par.jit
 def banded_smith_waterman(seq_a, seq_b, match_score, mismatch_pen, gap_pen, band_width):
-  """Banded Smith-Waterman local alignment score over integer-encoded sequences.
+  """Banded Smith-Waterman local alignment score over sequences.
 
   Keeps only two O(M) score rows in cache and restricts columns to |j - i| <= band_width.
   """
-  n = seq_a.shape[0]
-  m = seq_b.shape[0]
-  prev = np.zeros((m + 1,), dtype=np.float32)
-  curr = np.zeros((m + 1,), dtype=np.float32)
+  n, m = len(seq_a), len(seq_b)
+  prev = np.zeros(m + 1, dtype=np.float32)
+  curr = np.zeros(m + 1, dtype=np.float32)
   best = np.float32(0.0)
   for i in range(1, n + 1):
     ai = seq_a[i - 1]
-    j_lo = i - band_width
-    if j_lo < 1:
-      j_lo = 1
-    j_hi = i + band_width
-    if j_hi > m:
-      j_hi = m
+    j_lo = max(1, i - band_width)
+    j_hi = min(m, i + band_width)
     for j in range(j_lo, j_hi + 1):
       sub = match_score if ai == seq_b[j - 1] else mismatch_pen
-      v = prev[j - 1] + sub
-      up = prev[j] + gap_pen
-      left = curr[j - 1] + gap_pen
-      if up > v:
-        v = up
-      if left > v:
-        v = left
-      if v < np.float32(0.0):
-        v = np.float32(0.0)
+      v = max(np.float32(0.0), prev[j - 1] + sub, prev[j] + gap_pen, curr[j - 1] + gap_pen)
       curr[j] = v
-      if v > best:
-        best = v
-    for j in range(j_lo, j_hi + 1):
-      prev[j] = curr[j]
-      curr[j] = np.float32(0.0)
+      best = max(best, v)
+    prev[j_lo : j_hi + 1] = curr[j_lo : j_hi + 1]
+    curr[j_lo : j_hi + 1] = 0.0
   return best
 
 
@@ -231,10 +185,9 @@ def dna_ssm_scan(decay, signal):
 
   Compiled via chunkwise parallel affine prefix scan (TileScan).
   """
-  length = decay.shape[0]
   out = np.empty_like(signal)
   s = np.float32(0.0)
-  for t in range(length):
+  for t in range(len(decay)):
     s = decay[t] * s + signal[t]
     out[t] = s
   return out
@@ -247,10 +200,10 @@ def main():
   rng = np.random.default_rng(0)
   print("Parakeet Bioinformatics & Structural Biology Gallery\n" + "=" * 60)
 
-  # 1. FASTQ canonical k-mers & QC
-  alphabet = np.frombuffer(b"ACGT", dtype=np.uint8)
-  reads = alphabet[rng.integers(0, 4, size=(64, 100))]
-  quals = rng.integers(33 + 20, 33 + 41, size=(64, 100), dtype=np.uint8)
+  # 1. FASTQ canonical k-mers & QC (accepts list[str] directly!)
+  alphabet = np.array(list("ACGT"))
+  reads = ["".join(row) for row in alphabet[rng.integers(0, 4, size=(64, 100))]]
+  quals = ["".join(chr(q) for q in row) for row in rng.integers(33 + 20, 33 + 41, size=(64, 100))]
   kmers, gc, mq = encode_canonical_kmers_and_gc(reads, quals, 21)
   print(f"1. FASTQ 21-mers : shape={kmers.shape}, mean GC={gc.mean():.3f}, mean Phred={mq.mean():.1f}")
 

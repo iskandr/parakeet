@@ -62,21 +62,20 @@ def spectral_filter_loss(weights, spectrum, target_mag):
   return np.float64(0.5) * np.sum(diff * diff)
 
 
+GC_BASE = {"G": 1, "C": 1, "g": 1, "c": 1}
+
+
 @par.jit
 def fasta_gc_and_scores(fasta_buf, score_csv_buf):
   """Parse a FASTA byte buffer + CSV float scores with zero PyObjects."""
   lines = par.split_bytes(fasta_buf, ord("\n"), skip_empty=True)
-  gc_lut = np.zeros(256, dtype=np.int64)
-  for b in b"GCgc":
-    gc_lut[b] = 1
-  n_lines = len(lines)
   gc_total = 0
   base_total = 0
-  for k in range(n_lines):
+  for k in range(len(lines)):
     line = lines[k]
-    if len(line) > 0 and line[0] != ord(">"):
+    if len(line) > 0 and line[0] != ">":
       base_total += len(line)
-      gc_total += np.sum(gc_lut[line])
+      gc_total += np.sum(GC_BASE[line].astype(np.int64))
   scores = par.parse_float32(par.split_bytes(score_csv_buf, ord(","), skip_empty=True))
   return gc_total, base_total, np.mean(scores)
 

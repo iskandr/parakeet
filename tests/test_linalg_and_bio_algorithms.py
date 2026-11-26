@@ -172,11 +172,48 @@ def test_minimizer_sketch_exact_vs_naive():
   seq = alph[rng.integers(0, 4, size=300)]
   # Insert an 'N' break in the middle
   seq[120] = ord("N")
-  h_jit, p_jit, s_jit = minimizer_sketch(seq, 11, 8)
-  h_py, p_py, s_py = minimizer_sketch(seq, 11, 8, _backend="python")
-  np.testing.assert_array_equal(h_jit, h_py)
-  np.testing.assert_array_equal(p_jit, p_py)
-  np.testing.assert_array_equal(s_jit, s_py)
+  k, w = 11, 8
+  h_jit, p_jit, s_jit = minimizer_sketch(seq, k, w)
+
+  # Independent naive O(N * w) sliding-window reference in pure Python
+  code_map = {ord("A"): 0, ord("C"): 1, ord("G"): 2, ord("T"): 3}
+  mask64 = (1 << 64) - 1
+
+  def hash64(x: int) -> int:
+    h = ((x ^ (x >> 30)) * 0xBF58476D1CE4E5B9) & mask64
+    h = ((h ^ (h >> 27)) * 0x94D049BB133111EB) & mask64
+    return (h ^ (h >> 31)) & mask64
+
+  # Collect valid k-mer hashes per contiguous ACGT run
+  ref_h, ref_p, ref_s = [], [], []
+  last_pos = -1
+  seq_b = bytes(seq)
+  for start in range(len(seq_b) - (k + w - 1) + 1):
+    window = seq_b[start : start + k + w - 1]
+    if any(b not in code_map for b in window):
+      continue
+    best = None
+    for off in range(w):
+      sub = window[off : off + k]
+      fwd = rev = 0
+      for b in sub:
+        c = code_map[b]
+        fwd = (fwd << 2) | c
+      for b in reversed(sub):
+        rev = (rev << 2) | (3 - code_map[b])
+      canon, strand = (fwd, 0) if fwd <= rev else (rev, 1)
+      cand = (hash64(canon), start + off, strand)
+      if best is None or cand[0] < best[0]:
+        best = cand
+    if best[1] != last_pos:
+      ref_h.append(best[0])
+      ref_p.append(best[1])
+      ref_s.append(best[2])
+      last_pos = best[1]
+
+  np.testing.assert_array_equal(h_jit, np.array(ref_h, dtype=np.uint64))
+  np.testing.assert_array_equal(p_jit, np.array(ref_p, dtype=np.int64))
+  np.testing.assert_array_equal(s_jit, np.array(ref_s, dtype=np.uint8))
 
 
 def test_fm_index_backward_search_exact():

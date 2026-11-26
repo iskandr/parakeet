@@ -44,6 +44,11 @@ def contains(el, container, item):
     for x in container:
       acc = ops.lor(acc, el.truth(el.compare(_EQ, item, x)))
     return acc
+  if isinstance(container, str):
+    acc = ops.FALSE
+    for ch in container:
+      acc = ops.lor(acc, el.truth(el.compare(_EQ, item, ch)))
+    return acc
   if isinstance(container, RangeVal):
     container = el.range_array(container)
   from ..index import FrozenHashTable, SortedIndex

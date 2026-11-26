@@ -1,6 +1,5 @@
 """Julia set: a data-parallel map over pixels with a data-dependent inner loop."""
 
-import parakeet
 import parakeet as par
 
 
@@ -18,7 +17,7 @@ def julia(cr, ci, n, bound=1.5, lim=1000.0, cutoff=100):
       count += 1
     return count
 
-  return parakeet.imap(pixel, (n, n))
+  return par.imap(pixel, (n, n))
 
 
 def main(n: int = 200):

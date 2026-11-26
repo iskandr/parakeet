@@ -22,18 +22,19 @@ python benchmarks/bio_workloads.py
 
 | Domain task | Operator / optimization in Parakeet | What the compiler eliminates |
 |---|---|---|
-| FASTQ k-mers & read QC | `par.parfor` + `uint8` / `uint64` bitwise arithmetic | Python per-character loops and string copies |
+| FASTQ k-mers & read QC | `par.map` (multi-output) + `IntEnum` + ASCII-dict LUT | Explicit `parfor`, manual `np.empty` buffers, and ASCII bit-twiddling |
 | Multi-channel BAM pileup | Keyed `IndexScatter` fusion | Redundant passes over alignment positions (`6 -> 1`) |
-| Chemical fingerprint screening | `par.allpairs` + ordered `par.fold` (`pairwise_fold`) | O(N · M) similarity matrix allocation |
+| Chemical fingerprint screening | `par.popcount` + `par.allpairs` + ordered `par.fold` (`pairwise_fold`) | O(N · M) similarity matrix allocation |
 | 3D protein RBF / equivariant attention | [Online rescaled-monoid tiling](algebra.md#law-1-rescaled-semiring-monoids) + `par.grad` | O(N²) pairwise distance & weight matrices |
 | Banded Smith-Waterman & genome SSMs | Two-row banded DP + [chunkwise affine prefix scan](algebra.md#law-4-chunkwise-state-space-duality) (`TileScan`) | Python DP interpreter overhead & sequential scan bottlenecks |
 
 ## 1. FASTQ 2-bit canonical k-mers and read QC
 
-Representing raw DNA and Phred quality bytes as `uint8` arrays lets Parakeet
-compute forward and reverse-complement 2-bit `uint64` canonical k-mers
-(`min(fwd, revcomp)`), GC fraction, and mean Phred quality in one parallel pass
-over reads:
+Parakeet accepts `list[str]` directly (packing equal-length strings into a 2D
+`uint8` array or variable-length strings into a `RaggedArray[uint8]`), compiles
+constant single-character dictionaries (`BASE_CODE`) into 256-byte lookup
+tables, supports `IntEnum` alphabets (`Base.A`, `Base.C`, `Base.G`, `Base.T`),
+and unboxes multi-output `par.map` tuples into one parallel pass:
 
 ```python
 --8<-- "examples/bio_gallery.py:fastq_kmer_gc"
@@ -54,9 +55,8 @@ combines them into a single privatized traversal (`IndexScatter: 6 -> 1`):
 
 Chemical similarity screening compares query fingerprints `(N, 32)` against a
 compound library `(M, 32)` of packed `uint64` bitvectors (2,048 bits each).
-Combining a portable 64-bit SWAR popcount with `par.allpairs` and an ordered
-`par.fold` finds the closest library compound per query while preserving
-first-index ties:
+Combining `par.popcount` with `par.allpairs` and an ordered `par.fold` finds
+the closest library compound per query while preserving first-index ties:
 
 ```python
 --8<-- "examples/bio_gallery.py:tanimoto_screen"

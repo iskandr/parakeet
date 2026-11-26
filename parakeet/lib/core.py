@@ -388,29 +388,84 @@ def plain_map(el, shape, fn: Callable[[tuple], Any], what: str = "map") -> Array
     with el.trial() as blk:
       r = fn(probe)
       if isinstance(r, tuple):
-        raise el.error(
-          UnsupportedError,
-          f"the function passed to {what} returns a tuple; return a scalar or an array instead",
-        )
-      if isinstance(r, RangeVal):
-        r = el.range_array(r)
-      if not isinstance(r, (Expr, ArrayVal)):
-        raise el.error(
-          TypeInferenceError,
-          f"the function passed to {what} must return a scalar or an array, got {describe(r)}",
-        )
-      weight = block_weight(blk)
-      if isinstance(r, ArrayVal):
+        if not r:
+          raise el.error(UnsupportedError, f"the function passed to {what} returned an empty tuple")
         inner_vars = _defined_vars(blk) | {v.uid for v in probe}
-        inner_shape = [outer_expr(el, d, inner_vars) for d in r.shape]
-        r_cost, r_elt, r_rank = r.cost, r.elt, r.rank
-        r_concrete = r.buf is not None
-        if el.jvp is not None and not el.jvp.muted and r_elt.kind == "f":
-          r_has_jvp = el.jvp.has_tangent_array(el, r)
+        tuple_specs: list[tuple] = []
+        for slot in r:
+          if isinstance(slot, RangeVal):
+            slot = el.range_array(slot)
+          if isinstance(slot, Expr):
+            tuple_specs.append(("s", slot.type.strong))
+          elif isinstance(slot, ArrayVal):
+            slot_inner = [outer_expr(el, d, inner_vars) for d in slot.shape]
+            if any(d is None for d in slot_inner):
+              raise el.error(
+                UnsupportedError,
+                f"multi-output {what} requires array outputs whose shapes do not vary per element",
+              )
+            tuple_specs.append(("a", slot.elt, tuple(slot_inner)))
+          else:
+            raise el.error(
+              TypeInferenceError,
+              f"tuple elements returned by {what} must be scalars or arrays, got {describe(slot)}",
+            )
+        is_tuple = True
       else:
-        r_type = r.type.strong
+        is_tuple = False
+        if isinstance(r, RangeVal):
+          r = el.range_array(r)
+        if not isinstance(r, (Expr, ArrayVal)):
+          raise el.error(
+            TypeInferenceError,
+            f"the function passed to {what} must return a scalar or an array, got {describe(r)}",
+          )
+        weight = block_weight(blk)
+        if isinstance(r, ArrayVal):
+          inner_vars = _defined_vars(blk) | {v.uid for v in probe}
+          inner_shape = [outer_expr(el, d, inner_vars) for d in r.shape]
+          r_cost, r_elt, r_rank = r.cost, r.elt, r.rank
+          r_concrete = r.buf is not None
+          if el.jvp is not None and not el.jvp.muted and r_elt.kind == "f":
+            r_has_jvp = el.jvp.has_tangent_array(el, r)
+        else:
+          r_type = r.type.strong
   finally:
     el.loop_depth -= 1
+
+  if is_tuple:
+    outs: list[ArrayVal] = []
+    pinned_specs: list[tuple] = []
+    for k_slot, spec in enumerate(tuple_specs):
+      if spec[0] == "s":
+        outs.append(el.alloc_array(spec[1], shape, label=f"out{k_slot}"))
+        pinned_specs.append(spec)
+      else:
+        in_sh = tuple(el.tmp(d, "n") for d in spec[2])
+        outs.append(el.alloc_array(spec[1], shape + in_sh, label=f"out{k_slot}"))
+        pinned_specs.append(("a", spec[1], in_sh))
+
+    def tuple_body(idx):
+      res = fn(tuple(idx))
+      for out_j, spec_j, val_j in zip(outs, pinned_specs, res):
+        if spec_j[0] == "s":
+          pos = el.tmp(el.index_expr(out_j, idx), "pos")
+          el.emit(Store(out_j.buf, pos, cast(el.as_scalar(val_j, f"result of {what}"), spec_j[1])))
+        else:
+          sub = el.as_array(val_j)
+          for d, expect in zip(sub.shape, spec_j[2]):
+            if not el.dim_equal(d, expect):
+              el.check(
+                cmp("eq", d, expect),
+                "ValueError",
+                f"the function passed to {what} returned arrays of different shapes ({{0}} vs {{1}})",
+                d,
+                expect,
+              )
+          el.store_array(sub_view(el, out_j, idx), sub)
+
+    el.loop_nest(shape, tuple_body)
+    return tuple(outs)
 
   if isinstance(r, Expr):
 
