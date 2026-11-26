@@ -1432,6 +1432,10 @@ fuses into surrounding NumPy code) <strong>and</strong> directly from ordinary P
 <td>two-pass 1-to-K ragged compaction (<code>IndexExpand</code>)</td>
 </tr>
 <tr>
+<td><code>par.fixed_list(capacity, dtype=np.float32)</code></td>
+<td>fixed-capacity, zero-<code>malloc</code> thread-local scratch list (<code>.append</code>, <code>.pop</code>, <code>.clear</code>, indexing, <code>len</code>) for stacks and per-thread buffers inside <code>par.parfor</code> / <code>par.map</code> on CPU, CUDA, and Metal</td>
+</tr>
+<tr>
 <td><code>par.scatter_add(n, idx, vals, where=None)</code> / <code>par.scatter_add(n, ((k, v) for ...))</code></td>
 <td>index-directed associative scatter-add (<code>IndexScatter</code>) with thread-privatized parallel lowering and exact gather adjoint (also targeted automatically by <code>np.bincount</code>, <code>np.add.at</code>, canonical <code>for i: out[idx[i]] += vals[i]</code> loops, and filtered comprehensions like <code>[np.sum(vals[idx == b]) for b in range(n)]</code>)</td>
 </tr>

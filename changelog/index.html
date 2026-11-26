@@ -1182,6 +1182,34 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#150-november-25-2026" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.5.0 (November 25, 2026)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1.5.0 (November 25, 2026)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#lists-growable-cpu-vectors-gpu-scratch-stacks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lists, growable CPU vectors, &amp; GPU scratch stacks
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#140-november-25-2026" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1452,6 +1480,34 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#150-november-25-2026" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.5.0 (November 25, 2026)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1.5.0 (November 25, 2026)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#lists-growable-cpu-vectors-gpu-scratch-stacks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lists, growable CPU vectors, &amp; GPU scratch stacks
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#140-november-25-2026" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1700,6 +1756,33 @@
 
 
 <h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Permanent link">&para;</a></h1>
+<h2 id="150-november-25-2026">1.5.0 (November 25, 2026)<a class="headerlink" href="#150-november-25-2026" title="Permanent link">&para;</a></h2>
+<p>Local Python lists, GPU-safe fixed-capacity scratch buffers, dynamic-shape
+array/ragged loop rebinding, and zero-allocation <code>itertools</code> combinators
+(Python Semantics Wave 2, closing <code>#80</code>).</p>
+<h3 id="lists-growable-cpu-vectors-gpu-scratch-stacks">Lists, growable CPU vectors, &amp; GPU scratch stacks<a class="headerlink" href="#lists-growable-cpu-vectors-gpu-scratch-stacks" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Compile-time static <code>list</code>:</strong> Straight-line and unrolled <code>outs = []</code> with
+  <code>.append()</code>, <code>.extend()</code>, <code>.pop()</code>, <code>.clear()</code>, indexing/slicing, and
+  consumption by <code>np.stack</code>, <code>np.concatenate</code>, <code>np.array</code>, and
+  <code>RaggedArray.from_sequences</code> lowers away before IR emission and composes
+  seamlessly with <code>par.grad</code>.</li>
+<li><strong>Runtime growable CPU <code>list[T]</code>:</strong> Lists mutated inside runtime <code>for</code>/<code>while</code>
+  loops or dynamic <code>if</code> branches automatically promote to a refcounted
+  homogeneous growable buffer (<code>buf</code>, <code>len</code>, <code>cap</code>) with geometric doubling and
+  zero-copy conversion to <code>ArrayVal</code> (<code>par.config.verify=True</code> clean).</li>
+<li><strong><code>par.fixed_list(capacity, dtype)</code>:</strong> Fixed-capacity stack-allocated scratch
+  buffer (<code>ir.Alloc(..., stack=True)</code>) emitted natively as thread-local stack
+  arrays on CPU, multicore, CUDA, and Apple Metal with zero <code>malloc</code> and runtime
+  bounds/capacity checks.</li>
+<li><strong>Dynamic-shape loop rebinding:</strong> Verified runtime shape rebinding for both
+  <code>ArrayVal</code> (e.g., <code>arr = arr[arr &gt; thresh]</code>) and <code>RaggedArray</code> across <code>while</code>
+  and <code>for</code> loops under <code>par.config.verify=True</code>.</li>
+<li><strong>Static <code>itertools</code> &amp; generators:</strong> Zero-allocation compilation for
+  <code>itertools.pairwise</code>, <code>itertools.islice</code>, <code>itertools.chain</code>,
+  <code>itertools.product</code>, and <code>itertools.batched</code> in <code>for</code> loops and generator
+  expressions (<code>sum(...)</code>, <code>np.array(...)</code>).</li>
+</ul>
 <h2 id="140-november-25-2026">1.4.0 (November 25, 2026)<a class="headerlink" href="#140-november-25-2026" title="Permanent link">&para;</a></h2>
 <p>Broader idiomatic Python semantics lowered cleanly at elaboration time with
 zero <code>PyObject</code> overhead: non-frozen <code>@dataclass</code> records with pure methods,

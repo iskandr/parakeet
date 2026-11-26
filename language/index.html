@@ -1416,15 +1416,15 @@ code deliberately differs from running the same function in CPython.</p>
 </tr>
 <tr>
 <td>lists, list comprehensions</td>
-<td><strong>arrays</strong> (there are no Python lists in compiled code)</td>
+<td>homogeneous numeric literals build arrays; <code>[]</code> and mutated/heterogeneous lists compile as zero-overhead compile-time lists (<code>.append</code>, <code>.extend</code>, <code>.pop</code>, <code>.clear</code>), automatically promoting to a growable CPU buffer when mutated inside a dynamic loop or runtime branch; use <code>par.fixed_list(cap, dtype)</code> for zero-<code>malloc</code> thread-local scratch inside parallel loops and GPU kernels</td>
 </tr>
 <tr>
 <td><code>None</code>, strings, dtypes, functions, modules</td>
 <td>compile-time constants</td>
 </tr>
 <tr>
-<td><code>slice</code>, <code>range</code>, <code>zip</code>, <code>enumerate</code></td>
-<td>supported as values and in loops</td>
+<td><code>slice</code>, <code>range</code>, <code>zip</code>, <code>enumerate</code>, <code>itertools</code> (<code>pairwise</code>, <code>islice</code>, <code>chain</code>, <code>product</code>, <code>batched</code>)</td>
+<td>supported as values and in zero-allocation <code>for</code> loops / generator expressions</td>
 </tr>
 </tbody>
 </table>
@@ -1498,9 +1498,20 @@ reduction. Inner iterators with observable setup and dependent domains such as
     of a <code>shape</code> tuple, a <code>dtype</code>. If such a value comes straight from an
     argument of the compiled function, Parakeet specialises on its <em>value</em>
     automatically; otherwise it reports which expression must be constant.</p>
-<p>Lists are arrays
-:   <code>[a, b, c]</code> and <code>[f(x) for x in xs]</code> build arrays. <code>sorted(x)</code> returns an
-    array. There is no <code>append</code>.</p>
+<p>Lists and dynamic loops
+:   Numeric literals like <code>[1.0, 2.0, 3.0]</code> and <code>[f(x) for x in xs]</code> still build
+    arrays directly. Local lists built with <code>outs = []; outs.append(...)</code> stay
+    completely unboxed at compile time in straight-line and unrolled code (so
+    <code>np.stack(outs)</code> and <code>RaggedArray.from_sequences(outs)</code> work with zero heap
+    allocation and compose with <code>par.grad</code>), and automatically promote to a
+    growable homogeneous CPU buffer with geometric doubling when appended inside
+    a runtime <code>for</code>/<code>while</code> loop or dynamic <code>if</code> branch. Inside parallel
+    <code>par.parfor</code>/<code>par.map</code> bodies and GPU kernels (CUDA/Metal),
+    <code>par.fixed_list(cap, dtype)</code> provides a fixed-capacity stack-allocated
+    scratch buffer with zero <code>malloc</code>. Variables holding arrays or
+    <code>RaggedArray</code>s may also be rebound to different shapes across <code>while</code>/<code>for</code>
+    loop iterations (for example, shrinking an active frontier with
+    <code>arr = arr[mask]</code>).</p>
 <p>Integer arithmetic
 :   Python <code>int</code>s are 64-bit and wrap on overflow (like NumPy), they are not
     arbitrary precision.</p>

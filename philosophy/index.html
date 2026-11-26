@@ -1641,12 +1641,12 @@ or SciPy. Knowing the boundary up front avoids surprises.</p>
 <td>Complex numbers (<code>complex64</code>/<code>complex128</code>), native <code>float16</code> compute (<code>float16</code> is widened to <code>float32</code>), structured/record dtypes, object or string arrays</td>
 </tr>
 <tr>
-<td>Nested tuples, <code>NamedTuple</code>s, fixed string-key dicts, <code>@dataclass</code>es (frozen or non-frozen) with pure methods / <code>@property</code> / <code>__call__</code>, <code>slice</code>, <code>range</code>, <code>zip</code>, <code>enumerate</code></td>
+<td>Nested tuples, <code>NamedTuple</code>s, fixed string-key dicts, <code>@dataclass</code>es (frozen or non-frozen) with pure methods / <code>@property</code> / <code>__call__</code>, <code>slice</code>, <code>range</code>, <code>zip</code>, <code>enumerate</code>, <code>itertools</code> (<code>pairwise</code>, <code>islice</code>, <code>chain</code>, <code>product</code>, <code>batched</code>)</td>
 <td>Dynamic dictionary keys, <code>set</code>, runtime string manipulation, arbitrary non-dataclass user classes with heap mutation</td>
 </tr>
 <tr>
-<td>List literals and comprehensions as fixed-shape arrays</td>
-<td>Mutable or dynamically resized Python lists (<code>.append</code>, <code>.extend</code>, ragged lists)</td>
+<td>Static compile-time lists (<code>.append</code>, <code>.extend</code>, <code>.pop</code>, <code>.clear</code>), CPU growable homogeneous lists inside loops/branches, <code>par.fixed_list</code> GPU/parallel scratch, and dynamic-shape array/<code>RaggedArray</code> loop rebinding</td>
+<td>Heterogeneously typed lists grown dynamically across runtime loop iterations</td>
 </tr>
 <tr>
 <td><code>if</code>/<code>elif</code>/<code>else</code>, <code>for</code>, <code>while</code>, <code>for</code>/<code>while ... else</code>, <code>break</code>, <code>continue</code>, early <code>return</code>, structural <code>match</code>/<code>case</code>, <code>isinstance</code>/<code>hasattr</code>/<code>getattr</code>, nested <code>def</code>/<code>lambda</code>, closures, <code>*args</code>/<code>**kwargs</code>, <code>functools.partial</code>, <code>operator.*</code>, <code>assert</code>, <code>raise</code></td>
