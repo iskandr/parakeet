@@ -1,5 +1,44 @@
 # Changelog
 
+## 1.8.0 (November 26, 2026)
+
+Compiled `np.linalg` matrix decompositions and solvers, seven classic
+bioinformatics algorithms, a Rob Patro-style SSHash + Spearfish + Oarfish
+long-read RNA aligner and quantifier, and published head-to-head bioinformatics
+benchmarks (closing `#46`).
+
+### Compiled `np.linalg` decompositions and solvers
+
+- **`parakeet/lib/linalg_lib.py`:** Pure compiled implementations (zero
+  external LAPACK dependency, callable inside `par.parfor`, supporting both
+  `float32` and `float64`) for `np.linalg.cholesky`, `np.linalg.det`,
+  `np.linalg.solve` (1D and 2D RHS), `np.linalg.inv`, `np.linalg.qr`
+  (Householder `reduced` and `complete`), `np.linalg.eigh` (cyclic Jacobi,
+  `UPLO="L"/"U"`), and `np.linalg.svd` (one-sided Hestenes Jacobi,
+  square/tall/wide, `full_matrices`, `compute_uv`).
+
+### Bioinformatics algorithms, long-read RNA alignment, and head-to-head benchmarks
+
+- **Classic bioinformatics suite (`examples/bio_algorithms.py`):** 3-state
+  affine-gap Gotoh alignment + traceback to RLE CIGAR, multi-word `uint64`
+  Myers bit-vector edit distance, O(N) circular monotone-deque minimizer
+  sketching, FM-index / BWT backward search over `RaggedArray[uint8]`,
+  `par.flatmap` CIGAR expansion, profile HMM Viterbi + Forward-Backward
+  posterior decoding, and Kabsch 3D protein superposition & RMSD using compiled
+  `np.linalg.svd` and `np.linalg.det`.
+- **Long-read RNA alignment & quantification (`examples/patro_longread_rna.py`):**
+  SSHash-style streaming k-mer lookup over collapsed unitigs with
+  `FrozenHashTable` sparse minimizer buckets, Spearfish shared-anchor
+  projection and delta-mapping, and compiled Oarfish coverage-aware EM. On 80
+  real human Ensembl isoforms (`TP53`, `PKM`, `MAPT`, `ACTB`), achieves 9.7x
+  unitig collapse, 92.2% hash-lookup skip rate, 548.6 Mbp/s multicore mapping
+  on Apple M1 Pro, and EM Pearson `r = 0.965`.
+- **Head-to-head bioinformatics benchmarks (`benchmarks/bio_head_to_head.py`):**
+  Replicate median + IQR comparison against `edlib`, `Biopython`, `Biotite`,
+  `RDKit`, and `NumPy`, published in `docs/release-benchmarks.md` and
+  `docs/bioinformatics.md` alongside the overlapped CPU I/O and decompression
+  architecture notes.
+
 ## 1.7.0 (November 25, 2026)
 
 Adaptive 3-tier ragged parallelism, fused segmented 2D histograms with

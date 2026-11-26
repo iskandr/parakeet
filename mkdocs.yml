@@ -26,7 +26,7 @@ theme:
       scheme: slate
       primary: custom
       toggle: { icon: material/weather-sunny, name: Switch to light mode }
-  favicon: assets/logo.png
+  favicon: assets/favicon.svg
 
 extra_css:
   - stylesheets/extra.css

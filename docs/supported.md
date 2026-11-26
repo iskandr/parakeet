@@ -68,10 +68,12 @@ All follow NumPy's broadcasting and type promotion rules exactly.
 
 |  |  |  |  |
 |---|---|---|---|
-| `np.linalg.norm` | `np.random.normal` | `np.random.permutation` | `np.random.rand` |
-| `np.random.randint` | `np.random.randn` | `np.random.random` | `np.random.random_sample` |
-| `np.random.ranf` | `np.random.sample` | `np.random.seed` | `np.random.shuffle` |
-| `np.random.standard_normal` | `np.random.uniform` |  |  |
+| `np.linalg.cholesky` | `np.linalg.det` | `np.linalg.eigh` | `np.linalg.inv` |
+| `np.linalg.norm` | `np.linalg.qr` | `np.linalg.solve` | `np.linalg.svd` |
+| `np.random.normal` | `np.random.permutation` | `np.random.rand` | `np.random.randint` |
+| `np.random.randn` | `np.random.random` | `np.random.random_sample` | `np.random.ranf` |
+| `np.random.sample` | `np.random.seed` | `np.random.shuffle` | `np.random.standard_normal` |
+| `np.random.uniform` |  |  |  |
 
 ## Array attributes and methods
 

@@ -1,24 +1,55 @@
-# Automatic differentiation
+# Gradients
 
-Parakeet provides composable **reverse-mode**, **forward-mode**, and
-**higher-order** automatic differentiation directly over its operator IR. Every
-differentiated function compiles into ordinary fused, tiled, parallel CPU or
-GPU loops alongside the rest of your program:
+Parakeet differentiates functions directly over its operator IR, so the
+derivative code goes through the same fusion, tiling, and parallel CPU/GPU
+code generation as the forward pass.
 
-| API | What it computes |
-|---|---|
-| `par.grad(f, argnum=0)` | Reverse-mode gradient of a scalar-valued function |
-| `par.value_and_grad(f, argnum=0)` | Forward value and reverse-mode gradient in one compiled call |
-| `par.jvp(f, primals, tangents)` | Forward-mode Jacobian-vector product `(f(*primals), J_f(*primals) · tangents)` |
-| `par.vjp(f, *primals)` | General non-scalar reverse-mode `(y, pullback)` for array, tuple, record, or `RaggedArray` outputs |
-| `par.linearize(f, *primals)` | Forward value `y` plus reusable linear JVP function `t -> J_f(x) · t` |
-| `par.linear_transpose(f, *primals)` | Exact linear transpose `u -> Lᵀ(u)` of a linear function `L` |
-| `par.hvp(f, primals, tangents)` | Forward-over-reverse Hessian-vector product `∇²f(x) · v` |
-| `par.jacfwd(f, argnum=0)` / `par.jacrev(f, argnum=0)` | Full Jacobian matrix via forward-mode or reverse-mode AD |
-| `par.hessian(f, argnum=0)` | Full Hessian matrix via forward-over-reverse AD |
-| `par.stop_gradient(x)` | Zero-copy gradient & tangent barrier |
-| `@par.checkpoint` | Rematerialize a block's intermediates during backpropagation |
-| `@par.custom_vjp` / `@par.custom_jvp` | Attach user-defined reverse-mode or forward-mode derivative rules |
+## Forward mode vs. reverse mode
+
+For a function `f: R^n -> R^m` with Jacobian matrix `J` (shape `m x n`), there
+are two fundamental ways to propagate derivatives through the chain rule:
+
+* **Reverse mode (`par.grad`, `par.vjp`, `par.jacrev`):** Computes a
+  **vector-Jacobian product** `uᵀ · J` (pulling output sensitivities backward
+  to every input). Cost scales with the number of **outputs** `m`, independent
+  of the number of inputs `n`. Because reverse mode walks backward, it saves
+  (or recomputes) forward intermediates.
+  - **Use reverse mode when inputs outnumber outputs (`n >> m`):** training
+    losses (`m = 1` scalar loss with millions of parameters), inverse problems,
+    and sensitivity of one objective with respect to all weights or coordinates.
+* **Forward mode (`par.jvp`, `par.jacfwd`):** Computes a
+  **Jacobian-vector product** `J · v` (pushing an input perturbation `v`
+  forward alongside the computation). Cost scales with the number of **inputs**
+  `n`, independent of the number of outputs `m`, and it uses **O(1) extra
+  memory** with no backward tape even through long `for`/`while` loops.
+  - **Use forward mode when outputs outnumber inputs (`m >> n`):**
+    differentiating a simulation, ODE trajectory, or physical field with
+    respect to a handful of scalar parameters, computing directional
+    derivatives, or composing forward-over-reverse (`jvp(grad(f))`) for
+    Hessian-vector products (`par.hvp`).
+
+The two modes are exact linear transposes of each other: for any input `x`,
+input direction `v`, and output sensitivity `u`,
+
+```text
+dot(jvp(f, x, v), u) == dot(v, vjp(f, x)(u))
+```
+
+## API overview
+
+| API | Mode | What it computes |
+|---|---|---|
+| `par.grad(f, argnum=0)` | Reverse | Gradient of a scalar-valued function |
+| `par.value_and_grad(f, argnum=0)` | Reverse | Forward value and gradient in one compiled call |
+| `par.vjp(f, *primals)` | Reverse | `(y, pullback)` for vector, matrix, tuple, record, or `RaggedArray` outputs |
+| `par.jvp(f, primals, tangents)` | Forward | Directional derivative `(f(*primals), J · tangents)` in one forward pass |
+| `par.linearize(f, *primals)` | Forward | Forward value `y` plus reusable linear map `v -> J · v` |
+| `par.linear_transpose(L, *example_inputs)` | Transpose | Exact linear adjoint `u -> Lᵀ(u)` of a linear function `L` |
+| `par.hvp(f, primals, tangents)` | Fwd-over-rev | Hessian-vector product `H(x) · v` |
+| `par.jacfwd(f)` / `par.jacrev(f)` | Fwd / Rev | Full Jacobian matrix (`jacfwd` when `n <= m`, `jacrev` when `m < n`) |
+| `par.hessian(f, argnum=0)` | Fwd-over-rev | Full Hessian matrix |
+| `@par.checkpoint` | Memory | Recompute a block's intermediates during backpropagation instead of saving them |
+| `@par.custom_vjp` / `@par.custom_jvp` | Custom | Attach user-defined reverse-mode or forward-mode derivative rules |
 
 ## Reverse-mode gradients (`grad` and `value_and_grad`)
 
@@ -99,8 +130,9 @@ adjoint `Lᵀ` of a linear operator.
 ## Higher-order derivatives, HVPs, and Jacobians
 
 `par.hvp` computes Hessian-vector products via **forward-over-reverse AD**
-(`jvp(grad(f))`) in one fused pass; including through checkpointed loops,
-LayerNorm, and **zero-$O(T^2)$ rematerialized attention**:
+(`jvp(grad(f))`) in one fused pass, including through checkpointed loops,
+LayerNorm, and tiled attention (recomputing score tiles on the fly instead of
+storing the `T × T` attention matrix):
 
 ```python
 def objective(w, x):
@@ -237,12 +269,12 @@ value that an earlier operation's derivative still has to read
 (`y = np.tanh(h); h[0] = 5.0`) is refused loudly, because the derivative of
 `tanh` needs the original `h`.
 
-## The gradient is right or there is none
+## Unsupported operations fail at compile time
 
 Parakeet never returns a derivative that silently drops part of your function.
-If something on the path from inputs to output lacks a derivative rule; such
+If an operation on the path from inputs to output lacks a derivative rule (such
 as `np.cumprod`, `np.convolve`, or an arbitrary indexed overwrite
-`out[idx] = v`; you get an `UnsupportedError` naming it:
+`out[idx] = v`), compilation raises an `UnsupportedError` naming it:
 
 ```text
 UnsupportedError: cannot differentiate through cumprod() (line 12): its derivative is not implemented
@@ -256,10 +288,10 @@ primals). Because rules operate at the index-operator level before lowering:
 
 * Element-wise operators differentiate symbolically via partial derivatives.
 * `parakeet/transforms/algebraic_vjp.py` runs a composable registry of
-  algebraic rematerialization rules (`ALGEBRAIC_AD_RULES`) for FlashAttention
-  (VJP, JVP, and HVP with zero $O(T^2)$ allocations), linear cross-entropy,
-  softmax, and LayerNorm / RMSNorm; both at top level and inside checkpointed
-  loops.
+  algebraic rematerialization rules (`ALGEBRAIC_AD_RULES`) for tiled attention
+  (VJP, JVP, and HVP without allocating `T × T` score matrices), linear
+  cross-entropy, softmax, and LayerNorm / RMSNorm, both at top level and inside
+  checkpointed loops.
 * Scalars and views are not recorded on the tape: scalar adjoints push straight
   down the expression tree, and a view of an array is the same view of its
   adjoint.

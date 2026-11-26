@@ -1,0 +1,277 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="560" viewBox="0 0 960 560">
+<rect width="100%" height="100%" fill="#ffffff"/>
+<text x="24" y="26" font-family="Inter, -apple-system, sans-serif" font-size="16" font-weight="700" fill="#0f172a">Bioinformatics Head-to-Head Benchmarks (Lower is Better)</text>
+<text x="24" y="44" font-family="Inter, -apple-system, sans-serif" font-size="11" fill="#475569">arm64 / Darwin (10 cores) | Python 3.12.6 | Parakeet 1.8.0 | n=11 warmed replicates (median, IQR, individual dots)</text>
+<rect x="24.0" y="58.0" width="444.0" height="141.3" rx="8" fill="#f8fafc" stroke="#e2e8f0"/>
+<text x="36.0" y="78.0" font-family="Inter, -apple-system, sans-serif" font-size="12" font-weight="700" fill="#0f172a">Edit distance (1,000 × 256 bp)</text>
+<text x="190.0" y="104.0" text-anchor="end" font-family="Inter, -apple-system, sans-serif" font-size="10.2" fill="#334155">Parakeet (multicore)</text>
+<rect x="198.0" y="93.0" width="37.0" height="14" rx="3" fill="#0d9488" fill-opacity="0.82"/>
+<circle cx="247.0" cy="100.0" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="232.5" cy="100.0" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="260.8" cy="100.0" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="246.5" cy="100.0" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="235.0" cy="100.0" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="228.2" cy="100.0" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="235.2" cy="100.0" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="238.1" cy="100.0" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="234.6" cy="100.0" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="224.9" cy="100.0" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="230.0" cy="100.0" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<text x="241.0" y="104.0" font-family="ui-monospace, Menlo, monospace" font-size="9.3" font-weight="600" fill="#0f172a">2.04 ms (±0.61)</text>
+<text x="190.0" y="132.0" text-anchor="end" font-family="Inter, -apple-system, sans-serif" font-size="10.2" fill="#334155">Parakeet (c, 1T)</text>
+<rect x="198.0" y="121.0" width="68.5" height="14" rx="3" fill="#14b8a6" fill-opacity="0.82"/>
+<circle cx="267.3" cy="128.0" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="267.7" cy="128.0" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="267.3" cy="128.0" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="266.7" cy="128.0" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="266.9" cy="128.0" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="266.5" cy="128.0" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="265.7" cy="128.0" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="265.6" cy="128.0" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="265.2" cy="128.0" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="265.6" cy="128.0" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="265.6" cy="128.0" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<text x="272.5" y="132.0" font-family="ui-monospace, Menlo, monospace" font-size="9.3" font-weight="600" fill="#0f172a">3.78 ms (±0.08)</text>
+<text x="190.0" y="160.0" text-anchor="end" font-family="Inter, -apple-system, sans-serif" font-size="10.2" fill="#334155">edlib (C++ Myers)</text>
+<rect x="198.0" y="149.0" width="137.3" height="14" rx="3" fill="#2563eb" fill-opacity="0.82"/>
+<circle cx="312.0" cy="156.0" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="312.3" cy="156.0" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="313.1" cy="156.0" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="312.2" cy="156.0" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="343.6" cy="156.0" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="360.0" cy="156.0" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="358.0" cy="156.0" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="313.2" cy="156.0" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="335.3" cy="156.0" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="360.0" cy="156.0" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="351.8" cy="156.0" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<text x="341.3" y="160.0" font-family="ui-monospace, Menlo, monospace" font-size="9.3" font-weight="600" fill="#0f172a">7.58 ms (±2.33)</text>
+<rect x="492.0" y="58.0" width="444.0" height="141.3" rx="8" fill="#f8fafc" stroke="#e2e8f0"/>
+<text x="504.0" y="78.0" font-family="Inter, -apple-system, sans-serif" font-size="12" font-weight="700" fill="#0f172a">Affine-gap Gotoh (200 × 128 bp)</text>
+<text x="658.0" y="104.0" text-anchor="end" font-family="Inter, -apple-system, sans-serif" font-size="10.2" fill="#334155">Parakeet (multicore)</text>
+<rect x="666.0" y="93.0" width="23.1" height="14" rx="3" fill="#0d9488" fill-opacity="0.82"/>
+<circle cx="689.4" cy="100.0" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="694.1" cy="100.0" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="679.8" cy="100.0" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="682.5" cy="100.0" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="680.2" cy="100.0" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="686.5" cy="100.0" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="810.5" cy="100.0" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="692.7" cy="100.0" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="693.0" cy="100.0" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="688.3" cy="100.0" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="689.1" cy="100.0" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<text x="695.1" y="104.0" font-family="ui-monospace, Menlo, monospace" font-size="9.3" font-weight="600" fill="#0f172a">3.82 ms (±1.39)</text>
+<text x="658.0" y="131.3" text-anchor="end" font-family="Inter, -apple-system, sans-serif" font-size="10.2" fill="#334155">Parakeet (c, 1T)</text>
+<rect x="666.0" y="120.3" width="118.9" height="14" rx="3" fill="#14b8a6" fill-opacity="0.82"/>
+<circle cx="754.9" cy="127.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="758.8" cy="127.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="784.9" cy="127.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="779.2" cy="127.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="786.7" cy="127.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="796.3" cy="127.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="813.0" cy="127.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="781.8" cy="127.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="788.6" cy="127.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="802.1" cy="127.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="775.9" cy="127.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<text x="790.9" y="131.3" font-family="ui-monospace, Menlo, monospace" font-size="9.3" font-weight="600" fill="#0f172a">19.68 ms (±2.46)</text>
+<text x="658.0" y="158.7" text-anchor="end" font-family="Inter, -apple-system, sans-serif" font-size="10.2" fill="#334155">Biopython (C PairwiseAligner)</text>
+<rect x="666.0" y="147.7" width="51.7" height="14" rx="3" fill="#7c3aed" fill-opacity="0.82"/>
+<circle cx="717.3" cy="154.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="719.6" cy="154.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="716.5" cy="154.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="718.0" cy="154.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="719.0" cy="154.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="717.7" cy="154.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="718.3" cy="154.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="719.0" cy="154.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="717.5" cy="154.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="717.7" cy="154.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="716.4" cy="154.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<text x="723.7" y="158.7" font-family="ui-monospace, Menlo, monospace" font-size="9.3" font-weight="600" fill="#0f172a">8.55 ms (±0.21)</text>
+<text x="658.0" y="186.0" text-anchor="end" font-family="Inter, -apple-system, sans-serif" font-size="10.2" fill="#334155">Biotite (Cython align_optimal)</text>
+<rect x="666.0" y="175.0" width="137.3" height="14" rx="3" fill="#7c3aed" fill-opacity="0.82"/>
+<circle cx="803.3" cy="182.0" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="793.9" cy="182.0" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="828.0" cy="182.0" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="828.0" cy="182.0" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="803.1" cy="182.0" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<text x="809.3" y="186.0" font-family="ui-monospace, Menlo, monospace" font-size="9.3" font-weight="600" fill="#0f172a">22.72 ms (±5.40)</text>
+<rect x="24.0" y="213.3" width="444.0" height="141.3" rx="8" fill="#f8fafc" stroke="#e2e8f0"/>
+<text x="36.0" y="233.3" font-family="Inter, -apple-system, sans-serif" font-size="12" font-weight="700" fill="#0f172a">2048-bit Tanimoto 1-NN (256 × 8,192)</text>
+<text x="190.0" y="259.3" text-anchor="end" font-family="Inter, -apple-system, sans-serif" font-size="10.2" fill="#334155">Parakeet (multicore)</text>
+<rect x="198.0" y="248.3" width="5.0" height="14" rx="3" fill="#0d9488" fill-opacity="0.82"/>
+<circle cx="202.0" cy="255.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="203.1" cy="255.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="203.0" cy="255.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="202.2" cy="255.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="201.8" cy="255.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="204.3" cy="255.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="204.8" cy="255.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="204.8" cy="255.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="203.0" cy="255.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="204.0" cy="255.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="202.6" cy="255.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<text x="209.0" y="259.3" font-family="ui-monospace, Menlo, monospace" font-size="9.3" font-weight="600" fill="#0f172a">16.83 ms (±5.89)</text>
+<text x="190.0" y="287.3" text-anchor="end" font-family="Inter, -apple-system, sans-serif" font-size="10.2" fill="#334155">Parakeet (c, 1T)</text>
+<rect x="198.0" y="276.3" width="17.6" height="14" rx="3" fill="#14b8a6" fill-opacity="0.82"/>
+<circle cx="215.6" cy="283.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="213.1" cy="283.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="220.3" cy="283.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="214.9" cy="283.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="217.7" cy="283.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="218.2" cy="283.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="212.0" cy="283.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="213.8" cy="283.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="219.6" cy="283.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="216.8" cy="283.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="214.7" cy="283.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<text x="221.6" y="287.3" font-family="ui-monospace, Menlo, monospace" font-size="9.3" font-weight="600" fill="#0f172a">59.06 ms (±12.62)</text>
+<text x="190.0" y="315.3" text-anchor="end" font-family="Inter, -apple-system, sans-serif" font-size="10.2" fill="#334155">RDKit (C++ BulkTanimoto)</text>
+<rect x="198.0" y="304.3" width="137.3" height="14" rx="3" fill="#2563eb" fill-opacity="0.82"/>
+<circle cx="360.0" cy="311.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="335.8" cy="311.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="333.7" cy="311.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="346.5" cy="311.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="329.1" cy="311.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="335.3" cy="311.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="339.7" cy="311.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="321.7" cy="311.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="319.6" cy="311.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="325.9" cy="311.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="351.3" cy="311.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<text x="341.3" y="315.3" font-family="ui-monospace, Menlo, monospace" font-size="9.3" font-weight="600" fill="#0f172a">461.75 ms (±52.35)</text>
+<rect x="492.0" y="213.3" width="444.0" height="141.3" rx="8" fill="#f8fafc" stroke="#e2e8f0"/>
+<text x="504.0" y="233.3" font-family="Inter, -apple-system, sans-serif" font-size="12" font-weight="700" fill="#0f172a">Batched Kabsch 3D RMSD (2,000 × 128)</text>
+<text x="658.0" y="259.3" text-anchor="end" font-family="Inter, -apple-system, sans-serif" font-size="10.2" fill="#334155">Parakeet (multicore)</text>
+<rect x="666.0" y="248.3" width="15.9" height="14" rx="3" fill="#0d9488" fill-opacity="0.82"/>
+<circle cx="677.9" cy="255.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="683.6" cy="255.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="684.6" cy="255.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="685.7" cy="255.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="682.9" cy="255.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="678.7" cy="255.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="679.3" cy="255.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="681.9" cy="255.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="680.7" cy="255.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="679.2" cy="255.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="682.3" cy="255.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<text x="687.9" y="259.3" font-family="ui-monospace, Menlo, monospace" font-size="9.3" font-weight="600" fill="#0f172a">2.92 ms (±0.73)</text>
+<text x="658.0" y="286.7" text-anchor="end" font-family="Inter, -apple-system, sans-serif" font-size="10.2" fill="#334155">Parakeet (c, 1T)</text>
+<rect x="666.0" y="275.7" width="66.0" height="14" rx="3" fill="#14b8a6" fill-opacity="0.82"/>
+<circle cx="709.3" cy="282.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="713.4" cy="282.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="747.2" cy="282.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="718.8" cy="282.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="707.7" cy="282.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="709.5" cy="282.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="741.4" cy="282.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="743.6" cy="282.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="741.4" cy="282.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="732.0" cy="282.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="754.4" cy="282.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<text x="738.0" y="286.7" font-family="ui-monospace, Menlo, monospace" font-size="9.3" font-weight="600" fill="#0f172a">12.09 ms (±5.69)</text>
+<text x="658.0" y="314.0" text-anchor="end" font-family="Inter, -apple-system, sans-serif" font-size="10.2" fill="#334155">NumPy batched SVD</text>
+<rect x="666.0" y="303.0" width="137.3" height="14" rx="3" fill="#64748b" fill-opacity="0.82"/>
+<circle cx="816.4" cy="310.0" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="793.1" cy="310.0" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="811.9" cy="310.0" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="804.8" cy="310.0" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="811.8" cy="310.0" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="783.5" cy="310.0" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="803.3" cy="310.0" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="798.4" cy="310.0" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="804.2" cy="310.0" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="783.8" cy="310.0" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="785.6" cy="310.0" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<text x="809.3" y="314.0" font-family="ui-monospace, Menlo, monospace" font-size="9.3" font-weight="600" fill="#0f172a">25.15 ms (±3.47)</text>
+<text x="658.0" y="341.3" text-anchor="end" font-family="Inter, -apple-system, sans-serif" font-size="10.2" fill="#334155">Biotite (batched f32)</text>
+<rect x="666.0" y="330.3" width="116.5" height="14" rx="3" fill="#7c3aed" fill-opacity="0.82"/>
+<circle cx="804.7" cy="337.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="784.0" cy="337.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="788.0" cy="337.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="798.3" cy="337.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="777.6" cy="337.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="782.5" cy="337.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="768.8" cy="337.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="772.8" cy="337.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="782.0" cy="337.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="786.1" cy="337.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="782.3" cy="337.3" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<text x="788.5" y="341.3" font-family="ui-monospace, Menlo, monospace" font-size="9.3" font-weight="600" fill="#0f172a">21.35 ms (±1.33)</text>
+<rect x="24.0" y="368.7" width="444.0" height="141.3" rx="8" fill="#f8fafc" stroke="#e2e8f0"/>
+<text x="36.0" y="388.7" font-family="Inter, -apple-system, sans-serif" font-size="12" font-weight="700" fill="#0f172a">6-channel BAM pileup (2M reads)</text>
+<text x="190.0" y="414.7" text-anchor="end" font-family="Inter, -apple-system, sans-serif" font-size="10.2" fill="#334155">Parakeet (multicore)</text>
+<rect x="198.0" y="403.7" width="59.3" height="14" rx="3" fill="#0d9488" fill-opacity="0.82"/>
+<circle cx="261.2" cy="410.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="256.4" cy="410.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="265.0" cy="410.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="263.6" cy="410.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="259.8" cy="410.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="267.5" cy="410.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="257.0" cy="410.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="256.1" cy="410.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="255.9" cy="410.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="257.3" cy="410.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="257.3" cy="410.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<text x="263.3" y="414.7" font-family="ui-monospace, Menlo, monospace" font-size="9.3" font-weight="600" fill="#0f172a">17.58 ms (±1.68)</text>
+<text x="190.0" y="442.7" text-anchor="end" font-family="Inter, -apple-system, sans-serif" font-size="10.2" fill="#334155">Parakeet (c, 1T)</text>
+<rect x="198.0" y="431.7" width="108.5" height="14" rx="3" fill="#14b8a6" fill-opacity="0.82"/>
+<circle cx="316.6" cy="438.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="306.5" cy="438.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="259.0" cy="438.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="263.8" cy="438.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="282.6" cy="438.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="321.9" cy="438.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="360.0" cy="438.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="360.0" cy="438.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="265.8" cy="438.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="326.3" cy="438.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="283.3" cy="438.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<text x="312.5" y="442.7" font-family="ui-monospace, Menlo, monospace" font-size="9.3" font-weight="600" fill="#0f172a">32.16 ms (±14.79)</text>
+<text x="190.0" y="470.7" text-anchor="end" font-family="Inter, -apple-system, sans-serif" font-size="10.2" fill="#334155">NumPy (6× bincount)</text>
+<rect x="198.0" y="459.7" width="136.1" height="14" rx="3" fill="#64748b" fill-opacity="0.82"/>
+<circle cx="338.8" cy="466.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="324.6" cy="466.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="314.0" cy="466.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="340.5" cy="466.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="360.0" cy="466.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="334.1" cy="466.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="329.9" cy="466.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="329.0" cy="466.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="328.9" cy="466.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="349.1" cy="466.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="345.9" cy="466.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<text x="340.1" y="470.7" font-family="ui-monospace, Menlo, monospace" font-size="9.3" font-weight="600" fill="#0f172a">40.32 ms (±4.23)</text>
+<rect x="492.0" y="368.7" width="444.0" height="141.3" rx="8" fill="#f8fafc" stroke="#e2e8f0"/>
+<text x="504.0" y="388.7" font-family="Inter, -apple-system, sans-serif" font-size="12" font-weight="700" fill="#0f172a">SSHash + delta-map RNA (3.0 Mbp)</text>
+<text x="658.0" y="414.7" text-anchor="end" font-family="Inter, -apple-system, sans-serif" font-size="10.2" fill="#334155">Parakeet (multicore)</text>
+<rect x="666.0" y="403.7" width="34.7" height="14" rx="3" fill="#0d9488" fill-opacity="0.82"/>
+<circle cx="700.7" cy="410.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="709.7" cy="410.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="705.2" cy="410.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="704.6" cy="410.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="710.8" cy="410.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="701.5" cy="410.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="698.3" cy="410.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="694.9" cy="410.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="699.2" cy="410.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="698.0" cy="410.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="693.1" cy="410.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<text x="706.7" y="414.7" font-family="ui-monospace, Menlo, monospace" font-size="9.3" font-weight="600" fill="#0f172a">5.48 ms (549 Mbp/s)</text>
+<text x="658.0" y="442.7" text-anchor="end" font-family="Inter, -apple-system, sans-serif" font-size="10.2" fill="#334155">Parakeet (c, 1T)</text>
+<rect x="666.0" y="431.7" width="137.3" height="14" rx="3" fill="#14b8a6" fill-opacity="0.82"/>
+<circle cx="828.0" cy="438.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="775.5" cy="438.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="816.6" cy="438.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="803.5" cy="438.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="815.6" cy="438.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="807.8" cy="438.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="794.9" cy="438.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="803.2" cy="438.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="803.3" cy="438.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="787.2" cy="438.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<circle cx="786.0" cy="438.7" r="1.8" fill="#0f172a" fill-opacity="0.45"/>
+<text x="809.3" y="442.7" font-family="ui-monospace, Menlo, monospace" font-size="9.3" font-weight="600" fill="#0f172a">21.71 ms (138 Mbp/s)</text>
+</svg>

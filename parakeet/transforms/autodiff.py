@@ -1,39 +1,51 @@
-"""Reverse-mode differentiation of the array operators.
+"""Reverse-mode automatic differentiation over Parakeet's array operators.
 
-``grad(f)`` is an adverb like ``map`` or ``reduce``: it is applied while the
-calling function is elaborated, and what it produces is ordinary loop IR that
-is fused, tiled and parallelised with the rest.
+``grad(f)`` and ``vjp(f)`` act like data-parallel adverbs (``map``, ``reduce``):
+they run during elaboration and emit ordinary operator IR that is then fused,
+tiled, and parallelized alongside the forward pass.
 
-While ``f`` is elaborated a :class:`Tape` records each array operator applied
-to a value that depends on the differentiated arguments.  The record is made
-where the operator still has its algebraic meaning, so every rule below is
-one line of algebra:
+Design overview
+---------------
+While ``f`` is elaborated, a :class:`Tape` records each active array operator
+at the algebraic level before loop lowering, keeping every backward rule compact:
 
 ===============  ==========================================================
-element-wise     a map of the scalar function's partial derivative
-                 (:mod:`parakeet.transforms.derivatives`), summed over the
-                 dimensions the argument was broadcast along
-reduce           ``add``: the adjoint broadcast back; ``min``/``max``: sent
-                 to the winning elements; ``multiply``: times the product of
-                 the others
-matmul           two more matmuls
-map, allpairs    a loop over the same index space that differentiates the
-                 element function again, one element at a time
-views            none: a slice of an array is the same slice of its adjoint
+element-wise     map of symbolic partial derivatives
+                 (:mod:`parakeet.transforms.derivatives`), unbroadcast along
+                 stretched input axes
+reduce           ``add`` broadcasts the adjoint back; ``min``/``max`` splits
+                 ties equally among winning elements; ``multiply`` uses a
+                 zero-safe product-of-others rule
+matmul           two transposed matmuls (or outer products for 1D/2D cases)
+gather / scatter exact linear transposes of each other (``IndexScatter``
+                 backward for fancy-indexing gather; guarded gather for
+                 ``scatter_add``)
+map, allpairs    parallel backward loop with per-chunk privatized adjoint
+                 accumulators reduced at the end
+views            no tape node: any slice, transpose, or reshape of a dense
+                 array maps directly to the same view of its adjoint buffer
 ===============  ==========================================================
 
-Scalars are not recorded at all.  An IR expression is its own tape, and a
-variable bound to one remembers its definition, so the adjoint of a scalar
-is pushed straight down its expression tree.
+Scalars are never recorded on the tape: every IR expression is its own DAG, and
+``el.defs`` remembers pure scalar definitions so ``Tape.push`` walks scalar
+adjoints directly down the expression tree.
 
-The tape is static but the program is not: a loop body runs many times, a
-branch maybe never.  An operator applied to a differentiated value anywhere
-but in straight-line code therefore asks for the enclosing loop to be
-unrolled (possible when its trip count is a compile-time constant) and is an
-error otherwise.  Anything else that could carry a derivative past the tape
-unseen - a variable merged after a branch, an element stored into an array -
-is *tainted*, and meeting a tainted value during differentiation is an error
-too.  The gradient is right or there is none.
+Control flow and soundness
+--------------------------
+* Small static ``for`` loops unroll onto the tape; long/runtime ``for`` loops
+  and ``while`` loops are handled by :mod:`parakeet.transforms.ad_loops` using
+  ``O(sqrt(T))`` / ``O(log T)`` checkpointed IR reverse loops.
+* Pure runtime ``if`` statements evaluate both branches and select with
+  ``np.where``; stateful branches or unrecognized mutations taint the modified
+  variables/buffers so compilation fails loudly with :exc:`UnsupportedError`
+  rather than returning a silently wrong gradient.
+* Algebraic rematerialization (tiled attention, linear cross-entropy, softmax,
+  LayerNorm/RMSNorm) runs as a tape-level pass in
+  :mod:`parakeet.transforms.algebraic_vjp` immediately before emitting backward
+  statements.
+* Higher-order differentiation composes in two ways: forward-over-reverse
+  (``par.hvp`` via :mod:`parakeet.transforms.jvp` running over the backward
+  pass) and reverse-over-reverse (``grad(grad(...))`` via ``Tape.outer``).
 """
 
 from __future__ import annotations
@@ -146,10 +158,12 @@ def observe(el, stmt) -> None:
 
 
 def _info(el, what: str) -> tuple:
+  """Snapshot source location, description, library blame, and active branch for taint diagnostics."""
   return (el.loc(), what, el.blame(), el.if_stack[-1] if el.if_stack else None)
 
 
 def _tainted(el, info) -> UnsupportedError:
+  """Turn a recorded taint record into an actionable UnsupportedError (or trigger both-branch retry)."""
   loc, what, blamed, branch = info
   if branch is not None:
     el.request_both(*branch)  # start over running both branches, if this one allows it
@@ -172,7 +186,13 @@ def _tainted(el, info) -> UnsupportedError:
 
 
 class ScalarAdj:
-  """The adjoint of a scalar variable."""
+  """Adjoint accumulator for a single differentiated scalar IR variable.
+
+  In straight-line code inside the owning tape's ``home`` block, contributions
+  are collected in ``parts`` and summed once in :meth:`total`. When an inner
+  loop or parallel map backward body contributes to an outer scalar, a 1-element
+  memory cell (``cell``) or per-chunk ``redirect`` slot is used instead.
+  """
 
   def __init__(self, tape: Tape, var: Var, source: Node | None = None):
     self.tape = tape
@@ -184,6 +204,7 @@ class ScalarAdj:
     self.redirect: tuple | None = None  # (buffer, index): this chunk's own cell in a parallel loop
 
   def add(self, el, c: Expr, via: Tape) -> None:
+    """Accumulate scalar cotangent ``c`` into this variable (and mirror to JVP if active)."""
     if via.dry and self.tape is not via:
       self.needs_cell = True
       via.touched.add(self)
@@ -217,6 +238,7 @@ class ScalarAdj:
           el.emit(Store(dcell, ZERO, ops.prim("add", (Load(dcell, ZERO), cast(dc, dcell.type.elt)), dcell.type.elt)))
 
   def allocate(self, el) -> None:
+    """Materialize the 1-element accumulator cell when inner loops write to this scalar."""
     if self.needs_cell and self.cell is None:
       arr = el.alloc_array(self.var.type.strong, (ONE,), zero=True, label="adj")
       self.cell = arr.buf
@@ -224,6 +246,7 @@ class ScalarAdj:
         el.jvp.ensure_zero_buf_tangent(el, arr, label="d_adj")
 
   def total(self, el) -> Expr | None:
+    """Return the summed cotangent expression, or ``None`` if no contribution arrived."""
     t = self.var.type
     total: Expr | None = None
     for p in self.parts:
@@ -235,8 +258,14 @@ class ScalarAdj:
 
 
 class RootAdj:
-  """The adjoint of a dense array.  Views of the array are the same views of
-  the adjoint, so slicing, transposing and reshaping need no rules."""
+  """Adjoint accumulator for a concrete backing array buffer.
+
+  Every view (slice, transpose, reshape) of ``arr`` addresses the same relative
+  offset and strides inside ``self.buf``, so view operations require no tape
+  nodes. Whole-array contributions in straight-line code stay functional in
+  ``self.whole`` to enable fusion; partial views, in-place stores, or inner
+  loops promote to an explicit zero-initialized mutable buffer ``self.buf``.
+  """
 
   def __init__(self, tape: Tape, arr: ArrayVal, source: Node | None = None):
     self.tape = tape
@@ -250,6 +279,7 @@ class RootAdj:
     self.redirect: ArrayVal | None = None  # this chunk's own copy of the accumulator in a parallel loop
 
   def is_whole(self, el, v: ArrayVal) -> bool:
+    """True if ``v`` covers the exact same elements and layout as the root array."""
     a = self.arr
     return v is a or (
       v.rank == a.rank
@@ -259,12 +289,14 @@ class RootAdj:
     )
 
   def allocate(self, el) -> None:
+    """Allocate the zero-initialized mutable adjoint buffer (and its JVP shadow if needed)."""
     if self.buf is None:
       self.buf = el.alloc_array(self.arr.elt, self.arr.shape, zero=True, label="adj")
       if el.jvp is not None and not el.jvp.muted:
         el.jvp.ensure_zero_buf_tangent(el, self.buf, label="d_adj")
 
   def _ensure(self, el) -> ArrayVal:
+    """Return ``self.buf``, allocating it lazily if we are in the owning tape's home block."""
     if self.buf is None:
       if el.block is not self.tape.home:
         raise InternalError("adjoint of an array is needed inside a loop that was not anticipated")
@@ -272,10 +304,11 @@ class RootAdj:
     return self.buf  # type: ignore[return-value]
 
   def target(self, el) -> ArrayVal:
-    """Where adjoints are being accumulated right now."""
+    """Where adjoints are being accumulated right now (chunk-private buffer if redirected)."""
     return self.redirect if self.redirect is not None else self._ensure(el)
 
   def view(self, el, v: ArrayVal) -> ArrayVal:
+    """Project a view ``v`` of the primal array onto the matching slice of the adjoint buffer."""
     buf = self.target(el)
     out = ArrayVal(
       self.arr.elt, v.shape, buf=buf.buf, offset=el.tmp(iadd(buf.offset, isub(v.offset, self.arr.offset)), "off"),
@@ -286,6 +319,7 @@ class RootAdj:
     return out
 
   def add(self, el, v: ArrayVal, g, via: Tape) -> None:
+    """Accumulate array cotangent ``g`` into view ``v`` of this root buffer."""
     if self.stored is not None:
       raise _tainted(el, self.stored)
     if via.dry and self.tape is not via:
@@ -300,6 +334,7 @@ class RootAdj:
     accumulate(el, self.view(el, v), g)
 
   def scatter(self, el, pos: Expr, c: Expr, via: Tape) -> None:
+    """Accumulate a scalar cotangent ``c`` at flat primal buffer offset ``pos``."""
     if self.stored is not None:
       raise _tainted(el, self.stored)
     if via.dry and self.tape is not via:
@@ -312,6 +347,7 @@ class RootAdj:
     store_element(el, buf, p, ops.prim("add", (Load(buf.buf, p), cast(c, elt)), elt))
 
   def total(self, el) -> ArrayVal | None:
+    """Merge any functional ``whole`` adjoint into ``buf`` and return the final adjoint array."""
     if self.stored is not None:
       raise _tainted(el, self.stored)
     if self.buf is None:
@@ -393,6 +429,16 @@ class Node:
 
 
 class Tape:
+  """Elaboration-time reverse-mode tape for one differentiated scope.
+
+  Records active operator applications in forward order (``self.nodes``) along
+  with allocation/store timestamps (``tick``, ``born``, ``stored_at``) so the
+  backward pass can detect in-place overwrites of saved inputs. Nested tapes
+  use ``parent`` when differentiating inside ``map`` / ``fold`` bodies, and
+  ``outer`` when the gradient computation itself is being differentiated
+  (higher-order ``grad(grad(...))``).
+  """
+
   def __init__(self, el, parent: Tape | None = None, dry: bool = False, key: tuple = (), outer: Tape | None = None):
     self.parent = parent
     self.dry = dry
@@ -442,6 +488,7 @@ class Tape:
   # ---- lookup --------------------------------------------------------------------
 
   def find_root(self, uid: int) -> RootAdj | None:
+    """Walk up the parent tape chain to locate the RootAdj for buffer ``uid``."""
     t: Tape | None = self
     while t is not None:
       r = t.roots.get(uid)
@@ -451,6 +498,7 @@ class Tape:
     return None
 
   def find_scalar(self, uid: int) -> ScalarAdj | None:
+    """Walk up the parent tape chain to locate the ScalarAdj for scalar ``uid``."""
     t: Tape | None = self
     while t is not None:
       s = t.scalars.get(uid)
@@ -460,6 +508,7 @@ class Tape:
     return None
 
   def find_delayed(self, arr: ArrayVal) -> tuple[Tape, Node] | None:
+    """Walk up the parent tape chain to find the Node that produced delayed array ``arr``."""
     t: Tape | None = self
     while t is not None:
       n = t.delayed.get(id(arr))
@@ -532,6 +581,7 @@ class Tape:
   # ---- recording ---------------------------------------------------------------------
 
   def record(self, el, node: Node) -> None:
+    """Append ``node`` to the tape with a monotonic tick and a stable AST origin token."""
     if el.block is not self.block:
       self.not_static(el)
     self.tick += 1
@@ -551,6 +601,8 @@ class Tape:
     node.origin = origin
 
   def not_static(self, el) -> None:
+    """Handle an active array op inside a dynamic branch or loop by requesting
+    both-branch evaluation or loop unrolling, or raising UnsupportedError."""
     if len(el.if_stack) > self.if_depth:
       el.request_both(*el.if_stack[-1])
     for fr in reversed(el.frames):
@@ -593,6 +645,7 @@ class Tape:
   # ---- hooks called by the frontend ------------------------------------------------------
 
   def elementwise(self, el, args: list, active: list[bool], fn, elt: ScalarType, cost: int):
+    """Evaluate and record an element-wise operator, materializing expensive delayed inputs."""
     # the backward pass evaluates the arguments again: they must be cheap to re-read
     args = [el.as_concrete(a) if isinstance(a, ArrayVal) and a.buf is None and a.cost > CHEAP_COST else a for a in args]
     args = [a if isinstance(a, ArrayVal) else el.tmp(a) for a in args]
@@ -619,6 +672,7 @@ class Tape:
     self.register(el, node, out)
 
   def reduce(self, el, plain, op: str, a: ArrayVal, axis, init, what: str, keepdims):
+    """Evaluate and record a reduction (``add``, ``mul``, ``min``, ``max``) on the tape."""
     if op != "add" and a.buf is None and a.cost > CHEAP_COST:
       a = el.as_concrete(a)
     if init is not None:
@@ -640,6 +694,7 @@ class Tape:
     return out
 
   def matmul(self, el, plain, a: ArrayVal, b: ArrayVal, what: str):
+    """Evaluate and record a 1D/2D matrix or vector product on the tape."""
     from ..lib.numpy_lib import matmul
 
     with self.computing(el):
@@ -1022,6 +1077,13 @@ def _mentioned(el, exprs: list[Expr]) -> set[int]:
 
 
 def _elementwise(tape: Tape, el, node: Node, g: ArrayVal) -> None:
+  """Reverse-mode rule for element-wise operators.
+
+  For each active input ``args[k]``, symbolically differentiates the scalar
+  element function ``fn`` with respect to input ``k``, checks that any input
+  still referenced by that partial derivative has not been overwritten since
+  forward evaluation, and unbroadcasts the result back to ``args[k].shape``.
+  """
   active, fn, elt, cost = node.info
   args = node.inputs
   n = len(args)
@@ -1077,10 +1139,13 @@ def _elementwise(tape: Tape, el, node: Node, g: ArrayVal) -> None:
 
 
 def _alias(tape: Tape, el, node: Node, g: ArrayVal) -> None:
+  """Pass cotangents straight through a materialized copy to its source array."""
   tape.add(el, node.inputs[0], g)
 
 
 def _opaque(tape: Tape, el, node: Node, g: ArrayVal) -> None:
+  """Fallback backward rule for a delayed array with no dedicated algebraic rule:
+  re-evaluate ``arr.fn(idx)`` element-by-element and push scalar cotangents."""
   arr = node.inputs[0]
   if g.buf is None and g.cost > CHEAP_COST:
     g = el.as_concrete(g)
@@ -1095,6 +1160,14 @@ def _opaque(tape: Tape, el, node: Node, g: ArrayVal) -> None:
 
 
 def _reduce(tape: Tape, el, node: Node, g) -> None:
+  """Reverse-mode rule for ``sum``, ``prod``, ``min``, and ``max`` reductions.
+
+  * ``add``: broadcast the cotangent back along reduced axes (no input read needed).
+  * ``mul``: zero-safe rule counting zeros per slice so 1-zero slices still receive
+    the product of all non-zero siblings instead of ``0 / 0 = NaN``.
+  * ``min`` / ``max``: divide the cotangent equally across all elements tied with
+    the extremum (including ``init`` if supplied).
+  """
   from ..lib.numpy_lib import _axes
   from ..lib.numpy_lib import _reduce_prim as reduce_plain
 
@@ -1190,6 +1263,7 @@ def _reduce(tape: Tape, el, node: Node, g) -> None:
 
 
 def _matmul(tape: Tape, el, node: Node, g) -> None:
+  """Reverse-mode rule for 1D/2D ``matmul`` / ``dot``: ``dA = g @ B.T``, ``dB = A.T @ g``."""
   from ..lib.numpy_lib import matmul as matmul_plain
 
   a, b = node.inputs
@@ -1220,6 +1294,8 @@ def _matmul(tape: Tape, el, node: Node, g) -> None:
 
 
 def _pack(tape: Tape, el, node: Node, g: ArrayVal) -> None:
+  """Reverse-mode rule for array assembly (``stack`` / ``concatenate``):
+  slice each packed sub-view out of the output adjoint and add to its source."""
   holder = node.holder
   assert isinstance(holder, RootAdj)
   for view, v in zip(node.info, node.inputs):
@@ -1354,6 +1430,9 @@ def _map(tape: Tape, el, node: Node, g: ArrayVal) -> None:
 
 
 def _store(tape: Tape, el, node: Node, g) -> None:
+  """Reverse-mode rule for slice assignment ``dest[...] = value``: route the
+  current adjoint of ``dest`` to ``value`` and zero out that region so earlier
+  writers do not see cotangents meant for the overwritten slice."""
   dest, root, active = node.info
   (value,) = node.inputs
   region = root.view(el, dest)
@@ -1364,6 +1443,7 @@ def _store(tape: Tape, el, node: Node, g) -> None:
 
 
 def _store_element(tape: Tape, el, node: Node, g) -> None:
+  """Reverse-mode rule for scalar element assignment ``arr[pos] = v``."""
   pos, root, active = node.info
   (v,) = node.inputs
   buf = root.target(el)
@@ -1416,6 +1496,7 @@ def _fold_step(tape: Tape, el, x: ArrayVal, info, i: Expr, cell: ArrayVal, dry: 
 
 
 def _fold(tape: Tape, el, node: Node, g: Expr) -> None:
+  """Reverse-mode rule for a sequential 1D fold with saved per-step accumulators."""
   (x,) = node.inputs
   accs, init, step, n = node.info
   tape.stale(el, node)
@@ -1434,6 +1515,9 @@ def _fold(tape: Tape, el, node: Node, g: Expr) -> None:
 
 
 def _scatter_add(tape: Tape, el, node: Node, g: ArrayVal) -> None:
+  """Reverse-mode rule for ``scatter_add(n, idx, values, where=...)``:
+  the linear transpose of scatter-add is a (optionally masked/bounds-guarded)
+  gather ``d_values = g[idx]``."""
   (values,) = node.inputs
   if len(node.info) == 1:
     (idx,) = node.info
@@ -1477,6 +1561,10 @@ def _scatter_add(tape: Tape, el, node: Node, g: ArrayVal) -> None:
 
 
 def _gather(tape: Tape, el, node: Node, g) -> None:
+  """Reverse-mode rule for fancy-indexing gather ``base[idx...]``:
+  emits a parallel ``IndexScatter`` into ``base``'s adjoint buffer (or routes
+  through recorded ``scatter_add`` when inside an outer ``grad(grad(...))``
+  so second derivatives transpose cleanly back to gather)."""
   from ..syntax.ir import IndexScatter, ScatterUpdate
 
   (base,) = node.inputs
@@ -1751,6 +1839,7 @@ def _wrt_leaf(el, tape: Tape, v, what: str, *, in_record: bool = False):
 
 
 def _adjoint(el, holder, v):
+  """Materialize the final gradient leaf (or nested tuple/record/RaggedArray) from ``holder``."""
   if isinstance(holder, _StaticLeaf):
     return holder.value
   if record := record_type(holder):

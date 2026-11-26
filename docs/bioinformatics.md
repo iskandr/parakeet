@@ -85,6 +85,107 @@ rewrite into [chunkwise parallel affine prefix scans](algebra.md#law-4-chunkwise
 --8<-- "examples/bio_gallery.py:banded_sw_and_ssm"
 ```
 
+## 6. Classic sequence & structural algorithms (`examples/bio_algorithms.py`)
+
+Beyond fused gallery kernels, [`examples/bio_algorithms.py`](https://github.com/iskandr/parakeet/blob/master/examples/bio_algorithms.py)
+implements seven textbook bioinformatics kernels in compiled Python/NumPy:
+
+* **3-state affine-gap Gotoh global alignment + traceback (`gotoh_global_align`):**
+  Maintains `M`, `Ix`, and `Iy` DP matrices plus packed traceback directions and
+  emits run-length-encoded CIGAR `(ops, lengths)` via local growable lists.
+* **Multi-word Myers bit-vector edit distance (`myers_edit_distance`):**
+  Bit-parallel Levenshtein distance over arbitrary pattern lengths using 64-bit
+  `uint64` word blocks (`Pv`, `Mv`, `Peq`).
+* **O(N) monotone-deque minimizer sketching (`minimizer_sketch`):**
+  Canonical 2-bit k-mers hashed with SplitMix64 and sketched in a single linear
+  pass using a circular monotone deque.
+* **FM-index / BWT backward search (`build_fm_index`, `fm_backward_search_batch`):**
+  `C` array + sampled `Occ` checkpoints + LF-mapping queried in parallel over a
+  `RaggedArray[uint8]` batch of reads.
+* **CIGAR expansion (`expand_cigar`):**
+  One-line parallel expansion of `(ops, lengths)` via `par.flatmap`
+  (`IndexExpand`).
+* **Profile HMM Viterbi + Forward-Backward (`hmm_viterbi_and_posterior`):**
+  Log-space Viterbi decoding plus Forward-Backward posterior state probabilities.
+* **Kabsch 3D superposition & RMSD (`kabsch_rmsd`, `batched_kabsch_rmsd`):**
+  Uses Parakeet's compiled `np.linalg.svd` and `np.linalg.det` (with proper
+  rotation reflection correction when `det(R) < 0`) inside `par.parfor` to
+  superimpose thousands of protein structures in parallel with zero external
+  LAPACK dependency.
+
+## 7. Long-read RNA alignment & quantification (`examples/patro_longread_rna.py`)
+
+Inspired by Rob Patro's COMBINE lab tools (SSHash, Piscem, Spearfish, and
+Oarfish), [`examples/patro_longread_rna.py`](https://github.com/iskandr/parakeet/blob/master/examples/patro_longread_rna.py)
+puts a complete long-read RNA aligner and isoform quantifier into ~250 lines of
+compiled Python/NumPy:
+
+1. **Unitig collapse + SSHash sparse minimizer index (`build_unitig_sshash_index`):**
+   Collapses redundant gene isoforms into exact maximal shared unitigs stored
+   in CSR arrays with `unitig -> (tx_id, tx_pos)` postings and a
+   `FrozenHashTable` mapping sparse `m`-mer minimizers to small unitig buckets.
+2. **Streaming unitig contiguity + Spearfish delta-mapping (`stream_map_long_reads`):**
+   Inside `par.parfor` over a `RaggedArray[uint8]` of long reads, once a
+   minimizer probe lands on a unitig, the inner loop extends the Maximal Exact
+   Match (MEM) along that unitig in O(1) per base with zero hash lookups,
+   projects the anchor to all sharing isoforms via CSR postings, chains
+   co-linear diagonals, and retains competitive isoforms within `delta_frac` of
+   the top score.
+3. **Oarfish-style coverage-aware EM (`oarfish_em_quantify`):**
+   Runs compiled Expectation-Maximization over the delta-mapped compatibility
+   sets, weighting each compatible isoform by alignment score and effective
+   length compatibility.
+
+On 80 real human Ensembl cDNA isoforms (`TP53`, `PKM`, `MAPT`, `ACTB`;
+225,539 raw bp), unitig collapsing shrinks the reference by **9.7x**
+(`23,247` unitig bp across 231 unitigs), the SSHash fast path skips the hash
+table on **92.2%** of base steps, multicore mapping sustains **548.6 Mbp/s** on
+Apple M1 Pro (11-replicate median), and Oarfish EM achieves **Pearson r = 0.965**
+against ground truth.
+
+## 8. Overlapped CPU I/O, decompression, and compiler scope
+
+Parakeet intentionally does not embed POSIX file descriptors, zlib/zstd
+container parsers, or streaming I/O syscalls inside `@par.jit`. Keeping I/O out
+of whole-program compilation keeps the compiler small, portable, and GPU-safe,
+while still allowing full overlap between disk/codec work and compute:
+
+### Double-buffered CPU I/O + kernel orchestration
+
+Compiled Parakeet functions **release the Python GIL** for their entire C,
+multicore, CUDA, or Metal execution. That makes overlapped streaming
+straightforward with a 2-slot (or N-slot) ring buffer:
+
+1. **Producer thread (`ThreadPoolExecutor` / background reader):** Reads raw
+   FASTQ/BAM chunks from disk or `mmap`, decompresses them with a fast native
+   codec (`isal`, `zlib-ng`, `libdeflate`, or `pysam`), and packs the next slab
+   into a pre-allocated pinned `uint8` / `RaggedArray` host buffer (and on GPU,
+   stages an asynchronous host-to-device copy onto slot `k % 2`).
+2. **Consumer thread (Parakeet compute):** Launches `@par.jit` kernels (e.g.,
+   `par.split_bytes`, `encode_canonical_kmers_and_gc`, `stream_map_long_reads`,
+   or `single_pass_pileup`) on slab `(k - 1) % 2`. Because the GIL is released,
+   CPU decompression of slab `k` overlaps directly with multicore/GPU kernels
+   crunching slab `k - 1`.
+3. **Thread budget coordination:** On CPU-only hosts, reserve 1-2 cores for the
+   decompression producer and cap Parakeet's worker pool (`PARAKEET_THREADS`)
+   to the remaining cores so reader and compute threads do not oversubscribe.
+
+### What belongs in Parakeet vs. outside its semantic hull
+
+* **Fits inside `@par.jit`:** *Block-parallel BGZF DEFLATE inflate.* Because
+  BGZF splits `.bam` / `.fastq.gz` files into independent `<= 64 KiB` compressed
+  blocks whose uncompressed sizes (`ISIZE`) are known up front from the block
+  headers, a `par.parfor` over `N` BGZF blocks can decode each block's bit-stream
+  in parallel (~300 lines of `uint64` bit-reading, canonical Huffman LUT tables,
+  and LZ77 copy loops into a pre-sized output slab).
+* **Escapes Parakeet's semantic hull:** Single-stream sequential `gzip`/`zstd`
+  decompression, container framing/CRC error recovery, file I/O syscalls, and
+  unbounded dynamic output growth on GPU. Single-stream DEFLATE has a serial
+  32 KiB sliding-window dependency with no data parallelism, and native
+  SIMD/assembly libraries (`isa-l`, `libdeflate`, `zstd`) already saturate NVMe
+  bandwidth on 1-2 CPU cores. Feed decompressed `uint8` slabs from those
+  libraries into Parakeet instead.
+
 ## Inspecting the rewrites
 
 Run `par.show_rewrite` on any workload above to verify that scatter fusion,
