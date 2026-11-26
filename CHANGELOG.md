@@ -1,5 +1,47 @@
 # Changelog
 
+## 1.9.0 (November 26, 2026)
+
+Pythonic string sequences, constant char-dict lookup tables, multi-output and
+ragged `par.map`, compiled block-parallel BGZF DEFLATE inflate, overlapped
+streaming FASTQ I/O, batched 3D `np.linalg.*`, and differentiable protein
+backbone dihedrals.
+
+### Compiler & language ergonomics
+
+- **Direct string sequences:** Passing `list[str]` or `list[bytes]` to `@par.jit`
+  packs equal-length ASCII strings into a 2D `uint8` array `(N, L)` and
+  variable-length strings into a `RaggedArray[uint8]`.
+- **Single-character ASCII comparisons & constant char-dict LUTs:** Expressions
+  like `ch == "G"`, `seq == "C"`, `"A" <= ch <= "Z"`, and `ch in "CG"` compile
+  directly against `uint8` bytes. Constant single-char dictionaries
+  (`BASE_CODE = {"A": Base.A, ...}`) lower `BASE_CODE[seq]` and
+  `BASE_CODE.get(ch, 4)` into a static 256-entry L1-resident lookup table.
+- **Multi-output & ragged `par.map`:** Mapped functions can return tuples of
+  scalars and/or fixed-shape arrays (unboxed into one fused parallel loop) and
+  map directly over `RaggedArray` inputs.
+
+### Bioinformatics, streaming I/O, and batched linear algebra
+
+- **Block-parallel BGZF inflate & overlapped FASTQ streaming
+  (`examples/bgzf_and_streaming_io.py`):** Full compiled RFC-1951 DEFLATE
+  decoder (stored, fixed Huffman, and dynamic Huffman with a 9-bit fast LUT +
+  LZ77) running in parallel across BGZF blocks (1,579 MB/s multicore inflate on
+  Apple M1 Pro, 7.0x faster than Python `gzip`), paired with a double-buffered
+  overlapped `zlib` + GIL-free Parakeet FASTQ QC pipeline (341 MB/s overlapped
+  vs. 168 MB/s sequential, 906 MB/s with Parakeet BGZF + QC).
+- **Batched 3D `np.linalg.*` & new solvers (`parakeet/lib/linalg_lib.py`):**
+  Added `np.linalg.eigvalsh`, `np.linalg.pinv`, `np.linalg.lstsq`, and batched
+  3D `(B, M, N)` support via `par.map` for `cholesky`, `det`, `solve`, `inv`,
+  `qr`, `eigh`, `eigvalsh`, `svd`, and `pinv`.
+- **Differentiable protein backbone dihedrals (`examples/bio_algorithms.py`):**
+  Added vectorized Ramachandran `backbone_dihedrals(N, CA, C)` returning
+  `(phi, psi, omega)` torsion angles, verified with `par.grad`.
+- **Simplified Pythonic examples:** Rewrote C-style loops, magic ASCII numbers,
+  and explicit `par.parfor` calls across `examples/bio_gallery.py`,
+  `examples/bio_algorithms.py`, `examples/patro_longread_rna.py`,
+  `examples/cudatree_gbdt.py`, and `examples/complex_fft_and_fasta.py`.
+
 ## 1.8.0 (November 26, 2026)
 
 Compiled `np.linalg` matrix decompositions and solvers, seven classic
