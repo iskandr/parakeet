@@ -263,6 +263,7 @@ class Alloc(Stmt):
   var: Var
   count: Expr
   zero: bool = False
+  stack: bool = False
 
 
 @dataclass(eq=False, slots=True)
@@ -883,7 +884,8 @@ def fmt_block(block: list[Stmt], indent: int = 1) -> list[str]:
       out.append(f"{pad}continue")
     elif isinstance(s, Alloc):
       z = ", zeroed" if s.zero else ""
-      out.append(f"{pad}{s.var.name} = alloc({s.var.type.elt}, {fmt_expr(s.count)}{z})")
+      st = ", stack" if s.stack else ""
+      out.append(f"{pad}{s.var.name} = alloc({s.var.type.elt}, {fmt_expr(s.count)}{z}{st})")
     elif isinstance(s, Incref):
       out.append(f"{pad}incref({fmt_expr(s.buf)})")
     elif isinstance(s, Release):

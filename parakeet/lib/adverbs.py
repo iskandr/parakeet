@@ -997,6 +997,79 @@ def _scatter_add_entry(el, n, idx, values, where=None):
 scatter_add = _ScatterAddFunction("scatter_add", _scatter_add_entry)
 
 
+class FixedList:
+  """Python fallback for ``par.fixed_list(capacity, dtype)`` when executed outside ``@par.jit``."""
+
+  __slots__ = ("_data", "_cap", "_dtype")
+
+  def __init__(self, capacity: int, dtype=np.float32):
+    if capacity < 1:
+      raise ValueError("fixed_list() capacity must be >= 1")
+    self._cap = int(capacity)
+    self._dtype = np.dtype(dtype)
+    self._data: list = []
+
+  def append(self, value) -> None:
+    if len(self._data) >= self._cap:
+      raise IndexError(f"fixed_list capacity {self._cap} exceeded")
+    self._data.append(self._dtype.type(value))
+
+  def pop(self):
+    if not self._data:
+      raise IndexError("pop from empty fixed_list")
+    return self._data.pop()
+
+  def clear(self) -> None:
+    self._data.clear()
+
+  def __len__(self) -> int:
+    return len(self._data)
+
+  def __getitem__(self, i: int):
+    return self._data[i]
+
+  def __setitem__(self, i: int, value) -> None:
+    self._data[i] = self._dtype.type(value)
+
+  def __iter__(self):
+    return iter(self._data)
+
+  def __array__(self, dtype=None):
+    return np.asarray(self._data, dtype=dtype or self._dtype)
+
+
+class _FixedListFunction(LibFunction):
+  def __call__(self, capacity: int, dtype=np.float32):
+    return FixedList(capacity, dtype)
+
+
+def _fixed_list_entry(el, capacity, dtype=np.float32):
+  """Create a fixed-capacity thread-local list/stack backed by a stack-allocated
+  buffer (zero heap ``malloc`` — native on CPU, CUDA, and Metal).
+
+  Supports ``.append(v)``, ``.pop()``, ``.clear()``, ``len(fl)``, ``fl[i]``,
+  ``fl[i] = v``, and ``for x in fl:`` inside ``@par.jit``, ``par.parfor``, and
+  ``par.map`` kernels."""
+  from ..ndtypes import BufType
+  from ..syntax.ir import Alloc, Assign
+  from ..syntax.values import FixedListVal
+
+  cap = capacity if isinstance(capacity, int) else el.static_int(capacity, "fixed_list capacity")
+  if cap < 1:
+    raise el.error(StaticValueError, "fixed_list() capacity must be >= 1")
+  elt = el.as_dtype(dtype, "dtype").strong
+  buf = Var("fl_buf", BufType(elt))
+  length = Var("fl_len", I)
+  el.mutables.add(length.uid)
+  el.nonneg.add(length.uid)
+  el.emit(Alloc(buf, Const(cap, I), zero=False, stack=True))
+  el.emit(Assign(length, ZERO))
+  return FixedListVal(buf, length, cap, elt)
+
+
+fixed_list = _FixedListFunction("fixed_list", _fixed_list_entry)
+
+
 def _bool():
   from ..ndtypes import Bool
 

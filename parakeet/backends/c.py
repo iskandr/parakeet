@@ -42,6 +42,11 @@ class HostEmitter(CFamilyEmitter):
     self.loop_info: dict[int, tuple[bool, bool]] = {}
     self.n_labels = 0
     self.label_used = False
+    self.stack_bufs: dict[int, int] = {
+      t.var.uid: int(t.count.value)
+      for t in ir.walk_stmts(fn.body)
+      if isinstance(t, ir.Alloc) and t.stack and isinstance(t.count, ir.Const)
+    }
 
   # ---- statements ----------------------------------------------------------
 
@@ -78,6 +83,10 @@ class HostEmitter(CFamilyEmitter):
   def alloc(self, s: ir.Alloc, out: list[str], pad: str) -> None:
     name = s.var.name
     ct = self.ctype(s.var.type.elt)
+    if s.stack and isinstance(s.count, ir.Const):
+      if s.zero:
+        out.append(f"{pad}memset({name}_d, 0, sizeof({name}_d));")
+      return
     self.label_used = True
     out.append(f"{pad}{name} = pk_alloc(rt, {self.expr(s.count)}, sizeof({ct}), {int(s.zero)});")
     out.append(f"{pad}if (PK_UNLIKELY(!{name})) goto {self.fail_label};")
@@ -182,7 +191,10 @@ class HostEmitter(CFamilyEmitter):
   def declare(self, v: ir.Var, out: list[str], pad: str = "  ") -> None:
     t = v.type
     if isinstance(t, BufType):
-      out.append(f"{pad}pk_buf* {v.name} = NULL; {self.ctype(t.elt)}* {v.name}_d = NULL;")
+      if v.uid in self.stack_bufs:
+        out.append(f"{pad}{self.ctype(t.elt)} {v.name}_d[{self.stack_bufs[v.uid]}];")
+      else:
+        out.append(f"{pad}pk_buf* {v.name} = NULL; {self.ctype(t.elt)}* {v.name}_d = NULL;")
     elif t.kind == "b":
       out.append(f"{pad}bool {v.name} = false;")
     else:
@@ -277,7 +289,7 @@ class HostEmitter(CFamilyEmitter):
         elif isinstance(t, ir.Continue):
           items.append(("continue",))
         elif isinstance(t, ir.Alloc):
-          items.append(("alloc", var_key(t.var), expr_key(t.count), t.zero))
+          items.append(("alloc", var_key(t.var), expr_key(t.count), t.zero, t.stack))
         elif isinstance(t, ir.Incref):
           items.append(("incref", expr_key(t.buf)))
         elif isinstance(t, ir.Release):

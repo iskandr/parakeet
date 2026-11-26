@@ -10,7 +10,19 @@ from ..ndtypes import Bool, Float32, Float64, Int64, ScalarType, UInt64, WeakBoo
 from ..syntax import ops
 from ..syntax.ir import Assign, Const, Expr, If, IndexScatter, RtCall, ScatterUpdate, Scope, Store, Var
 from ..syntax.ops import ONE, ZERO, I, cast, cmp, iadd, imul, isub
-from ..syntax.values import CHEAP_COST, ArrayVal, RangeVal, TypeVal, describe
+from ..syntax.values import (
+  CHEAP_COST,
+  ArrayVal,
+  BatchedVal,
+  ChainVal,
+  FixedListVal,
+  ListVal,
+  ProductVal,
+  RangeVal,
+  TypeVal,
+  VecVal,
+  describe,
+)
 from .core import (
   along_axis,
   array_literal,
@@ -244,7 +256,15 @@ def identity(el, n, dtype=None):
 @register(np.array, np.asarray, np.ascontiguousarray, np.asanyarray)
 def array(el, obj, dtype=None, copy=None, order=None, ndmin=0):
   elt = None if dtype is None else el.as_dtype(dtype)
-  if isinstance(obj, tuple):
+  if isinstance(obj, ListVal):
+    arr = array_literal(el, list(obj.items), elt)
+  elif isinstance(obj, VecVal):
+    arr = el.vec_to_array(obj)
+  elif isinstance(obj, FixedListVal):
+    arr = el.fixed_list_to_array(obj)
+  elif isinstance(obj, (ChainVal, ProductVal, BatchedVal)):
+    arr = el.as_array(obj)
+  elif isinstance(obj, tuple):
     arr = array_literal(el, list(obj), elt)
   elif isinstance(obj, Expr):
     arr = el.scalar_to_array(obj if elt is None else cast(obj, elt))
@@ -466,6 +486,8 @@ def fliplr(el, a):
 
 
 def _sequence(el, seq, what: str) -> list[ArrayVal]:
+  if isinstance(seq, ListVal):
+    return [_arr(el, x) for x in seq.items]
   if isinstance(seq, tuple):
     return [_arr(el, x) for x in seq]
   if isinstance(seq, ArrayVal) and seq.rank >= 1 and isinstance(seq.shape[0], Const):

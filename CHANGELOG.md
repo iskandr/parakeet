@@ -1,5 +1,34 @@
 # Changelog
 
+## 1.5.0 (November 25, 2026)
+
+Local Python lists, GPU-safe fixed-capacity scratch buffers, dynamic-shape
+array/ragged loop rebinding, and zero-allocation `itertools` combinators
+(Python Semantics Wave 2, closing `#80`).
+
+### Lists, growable CPU vectors, & GPU scratch stacks
+
+- **Compile-time static `list`:** Straight-line and unrolled `outs = []` with
+  `.append()`, `.extend()`, `.pop()`, `.clear()`, indexing/slicing, and
+  consumption by `np.stack`, `np.concatenate`, `np.array`, and
+  `RaggedArray.from_sequences` lowers away before IR emission and composes
+  seamlessly with `par.grad`.
+- **Runtime growable CPU `list[T]`:** Lists mutated inside runtime `for`/`while`
+  loops or dynamic `if` branches automatically promote to a refcounted
+  homogeneous growable buffer (`buf`, `len`, `cap`) with geometric doubling and
+  zero-copy conversion to `ArrayVal` (`par.config.verify=True` clean).
+- **`par.fixed_list(capacity, dtype)`:** Fixed-capacity stack-allocated scratch
+  buffer (`ir.Alloc(..., stack=True)`) emitted natively as thread-local stack
+  arrays on CPU, multicore, CUDA, and Apple Metal with zero `malloc` and runtime
+  bounds/capacity checks.
+- **Dynamic-shape loop rebinding:** Verified runtime shape rebinding for both
+  `ArrayVal` (e.g., `arr = arr[arr > thresh]`) and `RaggedArray` across `while`
+  and `for` loops under `par.config.verify=True`.
+- **Static `itertools` & generators:** Zero-allocation compilation for
+  `itertools.pairwise`, `itertools.islice`, `itertools.chain`,
+  `itertools.product`, and `itertools.batched` in `for` loops and generator
+  expressions (`sum(...)`, `np.array(...)`).
+
 ## 1.4.0 (November 25, 2026)
 
 Broader idiomatic Python semantics lowered cleanly at elaboration time with

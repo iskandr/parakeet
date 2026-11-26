@@ -14,9 +14,9 @@ code deliberately differs from running the same function in CPython.
 | tuples (also nested) | compile-time structures of the above |
 | NamedTuples and `@dataclass` objects (frozen or non-frozen) | fields hold scalar, array, or nested record leaves; supports pure methods, `@property`, `__call__`, and local functional field rebinding (`obj.x = v`) |
 | dictionaries with fixed string keys | key order is part of the structure, with lookup by literal key |
-| lists, list comprehensions | **arrays** (there are no Python lists in compiled code) |
+| lists, list comprehensions | homogeneous numeric literals build arrays; `[]` and mutated/heterogeneous lists compile as zero-overhead compile-time lists (`.append`, `.extend`, `.pop`, `.clear`), automatically promoting to a growable CPU buffer when mutated inside a dynamic loop or runtime branch; use `par.fixed_list(cap, dtype)` for zero-`malloc` thread-local scratch inside parallel loops and GPU kernels |
 | `None`, strings, dtypes, functions, modules | compile-time constants |
-| `slice`, `range`, `zip`, `enumerate` | supported as values and in loops |
+| `slice`, `range`, `zip`, `enumerate`, `itertools` (`pairwise`, `islice`, `chain`, `product`, `batched`) | supported as values and in zero-allocation `for` loops / generator expressions |
 
 `float16` data is widened to `float32`. Complex numbers, object arrays, structured
 dtypes, general-purpose mutable containers, sets and arbitrary class instances are not supported; passing
@@ -102,9 +102,20 @@ Compile-time constants
     argument of the compiled function, Parakeet specialises on its *value*
     automatically; otherwise it reports which expression must be constant.
 
-Lists are arrays
-:   `[a, b, c]` and `[f(x) for x in xs]` build arrays. `sorted(x)` returns an
-    array. There is no `append`.
+Lists and dynamic loops
+:   Numeric literals like `[1.0, 2.0, 3.0]` and `[f(x) for x in xs]` still build
+    arrays directly. Local lists built with `outs = []; outs.append(...)` stay
+    completely unboxed at compile time in straight-line and unrolled code (so
+    `np.stack(outs)` and `RaggedArray.from_sequences(outs)` work with zero heap
+    allocation and compose with `par.grad`), and automatically promote to a
+    growable homogeneous CPU buffer with geometric doubling when appended inside
+    a runtime `for`/`while` loop or dynamic `if` branch. Inside parallel
+    `par.parfor`/`par.map` bodies and GPU kernels (CUDA/Metal),
+    `par.fixed_list(cap, dtype)` provides a fixed-capacity stack-allocated
+    scratch buffer with zero `malloc`. Variables holding arrays or
+    `RaggedArray`s may also be rebound to different shapes across `while`/`for`
+    loop iterations (for example, shrinking an active frontier with
+    `arr = arr[mask]`).
 
 Integer arithmetic
 :   Python `int`s are 64-bit and wrap on overflow (like NumPy), they are not

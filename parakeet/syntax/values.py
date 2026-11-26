@@ -157,6 +157,62 @@ class EnumerateVal:
 
 
 @dataclass(eq=False, slots=True)
+class ListVal:
+  """Compile-time mutable Python list in straight-line or unrolled code."""
+
+  items: list[Any]
+  origin: Any = None
+  path: Any = None
+  loop_depth: int = 0
+  branch_depth: int = 0
+
+
+@dataclass(eq=False, slots=True)
+class VecVal:
+  """CPU runtime growable homogeneous list backed by ``(buf, length, cap)``."""
+
+  buf: Var
+  length: Var
+  cap: Var
+  elt: ScalarType
+  slot: Var
+  home: Scope
+
+
+@dataclass(eq=False, slots=True)
+class FixedListVal:
+  """Fixed-capacity thread-local stack/list backed by a stack-allocated buffer
+  (zero heap malloc — native on CPU, CUDA, and Metal)."""
+
+  buf: Var
+  length: Var
+  cap: int
+  elt: ScalarType
+
+
+@dataclass(eq=False, slots=True)
+class ChainVal:
+  """Zero-allocation ``itertools.chain(*iterables)``."""
+
+  items: tuple
+
+
+@dataclass(eq=False, slots=True)
+class ProductVal:
+  """Zero-allocation ``itertools.product(*iterables)``."""
+
+  items: tuple
+
+
+@dataclass(eq=False, slots=True)
+class BatchedVal:
+  """Zero-allocation ``itertools.batched(iterable, n)``."""
+
+  item: Any
+  n: Expr
+
+
+@dataclass(eq=False, slots=True)
 class Undefined:
   """Placeholder for a name that is not bound on every path."""
 
@@ -188,6 +244,14 @@ def describe(v: Any) -> str:
     return f"method {v.name} of {describe(v.obj)}"
   if isinstance(v, RangeVal):
     return "range"
+  if isinstance(v, ListVal):
+    return f"list[{len(v.items)}]"
+  if isinstance(v, VecVal):
+    return f"list[{v.elt.name}]"
+  if isinstance(v, FixedListVal):
+    return f"FixedList[{v.elt.name}, {v.cap}]"
+  if isinstance(v, (ChainVal, ProductVal, BatchedVal)):
+    return type(v).__name__
   if isinstance(v, str):
     return f"str {v!r}"
   if isinstance(v, slice):

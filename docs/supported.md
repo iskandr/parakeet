@@ -79,12 +79,13 @@ All follow NumPy's broadcasting and type promotion rules exactly.
 | `.T` | `.dtype` | `.flat` | `.imag` |
 | `.itemsize` | `.nbytes` | `.ndim` | `.real` |
 | `.shape` | `.size` | `._replace()` | `.all()` |
-| `.any()` | `.argmax()` | `.argmin()` | `.argsort()` |
-| `.astype()` | `.bit_count()` | `.clip()` | `.conj()` |
-| `.conjugate()` | `.copy()` | `.cumprod()` | `.cumsum()` |
-| `.diagonal()` | `.dot()` | `.fill()` | `.flatten()` |
-| `.get()` | `.item()` | `.max()` | `.mean()` |
-| `.min()` | `.nonzero()` | `.prod()` | `.range()` |
+| `.any()` | `.append()` | `.argmax()` | `.argmin()` |
+| `.argsort()` | `.astype()` | `.bit_count()` | `.clear()` |
+| `.clip()` | `.conj()` | `.conjugate()` | `.copy()` |
+| `.cumprod()` | `.cumsum()` | `.diagonal()` | `.dot()` |
+| `.extend()` | `.fill()` | `.flatten()` | `.get()` |
+| `.item()` | `.max()` | `.mean()` | `.min()` |
+| `.nonzero()` | `.pop()` | `.prod()` | `.range()` |
 | `.ravel()` | `.reshape()` | `.round()` | `.squeeze()` |
 | `.std()` | `.sum()` | `.swapaxes()` | `.tolist()` |
 | `.trace()` | `.transpose()` | `.var()` |  |

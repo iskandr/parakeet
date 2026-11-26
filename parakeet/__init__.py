@@ -60,6 +60,7 @@ from .lib.adverbs import (
   each,
   filter,  # noqa: A004
   filter_reduce,
+  fixed_list,
   fold,
   grad,
   hessian,
@@ -207,7 +208,7 @@ __all__ = [
     "TypeInferenceError", "UnsupportedError", "__version__",
     "allpairs", "available_backends", "batched_wavefront", "bf16_to_f32", "block_sparse_attention",
     "bswap", "checkpoint", "clear_cache", "clz", "config", "ctz", "custom_jvp", "custom_vjp", "each", "errors",
-    "f32_to_bf16", "filter", "filter_pairs", "filter_reduce", "flatmap", "fold", "hessian", "hvp", "ifilter_reduce",
+    "f32_to_bf16", "filter", "filter_pairs", "filter_reduce", "fixed_list", "flatmap", "fold", "hessian", "hvp", "ifilter_reduce",
     "imap", "ipa_attention", "ireduce", "iscan", "iscatter", "jacfwd", "jacrev", "jit", "jvp", "lib",
     "linear_transpose", "linearize", "map", "morton_order",
     "options", "outer_map", "parfor", "pmap1", "pmap2",

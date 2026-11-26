@@ -119,7 +119,7 @@ class Cloner:
     if isinstance(s, (ir.Break, ir.Continue, ir.Comment)):
       return s
     if isinstance(s, ir.Alloc):
-      return ir.Alloc(self.var(s.var), x(s.count), s.zero)
+      return ir.Alloc(self.var(s.var), x(s.count), s.zero, s.stack)
     if isinstance(s, ir.Incref):
       return ir.Incref(x(s.buf))
     if isinstance(s, ir.Release):
