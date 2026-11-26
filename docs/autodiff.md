@@ -269,12 +269,12 @@ value that an earlier operation's derivative still has to read
 (`y = np.tanh(h); h[0] = 5.0`) is refused loudly, because the derivative of
 `tanh` needs the original `h`.
 
-## The gradient is right or there is none
+## Unsupported operations fail at compile time
 
 Parakeet never returns a derivative that silently drops part of your function.
-If something on the path from inputs to output lacks a derivative rule; such
+If an operation on the path from inputs to output lacks a derivative rule (such
 as `np.cumprod`, `np.convolve`, or an arbitrary indexed overwrite
-`out[idx] = v`; you get an `UnsupportedError` naming it:
+`out[idx] = v`), compilation raises an `UnsupportedError` naming it:
 
 ```text
 UnsupportedError: cannot differentiate through cumprod() (line 12): its derivative is not implemented
