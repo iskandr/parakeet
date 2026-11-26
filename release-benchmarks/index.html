@@ -672,10 +672,32 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#nvidia-l4-gpu-and-4-thread-cpu-1024-4096-32-float32" class="md-nav__link">
+  <a href="#exact-1-nn-1024-4096-32-float32" class="md-nav__link">
     <span class="md-ellipsis">
       
-        NVIDIA L4 GPU and 4-thread CPU (1,024 × 4,096 × 32, float32)
+        Exact 1-NN (1,024 × 4,096 × 32, float32)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#gaussian-kernel-regression-1024-4096-32-float32" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Gaussian kernel regression (1,024 × 4,096 × 32, float32)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#summary-table-1024-4096-32-float32" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary table (1,024 × 4,096 × 32, float32)
       
     </span>
   </a>
@@ -951,6 +973,34 @@
     
   
     Backends and GPUs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../primitives/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Algebraic primitives & walkthrough
   
 
     
@@ -1416,10 +1466,32 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#nvidia-l4-gpu-and-4-thread-cpu-1024-4096-32-float32" class="md-nav__link">
+  <a href="#exact-1-nn-1024-4096-32-float32" class="md-nav__link">
     <span class="md-ellipsis">
       
-        NVIDIA L4 GPU and 4-thread CPU (1,024 × 4,096 × 32, float32)
+        Exact 1-NN (1,024 × 4,096 × 32, float32)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#gaussian-kernel-regression-1024-4096-32-float32" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Gaussian kernel regression (1,024 × 4,096 × 32, float32)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#summary-table-1024-4096-32-float32" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary table (1,024 × 4,096 × 32, float32)
       
     </span>
   </a>
@@ -1597,17 +1669,27 @@ a <strong>4-thread CPU</strong> at compiler revision <code>0dcb7d5</code> (<code
 resident on device, explicit synchronization, reference-checked outputs,
 <code>n = 21</code> GPU replicates / <code>n = 11</code> CPU replicates).
 <a href="../assets/colab-l4-0dcb7d5.json">Download full raw JSON (samples, compile times, allocations, training logs)</a>.</p>
-<p><img alt="Pairwise exact 1-NN and Gaussian kernel regression latency on NVIDIA L4 and 4-thread CPU showing all replicates, IQR, and median" src="../assets/bench-pairwise-l4.svg" /></p>
+<blockquote>
+<p><strong>Baseline policy &amp; Parakeet variants:</strong> Every GPU benchmark includes the same
+general array-compiler matrix (<strong>Parakeet</strong>, <strong>PyTorch eager</strong>,
+<strong><code>torch.compile</code></strong>, <strong>JAX <code>jit</code></strong>, and <strong>CuPy</strong>), plus domain-specific
+libraries only on the tasks they support (<code>Faiss</code> / <code>scikit-learn</code> / <code>SciPy</code>
+for nearest-neighbor search; <code>PyKeOps</code> for pairwise kernels; <code>edlib</code> /
+<code>Biopython</code> / <code>Biotite</code> / <code>RDKit</code> for bioinformatics). Where multiple Parakeet
+spellings, precision modes, or historical releases were measured on the same
+hardware (NumPy vs. <code>par.map</code>, current vs. <code>1.0.0</code>, FP32 vs. TF32, multicore
+vs. 1-thread), all Parakeet variants are plotted together.</p>
+</blockquote>
 <p><strong>Key takeaways:</strong></p>
 <ul>
 <li><strong>Exact 1-NN (<code>1,024 × 4,096 × 32</code>):</strong> On the L4 GPU, Parakeet's ordinary
   broadcasting NumPy (<strong>0.223 ms</strong>) and nested-map form (<strong>0.225 ms</strong>) both
   beat <code>torch.compile(cdist)</code> (<strong>0.257 ms</strong>), <code>PyTorch cdist</code> (<strong>0.251 ms</strong>),
-  <code>JAX jit</code> (<strong>0.500 ms</strong>), <code>PyKeOps</code> (<strong>0.953 ms</strong>), and <code>CuPy</code> (<strong>16.93 ms</strong>),
-  trailing only <code>Faiss GpuIndexFlatL2</code> (<strong>0.150 ms</strong>). On 4 CPU threads,
-  Parakeet (<strong>7.91 ms</strong>) beats <code>Faiss Flat</code> (<strong>8.42 ms</strong>), <code>PyKeOps</code>
-  (<strong>29.03 ms</strong>), <code>SciPy cKDTree</code> (<strong>54.27 ms</strong>), and <code>NumPy</code> (<strong>472.3 ms</strong>),
-  just behind <code>scikit-learn</code> brute (<strong>6.49 ms</strong>).</li>
+  <code>JAX jit</code> (<strong>0.500 ms</strong>), Parakeet <code>1.0.0</code> (<strong>0.787 ms</strong>), <code>PyKeOps</code>
+  (<strong>0.953 ms</strong>), and <code>CuPy</code> (<strong>16.93 ms</strong>), trailing only <code>Faiss GpuIndexFlatL2</code>
+  (<strong>0.150 ms</strong>). On 4 CPU threads, Parakeet (<strong>7.91 ms</strong>) beats <code>Faiss Flat</code>
+  (<strong>8.42 ms</strong>), <code>PyKeOps</code> (<strong>29.03 ms</strong>), <code>SciPy cKDTree</code> (<strong>54.27 ms</strong>), and
+  <code>NumPy</code> (<strong>472.3 ms</strong>), just behind <code>scikit-learn</code> brute (<strong>6.49 ms</strong>).</li>
 <li><strong>Scaling to 16,384 references:</strong> Tiled GPU pairwise folds cut latency by
   <strong>4.8×</strong> (<code>2.597 ms → 0.542 ms</code> on L4) and cut global scratch memory by
   <strong>21×</strong> (<code>64 MiB → 3 MiB</code>, plus a <code>16 KiB</code> shared-memory tile per block).</li>
@@ -1624,7 +1706,13 @@ resident on device, explicit synchronization, reference-checked outputs,
 </ul>
 <hr />
 <h2 id="pairwise-search-and-kernel-regression">Pairwise search and kernel regression<a class="headerlink" href="#pairwise-search-and-kernel-regression" title="Permanent link">&para;</a></h2>
-<h3 id="nvidia-l4-gpu-and-4-thread-cpu-1024-4096-32-float32">NVIDIA L4 GPU and 4-thread CPU (<code>1,024 × 4,096 × 32</code>, <code>float32</code>)<a class="headerlink" href="#nvidia-l4-gpu-and-4-thread-cpu-1024-4096-32-float32" title="Permanent link">&para;</a></h3>
+<h3 id="exact-1-nn-1024-4096-32-float32">Exact 1-NN (<code>1,024 × 4,096 × 32</code>, <code>float32</code>)<a class="headerlink" href="#exact-1-nn-1024-4096-32-float32" title="Permanent link">&para;</a></h3>
+<p><img alt="GPU exact 1-NN search latency on NVIDIA L4" src="../assets/bench-1nn-gpu-l4.svg" /></p>
+<p><img alt="CPU exact 1-NN search latency on 4 threads" src="../assets/bench-1nn-cpu.svg" /></p>
+<h3 id="gaussian-kernel-regression-1024-4096-32-float32">Gaussian kernel regression (<code>1,024 × 4,096 × 32</code>, <code>float32</code>)<a class="headerlink" href="#gaussian-kernel-regression-1024-4096-32-float32" title="Permanent link">&para;</a></h3>
+<p><img alt="GPU Gaussian kernel regression latency on NVIDIA L4" src="../assets/bench-rbf-gpu-l4.svg" /></p>
+<p><img alt="CPU Gaussian kernel regression latency on 4 threads" src="../assets/bench-rbf-cpu.svg" /></p>
+<h3 id="summary-table-1024-4096-32-float32">Summary table (<code>1,024 × 4,096 × 32</code>, <code>float32</code>)<a class="headerlink" href="#summary-table-1024-4096-32-float32" title="Permanent link">&para;</a></h3>
 <p>Warmed medians in milliseconds (lower is faster). Faiss and scikit-learn times
 exclude index construction. Implementations:
 <a href="../gallery/#exact-nearest-neighbor"><code>nearest_numpy</code></a>,
@@ -1733,7 +1821,8 @@ scaling and GPU throughput. On both NVIDIA L4 (<code>0dcb7d5</code> vs. <code>1.
 both the broadcasting NumPy form and the explicit operator form compile to the
 same tiled pairwise fold with zero host transfers and exact first-index
 tie/NaN semantics.</p>
-<p><img alt="GPU exact 1-NN latency and global scratch memory scaling from 1,024 to 16,384 references on NVIDIA L4" src="../assets/bench-scaling-1nn.svg" /></p>
+<p><img alt="GPU exact 1-NN latency scaling from 1,024 to 16,384 references on NVIDIA L4" src="../assets/bench-scaling-1nn-latency.svg" /></p>
+<p><img alt="GPU exact 1-NN global scratch memory scaling from 1,024 to 16,384 references on NVIDIA L4" src="../assets/bench-scaling-1nn-memory.svg" /></p>
 <table>
 <thead>
 <tr>
@@ -1800,8 +1889,10 @@ transfers (<a href="../gallery/#inverse-distance-smoothing">browse both programs
 </ul>
 <hr />
 <h2 id="forward-gpu-kernels-and-nanogpt-training">Forward GPU kernels and nanoGPT training<a class="headerlink" href="#forward-gpu-kernels-and-nanogpt-training" title="Permanent link">&para;</a></h2>
-<p><img alt="Forward GPU kernel latencies and end-to-end nanoGPT training step times on NVIDIA L4" src="../assets/bench-workloads-l4.svg" /></p>
 <h3 id="forward-gpu-workloads-nvidia-l4-n-21-warmed-calls">Forward GPU workloads (NVIDIA L4, <code>n = 21</code> warmed calls)<a class="headerlink" href="#forward-gpu-workloads-nvidia-l4-n-21-warmed-calls" title="Permanent link">&para;</a></h3>
+<p><img alt="GBDT histogram and best-split latency on NVIDIA L4" src="../assets/bench-gbdt-l4.svg" /></p>
+<p><img alt="Causal self-attention latency on NVIDIA L4" src="../assets/bench-attn-l4.svg" /></p>
+<p><img alt="Linear cross-entropy latency on NVIDIA L4" src="../assets/bench-cce-l4.svg" /></p>
 <table>
 <thead>
 <tr>
@@ -1845,6 +1936,7 @@ transfers (<a href="../gallery/#inverse-distance-smoothing">browse both programs
 </tbody>
 </table>
 <h3 id="end-to-end-nanogpt-training-nvidia-l4">End-to-end nanoGPT training (NVIDIA L4)<a class="headerlink" href="#end-to-end-nanogpt-training-nvidia-l4" title="Permanent link">&para;</a></h3>
+<p><img alt="End-to-end nanoGPT training step times on NVIDIA L4" src="../assets/bench-nanogpt-l4.svg" /></p>
 <p>Each step runs the full forward pass, reverse-mode backpropagation, and Adam
 update (4 attention heads, median of 20 warmed steps in milliseconds). Parakeet
 and JAX compile the optimizer directly into the training step; <code>torch.compile</code>
@@ -1888,7 +1980,8 @@ specialist C/C++/Cython libraries (<code>edlib 1.3.9</code>, <code>Biopython 1.8
 <code>PairwiseAligner</code>, <code>Biotite 2.0.0</code>, <code>RDKit 2026.9.2</code>, and <code>NumPy 2.5.5</code>),
 verified for exact output agreement before timing (<code>n = 11</code> warmed replicates).
 <a href="../assets/bio-benchmarks-m1pro.json">Download raw JSON</a>.</p>
-<p><img alt="Bioinformatics head-to-head benchmarks on Apple M1 Pro comparing Parakeet against edlib, Biopython, Biotite, RDKit, and NumPy" src="../assets/bench-bio-m1pro.svg" /></p>
+<p><img alt="Sequence alignment and RNA mapping benchmarks on Apple M1 Pro" src="../assets/bench-bio-seq-m1pro.svg" /></p>
+<p><img alt="Cheminformatics, structural biology, and BAM pileup benchmarks on Apple M1 Pro" src="../assets/bench-bio-struct-m1pro.svg" /></p>
 <table>
 <thead>
 <tr>

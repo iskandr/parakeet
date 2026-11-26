@@ -61,8 +61,68 @@
 .pk-example p:last-child { margin-bottom: 0; }
 .md-typeset table:not([class]) { font-variant-numeric: tabular-nums; }
 
+.pk-prim-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+  margin: 1rem 0 1.4rem;
+}
+
+.pk-prim-card {
+  background: var(--pk-panel);
+  border: 1px solid var(--pk-edge);
+  border-radius: 0.45rem;
+  padding: 0.85rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.pk-prim-card--wide {
+  grid-column: 1 / -1;
+}
+
+.pk-prim-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.4rem;
+  color: var(--pk-ink);
+  font-size: 0.96rem;
+}
+
+.pk-prim-head code {
+  font-size: 0.72rem;
+  padding: 0.08rem 0.38rem;
+  border-radius: 0.25rem;
+  opacity: 0.85;
+}
+
+.pk-prim-card p {
+  margin: 0;
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.pk-prim-card pre {
+  margin: 0.25rem 0 !important;
+}
+
+.pk-prim-card pre > code {
+  background: var(--md-default-bg-color);
+  font-size: 0.74rem;
+  padding: 0.45rem 0.65rem;
+}
+
+.pk-prim-card p:last-child {
+  margin-top: auto;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
 @media (max-width: 60em) {
   .pk-intro { grid-template-columns: minmax(0, 1fr); max-width: 40rem; }
   .pk-wordmark { width: min(100%, 13rem); }
   .pk-example { max-width: 34rem; }
+  .pk-prim-grid { grid-template-columns: minmax(0, 1fr); }
 }

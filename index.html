@@ -843,6 +843,34 @@
   
   
     <li class="md-nav__item">
+      <a href="primitives/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Algebraic primitives & walkthrough
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="operators/" class="md-nav__link">
         
   
@@ -1368,64 +1396,69 @@ distance matrix. Ties preserve NumPy's first-index rule.</p>
 install <code>parakeet[metal]</code> on Apple Silicon or <code>parakeet[cuda12]</code> with an NVIDIA
 GPU.</p>
 <h2 id="algebraic-primitives">Algebraic primitives<a class="headerlink" href="#algebraic-primitives" title="Permanent link">&para;</a></h2>
-<p>Rather than building hundreds of one-off C or GPU kernels for individual NumPy
-functions, Parakeet lowers array expressions, comprehensions, matrix products,
-and explicit parallel operators onto a small set of composable array
-primitives:</p>
-<table>
-<thead>
-<tr>
-<th>Primitive</th>
-<th>What it expresses</th>
-<th>Examples in Python / NumPy</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><strong>Map (<code>IndexMap</code>)</strong></td>
-<td>Independent per-element computation over an N-D index space</td>
-<td>Element-wise NumPy, broadcasting, comprehensions, <code>par.map</code>, <code>par.allpairs</code></td>
-</tr>
-<tr>
-<td><strong>Reduce / Fold (<code>IndexReduce</code>)</strong></td>
-<td>Associative or ordered reductions, including multi-field carries</td>
-<td><code>np.sum</code>, <code>np.argmin</code>, <code>logsumexp</code>, Welford variance, <code>par.fold</code></td>
-</tr>
-<tr>
-<td><strong>Scan (<code>IndexScan</code>)</strong></td>
-<td>Prefix accumulations and associative recurrences</td>
-<td><code>np.cumsum</code>, <code>par.scan</code>, affine/bilinear <code>for</code> loops (IIR filters, SSMs)</td>
-</tr>
-<tr>
-<td><strong>Filter &amp; Expand (<code>IndexFilter</code>, <code>IndexExpand</code>)</strong></td>
-<td>Stream compaction (1-to-0/1) and ragged expansion (1-to-K)</td>
-<td>Boolean masking <code>x[x &gt; 0]</code>, <code>par.flatmap</code>, <code>par.filter_pairs</code></td>
-</tr>
-<tr>
-<td><strong>Scatter (<code>IndexScatter</code>)</strong></td>
-<td>Associative accumulation into shared bins</td>
-<td><code>np.bincount</code>, <code>np.add.at</code>, indexed <code>+=</code> loops, <code>par.scatter_add</code></td>
-</tr>
-<tr>
-<td><strong>Wavefront (<code>IndexWavefront</code>)</strong></td>
-<td>Anti-diagonal and banded 2D dynamic programming</td>
-<td><code>par.wavefront</code>, <code>par.soft_align</code></td>
-</tr>
-<tr>
-<td><strong>Tile (<code>IndexTile</code>)</strong></td>
-<td>Cache and GPU shared-memory staging emitted by the middle end</td>
-<td>Matrix products, <code>einsum</code>, tiled pairwise folds, online softmax / attention</td>
-</tr>
-</tbody>
-</table>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nd">@par</span><span class="o">.</span><span class="n">jit</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">scaled_tanh_numpy</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">beta</span><span class="o">=</span><span class="mf">0.3</span><span class="p">):</span>
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>  <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">x</span> <span class="o">*</span> <span class="n">alpha</span><span class="p">)</span> <span class="o">+</span> <span class="n">beta</span>
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>
-<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>
-<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="nd">@par</span><span class="o">.</span><span class="n">jit</span>
-<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="k">def</span><span class="w"> </span><span class="nf">scaled_tanh_comp</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">beta</span><span class="o">=</span><span class="mf">0.3</span><span class="p">):</span>
-<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>  <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">np</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">xi</span> <span class="o">*</span> <span class="n">alpha</span><span class="p">)</span> <span class="o">+</span> <span class="n">beta</span> <span class="k">for</span> <span class="n">xi</span> <span class="ow">in</span> <span class="n">x</span><span class="p">])</span>
+<p>Rather than shipping hundreds of hand-written C or GPU kernels for individual
+NumPy functions, Parakeet lowers ordinary Python, NumPy, and <code>par.*</code> calls onto
+<strong>seven composable operators</strong>. Inside the compiler IR, each operator carries an
+<code>Index</code> prefix (<code>IndexMap</code>, <code>IndexReduce</code>, ...) to mark that it runs over an
+explicit N-D coordinate space, while your code stays idiomatic NumPy or <code>par.*</code>.
+<a href="primitives/">Read the full primitives guide and end-to-end compilation walkthrough</a>.</p>
+<div class="pk-prim-grid">
+<div class="pk-prim-card">
+<div class="pk-prim-head"><strong>Map</strong> <code>IndexMap</code></div>
+<p>Independent per-element work over an N-D index space: broadcasting, comprehensions, <code>par.map</code>, <code>par.allpairs</code>.
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">np</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">x</span> <span class="o">*</span> <span class="mf">0.5</span><span class="p">)</span> <span class="o">+</span> <span class="mf">0.3</span>
+</code></pre></div>
+<a href="primitives/#map">Details &amp; fusion rules</a></p>
+</div>
+<div class="pk-prim-card">
+<div class="pk-prim-head"><strong>Reduce &amp; Fold</strong> <code>IndexReduce</code></div>
+<p>Associative reductions (<code>np.sum</code>, <code>par.reduce</code>) and ordered multi-state folds (<code>np.argmin</code>, <code>par.fold</code>).
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">np</span><span class="o">.</span><span class="n">argmin</span><span class="p">(</span><span class="n">d2</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+</code></pre></div>
+<a href="primitives/#reduce-and-fold">Details &amp; <code>reduce</code> vs <code>fold</code></a></p>
+</div>
+<div class="pk-prim-card">
+<div class="pk-prim-head"><strong>Scan</strong> <code>IndexScan</code></div>
+<p>Prefix sums (<code>np.cumsum</code>, <code>par.scan</code>) and affine/bilinear <code>for</code> recurrences (IIR filters, Mamba-2 SSMs).
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">np</span><span class="o">.</span><span class="n">cumsum</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>  <span class="c1"># or affine for-loop</span>
+</code></pre></div>
+<a href="primitives/#scan">Details &amp; chunkwise duality</a></p>
+</div>
+<div class="pk-prim-card">
+<div class="pk-prim-head"><strong>Filter &amp; Expand</strong> <code>IndexFilter</code> <code>IndexExpand</code></div>
+<p>Stream compaction (1-to-0/1 boolean masking) and 2-pass ragged expansion (1-to-K <code>par.flatmap</code>).
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="n">x</span> <span class="o">&gt;</span> <span class="mf">0.0</span><span class="p">])</span>  <span class="c1"># 0-alloc FilterReduce</span>
+</code></pre></div>
+<a href="primitives/#filter-and-expand">Details &amp; filter fusion</a></p>
+</div>
+<div class="pk-prim-card">
+<div class="pk-prim-head"><strong>Scatter</strong> <code>IndexScatter</code></div>
+<p>Associative bin accumulation (<code>np.bincount</code>, <code>np.add.at</code>, <code>out[idx[i]] += v</code>, <code>par.scatter_add</code>).
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">np</span><span class="o">.</span><span class="n">bincount</span><span class="p">(</span><span class="n">bins</span><span class="p">,</span> <span class="n">weights</span><span class="o">=</span><span class="n">grads</span><span class="p">,</span> <span class="n">minlength</span><span class="o">=</span><span class="mi">256</span><span class="p">)</span>
+</code></pre></div>
+<a href="primitives/#scatter">Details &amp; histogram fusion</a></p>
+</div>
+<div class="pk-prim-card">
+<div class="pk-prim-head"><strong>Wavefront</strong> <code>IndexWavefront</code></div>
+<p>Anti-diagonal and banded 2D dynamic programming for sequence alignment and differentiable DP.
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="n">par</span><span class="o">.</span><span class="n">soft_align</span><span class="p">(</span><span class="n">scores</span><span class="p">,</span> <span class="n">gamma</span><span class="o">=</span><span class="mf">1.0</span><span class="p">)</span>
+</code></pre></div>
+<a href="primitives/#wavefront">Details &amp; banded DP</a></p>
+</div>
+<div class="pk-prim-card pk-prim-card--wide">
+<div class="pk-prim-head"><strong>Tile</strong> <code>IndexTile</code></div>
+<p>Emitted automatically by the middle end for CPU cache/register micro-tiles and GPU shared memory on matrix products, <code>einsum</code>, 1-NN, and online softmax attention.
+<a href="primitives/#walkthrough-attention">Walk through causal attention from 4 lines of NumPy to a single tiled kernel</a></p>
+</div>
+</div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nd">@par</span><span class="o">.</span><span class="n">jit</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">scaled_tanh_numpy</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">beta</span><span class="o">=</span><span class="mf">0.3</span><span class="p">):</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>  <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">x</span> <span class="o">*</span> <span class="n">alpha</span><span class="p">)</span> <span class="o">+</span> <span class="n">beta</span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="nd">@par</span><span class="o">.</span><span class="n">jit</span>
+<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="k">def</span><span class="w"> </span><span class="nf">scaled_tanh_comp</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">beta</span><span class="o">=</span><span class="mf">0.3</span><span class="p">):</span>
+<a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>  <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">np</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">xi</span> <span class="o">*</span> <span class="n">alpha</span><span class="p">)</span> <span class="o">+</span> <span class="n">beta</span> <span class="k">for</span> <span class="n">xi</span> <span class="ow">in</span> <span class="n">x</span><span class="p">])</span>
 </code></pre></div>
 <p>Both versions lower to the same single fused parallel loop with no temporary
 arrays. Because programs stay in this operator representation until code
@@ -1438,7 +1471,8 @@ domains:</p>
 <li><strong>Tiling and single-pass reductions.</strong> Associative reductions and bilinear
   products tile into CPU cache or GPU shared memory, so Gaussian kernel
   regression, nearest-neighbor search, and attention stream blocks instead of
-  allocating giant pairwise matrices. <a href="algebra/">Read the algebraic laws</a>.</li>
+  allocating giant pairwise matrices. <a href="algebra/">Read the algebraic laws</a> or
+  <a href="primitives/#worked-end-to-end-compilation-walkthroughs">follow the worked compilation walkthrough</a>.</li>
 <li><strong>Differentiation.</strong> <code>par.grad</code>, <code>par.value_and_grad</code>, and <code>par.jvp</code>
   differentiate the primitives directly, compiling a full training step into
   one native function. <a href="autodiff/">Learn about gradients</a>.</li>
