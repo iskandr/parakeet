@@ -15,18 +15,26 @@ resident on device, explicit synchronization, reference-checked outputs,
 `n = 21` GPU replicates / `n = 11` CPU replicates).
 [Download full raw JSON (samples, compile times, allocations, training logs)](assets/colab-l4-0dcb7d5.json).
 
-![Pairwise exact 1-NN and Gaussian kernel regression latency on NVIDIA L4 and 4-thread CPU showing all replicates, IQR, and median](assets/bench-pairwise-l4.svg)
+> **Baseline policy & Parakeet variants:** Every GPU benchmark includes the same
+> general array-compiler matrix (**Parakeet**, **PyTorch eager**,
+> **`torch.compile`**, **JAX `jit`**, and **CuPy**), plus domain-specific
+> libraries only on the tasks they support (`Faiss` / `scikit-learn` / `SciPy`
+> for nearest-neighbor search; `PyKeOps` for pairwise kernels; `edlib` /
+> `Biopython` / `Biotite` / `RDKit` for bioinformatics). Where multiple Parakeet
+> spellings, precision modes, or historical releases were measured on the same
+> hardware (NumPy vs. `par.map`, current vs. `1.0.0`, FP32 vs. TF32, multicore
+> vs. 1-thread), all Parakeet variants are plotted together.
 
 **Key takeaways:**
 
 * **Exact 1-NN (`1,024 × 4,096 × 32`):** On the L4 GPU, Parakeet's ordinary
   broadcasting NumPy (**0.223 ms**) and nested-map form (**0.225 ms**) both
   beat `torch.compile(cdist)` (**0.257 ms**), `PyTorch cdist` (**0.251 ms**),
-  `JAX jit` (**0.500 ms**), `PyKeOps` (**0.953 ms**), and `CuPy` (**16.93 ms**),
-  trailing only `Faiss GpuIndexFlatL2` (**0.150 ms**). On 4 CPU threads,
-  Parakeet (**7.91 ms**) beats `Faiss Flat` (**8.42 ms**), `PyKeOps`
-  (**29.03 ms**), `SciPy cKDTree` (**54.27 ms**), and `NumPy` (**472.3 ms**),
-  just behind `scikit-learn` brute (**6.49 ms**).
+  `JAX jit` (**0.500 ms**), Parakeet `1.0.0` (**0.787 ms**), `PyKeOps`
+  (**0.953 ms**), and `CuPy` (**16.93 ms**), trailing only `Faiss GpuIndexFlatL2`
+  (**0.150 ms**). On 4 CPU threads, Parakeet (**7.91 ms**) beats `Faiss Flat`
+  (**8.42 ms**), `PyKeOps` (**29.03 ms**), `SciPy cKDTree` (**54.27 ms**), and
+  `NumPy` (**472.3 ms**), just behind `scikit-learn` brute (**6.49 ms**).
 * **Scaling to 16,384 references:** Tiled GPU pairwise folds cut latency by
   **4.8×** (`2.597 ms → 0.542 ms` on L4) and cut global scratch memory by
   **21×** (`64 MiB → 3 MiB`, plus a `16 KiB` shared-memory tile per block).
@@ -45,7 +53,19 @@ resident on device, explicit synchronization, reference-checked outputs,
 
 ## Pairwise search and kernel regression
 
-### NVIDIA L4 GPU and 4-thread CPU (`1,024 × 4,096 × 32`, `float32`)
+### Exact 1-NN (`1,024 × 4,096 × 32`, `float32`)
+
+![GPU exact 1-NN search latency on NVIDIA L4](assets/bench-1nn-gpu-l4.svg)
+
+![CPU exact 1-NN search latency on 4 threads](assets/bench-1nn-cpu.svg)
+
+### Gaussian kernel regression (`1,024 × 4,096 × 32`, `float32`)
+
+![GPU Gaussian kernel regression latency on NVIDIA L4](assets/bench-rbf-gpu-l4.svg)
+
+![CPU Gaussian kernel regression latency on 4 threads](assets/bench-rbf-cpu.svg)
+
+### Summary table (`1,024 × 4,096 × 32`, `float32`)
 
 Warmed medians in milliseconds (lower is faster). Faiss and scikit-learn times
 exclude index construction. Implementations:
@@ -83,7 +103,9 @@ both the broadcasting NumPy form and the explicit operator form compile to the
 same tiled pairwise fold with zero host transfers and exact first-index
 tie/NaN semantics.
 
-![GPU exact 1-NN latency and global scratch memory scaling from 1,024 to 16,384 references on NVIDIA L4](assets/bench-scaling-1nn.svg)
+![GPU exact 1-NN latency scaling from 1,024 to 16,384 references on NVIDIA L4](assets/bench-scaling-1nn-latency.svg)
+
+![GPU exact 1-NN global scratch memory scaling from 1,024 to 16,384 references on NVIDIA L4](assets/bench-scaling-1nn-memory.svg)
 
 | References (`Q = 1,024, D = 32`) | L4 `1.0.0` NumPy | L4 Tiled NumPy | L4 Tiled `par.map` | A10G `1.0.0` NumPy | A10G Tiled NumPy | A10G Tiled `par.map` | `1.0.0` Global Scratch | Tiled Global Scratch |
 |---:|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -111,9 +133,13 @@ transfers ([browse both programs](gallery.md#inverse-distance-smoothing)):
 
 ## Forward GPU kernels and nanoGPT training
 
-![Forward GPU kernel latencies and end-to-end nanoGPT training step times on NVIDIA L4](assets/bench-workloads-l4.svg)
-
 ### Forward GPU workloads (NVIDIA L4, `n = 21` warmed calls)
+
+![GBDT histogram and best-split latency on NVIDIA L4](assets/bench-gbdt-l4.svg)
+
+![Causal self-attention latency on NVIDIA L4](assets/bench-attn-l4.svg)
+
+![Linear cross-entropy latency on NVIDIA L4](assets/bench-cce-l4.svg)
 
 | Workload | Parakeet | PyTorch | `torch.compile` | JAX `jit` | CuPy | Implementation |
 |---|---:|---:|---:|---:|---:|---|
@@ -122,6 +148,8 @@ transfers ([browse both programs](gallery.md#inverse-distance-smoothing)):
 | Linear cross-entropy (`512 × 128 × 2,048`) | **1.447 ms** | 0.068 ms | 0.155 ms | 0.189 ms | 0.431 ms | [`cut_cross_entropy`](gallery.md#linear-cross-entropy) |
 
 ### End-to-end nanoGPT training (NVIDIA L4)
+
+![End-to-end nanoGPT training step times on NVIDIA L4](assets/bench-nanogpt-l4.svg)
 
 Each step runs the full forward pass, reverse-mode backpropagation, and Adam
 update (4 attention heads, median of 20 warmed steps in milliseconds). Parakeet
@@ -145,7 +173,9 @@ specialist C/C++/Cython libraries (`edlib 1.3.9`, `Biopython 1.88` C
 verified for exact output agreement before timing (`n = 11` warmed replicates).
 [Download raw JSON](assets/bio-benchmarks-m1pro.json).
 
-![Bioinformatics head-to-head benchmarks on Apple M1 Pro comparing Parakeet against edlib, Biopython, Biotite, RDKit, and NumPy](assets/bench-bio-m1pro.svg)
+![Sequence alignment and RNA mapping benchmarks on Apple M1 Pro](assets/bench-bio-seq-m1pro.svg)
+
+![Cheminformatics, structural biology, and BAM pileup benchmarks on Apple M1 Pro](assets/bench-bio-struct-m1pro.svg)
 
 | Workload | Parakeet (multicore) | Parakeet (`c`, 1T) | Specialist / Baseline | Speedup vs. Baseline | Implementation |
 |---|---:|---:|---:|---:|---|
