@@ -1831,8 +1831,12 @@ def _stacked_matmul(el, a: ArrayVal, b: ArrayVal, what: str):
   if b.rank <= 2:
     # every row of every matrix in the stack times b: one big matrix product
     lead = a.shape[:-1]
-    flat = matmul(el, el.reshape(a, (Const(-1, I), a.shape[-1])), b, what)
-    return el.reshape(el.as_array(flat), lead + (() if b.rank == 1 else (b.shape[1],)), checked=True)
+    flat = el.as_array(matmul(el, el.reshape(a, (Const(-1, I), a.shape[-1])), b, what))
+    # Keep the 2D matmul intact so tiling/Tensor Core codegen recognizes it cleanly
+    # (reshape-transparent vertical fusion then folds any 3D epilogue directly into the GEMM).
+    if flat.buf is None and b.rank == 2:
+      flat = el.as_concrete(flat)
+    return el.reshape(flat, lead + (() if b.rank == 1 else (b.shape[1],)), checked=True)
   if a.rank == 1:
     a = el.expand_dims(a, [0])
     out = _stacked_matmul(el, a, b, what)

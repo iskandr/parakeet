@@ -660,12 +660,27 @@ class ArrayMixin:
     if len(unknown) > 1:
       raise self.error(StaticValueError, "can only specify one unknown dimension")
     if unknown:
-      known = self.tmp(iprod([d for k, d in enumerate(shape) if k != unknown[0]]), "known")
+      known_dims = [d for k, d in enumerate(shape) if k != unknown[0]]
+      known = self.tmp(iprod(known_dims), "known")
       self.check(
                 land(cmp("gt", known, 0), cmp("eq", imod(size, imax(known, 1)), 0)),
                 "ValueError", "cannot reshape array of size {0} into the requested shape", size,
             )  # fmt: skip
-      shape[unknown[0]] = self.tmp(idiv(size, imax(known, 1)), "dim")
+      # When every known dimension matches a distinct factor of arr.shape (e.g.
+      # (B, T, C).reshape((-1, C))), the inferred axis is the exact product of
+      # the remaining factors rather than an opaque floor-division by C.
+      rem_factors = list(arr.shape)
+      matched_all = True
+      for kd in known_dims:
+        hit = next((idx for idx, ad in enumerate(rem_factors) if self.dim_equal(ad, kd)), None)
+        if hit is None:
+          matched_all = False
+          break
+        rem_factors.pop(hit)
+      if matched_all:
+        shape[unknown[0]] = self.tmp(iprod(rem_factors), "dim")
+      else:
+        shape[unknown[0]] = self.tmp(idiv(size, imax(known, 1)), "dim")
       self.nonneg.add(shape[unknown[0]].uid) if isinstance(shape[unknown[0]], Var) else None
     elif not checked:
       shape = list(self.check_dims(shape))

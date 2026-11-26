@@ -307,6 +307,7 @@ class ParLoop(Stmt):
   work: Expr | None = None  # estimated inner iterations per element (None: one), valid just before the loop
   shared_tile: SharedTilePlan | None = None  # optional GPU __shared__/threadgroup block-tiling plan
   monoidal_tile: MonoidalTilePlan | None = None  # optional GPU SRAM-tiled rescaled-monoid plan (Laws 1, 2, 5)
+  warp_reduce: WarpRowReducePlan | None = None  # optional CUDA 1-warp-per-row coalesced reduction plan
 
 
 # ---- operators -------------------------------------------------------------
@@ -332,6 +333,7 @@ class IndexMap(Stmt):
   ordered: bool = False
   parallel: bool = True  # may use threads or a device (false: nested in a parallel loop, or tiny)
   loc: SourceLocation | None = None
+  warp_reduce: WarpRowReducePlan | None = None
 
 
 @dataclass(eq=False, slots=True)
@@ -502,6 +504,20 @@ class TileRowFold:
   width: Var
   rows: IndexMap  # same row map as the tile body; ordinary lowering lowers its fold
   tile_config: tuple[int, int, int, int, int]
+
+
+@dataclass(eq=False)
+class WarpRowReducePlan:
+  """CUDA 1-warp-per-row coalesced row-reduction plan for an N-D
+  ``IndexMap`` wrapping a 1-D contiguous ``IndexReduce`` (e.g. LayerNorm
+  ``mu``/``var``/``g_mean``+``gx_mean``, softmax ``max``/``sum``, ``D_i``)."""
+
+  shape: tuple[Expr, ...]
+  index: tuple[Var, ...]
+  before: list[Stmt]
+  reduce: IndexReduce
+  after: list[Stmt]
+  pre_checks: list[Check] = field(default_factory=list)
 
 
 @dataclass(eq=False)

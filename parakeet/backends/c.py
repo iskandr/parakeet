@@ -381,8 +381,14 @@ class HostEmitter(CFamilyEmitter):
         for u in list(defined):
           if u not in saved_def:
             defined.pop(u, None)
+    warp_key = None
+    if s.warp_reduce is not None:
+      warp_key = (
+        tuple(expr_key(d) for d in s.warp_reduce.shape),
+        tuple(expr_key(d) for d in s.warp_reduce.reduce.shape),
+      )
     free_types = tuple(v.type for v in free)
-    return (s.kind, free_types, body_key, owned_key, shared_key, monoid_key), free
+    return (s.kind, free_types, body_key, owned_key, shared_key, monoid_key, warp_key), free
 
   def par_loop(self, s: ir.ParLoop, out: list[str], indent: int) -> None:
     pad = "  " * indent

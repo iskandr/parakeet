@@ -41,7 +41,7 @@ from .device import (
   untouched_regions,
 )
 from .monoidal_gpu import generate_monoidal_gpu_kernel
-from .tiled_gpu import BLOCK_THREADS, generate_tiled_gpu_kernel
+from .tiled_gpu import BLOCK_THREADS, generate_tiled_gpu_kernel, generate_warp_reduce_cuda_kernel
 
 BLOCK = 256
 
@@ -131,6 +131,7 @@ using std::isnan; using std::isinf; using std::isfinite; using std::signbit;
 #define __global__
 #define __forceinline__ inline
 #define __shared__ static
+#define __align__(n) alignas(n)
 struct pk_dim3 { unsigned int x, y, z; };
 static pk_dim3 blockIdx, blockDim;
 static thread_local pk_dim3 threadIdx;
@@ -185,6 +186,7 @@ namespace nvcuda { namespace wmma {
   struct fragment {
     static constexpr int R = (std::is_same<Use, matrix_b>::value) ? K : M;
     static constexpr int C = (std::is_same<Use, matrix_a>::value) ? K : N;
+    static constexpr bool is_col = std::is_same<Layout, col_major>::value;
     float x[R * C];
   };
   template <typename Frag>
@@ -195,7 +197,7 @@ namespace nvcuda { namespace wmma {
   static inline void load_matrix_sync(Frag& f, const float* p, unsigned int ldm) {
     for (int r = 0; r < Frag::R; ++r)
       for (int c = 0; c < Frag::C; ++c)
-        f.x[r * Frag::C + c] = p[r * ldm + c];
+        f.x[r * Frag::C + c] = Frag::is_col ? p[c * ldm + r] : p[r * ldm + c];
   }
   template <int M, int N, int K, typename T, typename LA, typename LB>
   static inline void mma_sync(
@@ -280,6 +282,10 @@ class CudaPlanner(DevicePlanner):
       mon_plan = generate_monoidal_gpu_kernel(loop, free, "cuda", em, PRELUDE, profile=self.profile)
       if mon_plan is not None:
         return mon_plan
+    if loop.warp_reduce is not None:
+      wr_plan = generate_warp_reduce_cuda_kernel(loop, free, em, PRELUDE)
+      if wr_plan is not None:
+        return wr_plan
     if loop.shared_tile is not None:
       tiled_plan = generate_tiled_gpu_kernel(loop, free, "cuda", em, PRELUDE, profile=self.profile)
       if tiled_plan is not None:

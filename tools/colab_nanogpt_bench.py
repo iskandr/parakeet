@@ -90,8 +90,7 @@ def pk_gpt_loss(params, tokens, targets, causal, n_head):
   picked = z[np.arange(B * T), targets.reshape((B * T,))]
   return -np.mean(picked - lse)
 
-@jit
-def pk_adam_step(params, grads, m, v, lr, b1, b2, bc1, bc2):
+def pk_adam_update(params, grads, m, v, lr, b1, b2, bc1, bc2):
   def upd(p, g, mi, vi):
     mn = b1 * mi + (np.float32(1.0) - b1) * g
     vn = b2 * vi + (np.float32(1.0) - b2) * g * g
@@ -115,10 +114,17 @@ def pk_adam_step(params, grads, m, v, lr, b1, b2, bc1, bc2):
     nblocks = nblocks + (npb,); nmblocks = nmblocks + (nmb,); nvblocks = nvblocks + (nvb,)
   return (wte, wpe, nblocks, gf, bf, head), (mwte, mwpe, nmblocks, mgf, mbf, mhead), (vwte, vwpe, nvblocks, vgf, vbf, vhead)
 
+_pk_vg_loss = value_and_grad(pk_gpt_loss)
+
+@jit
+def pk_train_step(params, m, v, tok, tgt, causal, n_head, lr, b1, b2, bc1, bc2):
+  lv, grads = _pk_vg_loss(params, tok, tgt, causal, n_head)
+  params, m, v = pk_adam_update(params, grads, m, v, lr, b1, b2, bc1, bc2)
+  return lv, params, m, v
+
 def bench_parakeet(cfg, params_np, tokens_np, targets_np, causal_np, tensor_cores=False, steps=20):
   import cupy
   B, T, C, H, L, V = cfg
-  vg = value_and_grad(pk_gpt_loss)
   lr, b1, b2 = np.float32(3e-3), np.float32(0.9), np.float32(0.99)
   with parakeet.options(backend="cuda", device_threshold=1, device_fallback="silent", verify=False, tensor_cores=tensor_cores):
     params = parakeet.to_device(tree_copy(params_np), backend="cuda")
@@ -129,16 +135,14 @@ def bench_parakeet(cfg, params_np, tokens_np, targets_np, causal_np, tensor_core
     cas_d = parakeet.to_device(causal_np, backend="cuda")
 
     t_c0 = time.perf_counter()
-    loss0, grads = vg(params, tok_d, tgt_d, cas_d, H)
     bc1, bc2 = np.float32(1.0 - 0.9), np.float32(1.0 - 0.99)
-    params, m, v = pk_adam_step(params, grads, m, v, lr, b1, b2, bc1, bc2)
+    loss0, params, m, v = pk_train_step(params, m, v, tok_d, tgt_d, cas_d, H, lr, b1, b2, bc1, bc2)
     cupy.cuda.Stream.null.synchronize()
     compile_s = time.perf_counter() - t_c0
 
     # 2 extra warmup steps
     for s in (2, 3):
-      lv, grads = vg(params, tok_d, tgt_d, cas_d, H)
-      params, m, v = pk_adam_step(params, grads, m, v, lr, b1, b2, np.float32(1.0 - 0.9**s), np.float32(1.0 - 0.99**s))
+      lv, params, m, v = pk_train_step(params, m, v, tok_d, tgt_d, cas_d, H, lr, b1, b2, np.float32(1.0 - 0.9**s), np.float32(1.0 - 0.99**s))
     cupy.cuda.Stream.null.synchronize()
 
     dev = parakeet.api.get_backend("cuda").device()
@@ -146,8 +150,7 @@ def bench_parakeet(cfg, params_np, tokens_np, targets_np, causal_np, tensor_core
     times = []
     for s in range(4, 4 + steps):
       t0 = time.perf_counter()
-      lv, grads = vg(params, tok_d, tgt_d, cas_d, H)
-      params, m, v = pk_adam_step(params, grads, m, v, lr, b1, b2, np.float32(1.0 - 0.9**s), np.float32(1.0 - 0.99**s))
+      lv, params, m, v = pk_train_step(params, m, v, tok_d, tgt_d, cas_d, H, lr, b1, b2, np.float32(1.0 - 0.9**s), np.float32(1.0 - 0.99**s))
       cupy.cuda.Stream.null.synchronize()
       times.append((time.perf_counter() - t0) * 1000.0)
     return {
