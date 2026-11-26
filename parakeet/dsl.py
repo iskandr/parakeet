@@ -51,6 +51,7 @@ from .lib.adverbs import (
   jacfwd,
   jacrev,
   jvp,
+  jvp_for,
   linear_transpose,
   linearize,
   map,  # noqa: A004
@@ -65,6 +66,7 @@ from .lib.adverbs import (
   topk_fold,
   value_and_grad,
   vjp,
+  vjp_for,
 )
 from .lib.expand_lib import filter_pairs, flatmap
 from .lib.ragged_lib import (
@@ -411,6 +413,7 @@ __all__ = [
   "jacfwd",
   "jacrev",
   "jvp",
+  "jvp_for",
   "kernel",
   "linear_transpose",
   "linearize",
@@ -463,6 +466,7 @@ __all__ = [
   "value_and_grad",
   "varlen_flash_attention",
   "vjp",
+  "vjp_for",
   "wavefront",
   "where",
   "zeros",

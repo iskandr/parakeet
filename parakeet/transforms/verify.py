@@ -50,11 +50,13 @@ from ..syntax.ir import (
 
 
 def _fail(fn: Function, phase: str, msg: str) -> None:
+  """Raise an ``InternalError`` identifying the failing function, pipeline phase, and invariant."""
   where = f" ({phase})" if phase else ""
   raise InternalError(f"IR verification failed for {fn.name}{where}: {msg}")
 
 
 def _is_int(t) -> bool:
+  """Return ``True`` for signed or unsigned integer scalar types."""
   return isinstance(t, ScalarType) and t.kind in "iu"
 
 
@@ -98,6 +100,7 @@ def verify(fn: Function, phase: str = "") -> Function:
       allocated_bufs.add(s.var.uid)
 
   def check_scope(scope: ir.Scope) -> None:
+    """Verify every buffer owned by ``scope`` is a ``BufType`` allocated in ``fn``."""
     for v in scope.owned:
       if not isinstance(v.type, BufType):
         _fail(fn, phase, f"scope owns non-buffer variable {v.name}: {v.type}")
@@ -105,6 +108,7 @@ def verify(fn: Function, phase: str = "") -> Function:
         _fail(fn, phase, f"scope owns buffer {v.name} that is never allocated in {fn.name}")
 
   def check_expr(e: Expr, visible: set[int], context: str) -> None:
+    """Verify every variable read in ``e`` is visible and every ``Load`` uses a valid buffer and int index."""
     for node in ir.walk_expr(e):
       if isinstance(node, Var):
         if node.uid not in visible:
@@ -116,6 +120,7 @@ def verify(fn: Function, phase: str = "") -> Function:
           _fail(fn, phase, f"Load index on {node.buf.name} has non-integer type {node.index.type}")
 
   def check_block(block: list[ir.Stmt], visible: set[int]) -> None:
+    """Walk statements in order, enforcing typing, scoping, and operator-isolation invariants."""
     for s in block:
       if isinstance(s, Assign):
         check_expr(s.value, visible, f"assignment to {s.var.name}")

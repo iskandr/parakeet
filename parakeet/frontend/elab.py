@@ -1001,6 +1001,36 @@ class Elaborator(ArrayMixin):
   # ================================================================ calling
 
   def call_user(self, fnval, args: list, kwargs: dict, node: ast.AST | None, env: dict | None = None):
+    if isinstance(fnval, PyFunc) and env is None:
+      from ..lib.adverbs import CUSTOM_JVP_RULES, CUSTOM_VJP_RULES
+
+      raw_fn = fnval.fn
+      guard = getattr(self, "_in_custom_ad", None)
+      if guard is None:
+        guard = self._in_custom_ad = set()
+      if id(raw_fn) not in guard:
+        jvp_entry = CUSTOM_JVP_RULES.get(raw_fn)
+        if jvp_entry is not None and self.jvp is not None and not self.jvp.muted:
+          from ..transforms.jvp import custom_jvp_call
+
+          rule_fn, flat_args = jvp_entry
+          guard.add(id(raw_fn))
+          try:
+            return custom_jvp_call(self, fnval, self.lift(rule_fn), args, kwargs, flat_args=flat_args)
+          finally:
+            guard.discard(id(raw_fn))
+        vjp_entry = CUSTOM_VJP_RULES.get(raw_fn)
+        if vjp_entry is not None and self.tape is not None and not self.tape.muted:
+          from ..transforms.ad_loops import custom_vjp_call
+
+          fwd_fn, bwd_fn = vjp_entry
+          guard.add(id(raw_fn))
+          try:
+            return custom_vjp_call(
+              self, fnval, self.lift(fwd_fn), None if bwd_fn is None else self.lift(bwd_fn), args, kwargs
+            )
+          finally:
+            guard.discard(id(raw_fn))
     if isinstance(fnval, PyFunc):
       try:
         src = get_source(fnval.fn)

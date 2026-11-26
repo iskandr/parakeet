@@ -1855,32 +1855,74 @@ def _adjoint(el, holder, v):
   return el.as_concrete(el.cast_array(total, v.elt))
 
 
+def _param_names(f) -> list[str] | None:
+  """Return the ordered positional/keyword parameter names of callable ``f``, if inspectable."""
+  import inspect
+
+  from ..syntax.values import Closure, PyFunc
+
+  if isinstance(f, PyFunc):
+    try:
+      return list(inspect.signature(f.fn).parameters.keys())
+    except (TypeError, ValueError):
+      return None
+  if isinstance(f, Closure):
+    return [a.arg for a in f.node.args.args]
+  return None
+
+
 def differentiate(el, f, argnum, args: list, kwargs: dict, with_value: bool, what: str):
-  """Elaborate ``f(*args)`` and the gradient of its (scalar) result."""
+  """Elaborate ``f(*args, **kwargs)`` and the gradient of its scalar result.
+
+  ``argnum`` may be an integer index, a parameter name string, or a tuple of
+  indices and/or parameter names.
+  """
   outer = el.tape  # set when this gradient is itself being differentiated
   if outer is not None and (outer.muted or outer.parent is not None):
     raise el.error(UnsupportedError, f"{what} inside a function that is mapped and differentiated is not supported")
-  if isinstance(argnum, tuple):
-    wrt = [el.static_int(a, f"the argument numbers passed to {what}") for a in argnum]
-    single = False
-  else:
-    wrt = [el.static_int(argnum, f"the argument number passed to {what}")]
-    single = True
-  for k in wrt:
-    if not 0 <= k < len(args):
-      raise el.error(
-        TypeInferenceError,
-        f"{what}: there is no positional argument {k} (the function was called with {len(args)})",
-      )
-  if len(set(wrt)) != len(wrt):
-    raise el.error(TypeInferenceError, f"{what}: argument numbers must be distinct")
+  raw_specs = list(argnum) if isinstance(argnum, tuple) else [argnum]
+  single = not isinstance(argnum, tuple)
+  pnames = _param_names(f)
+  # Each resolved target is either ("pos", index) or ("kw", name)
+  targets: list[tuple[str, int | str]] = []
+  for spec in raw_specs:
+    if isinstance(spec, str):
+      if spec in kwargs:
+        targets.append(("kw", spec))
+      elif pnames is not None and spec in pnames:
+        idx = pnames.index(spec)
+        if idx < len(args):
+          targets.append(("pos", idx))
+        else:
+          raise el.error(
+            TypeInferenceError,
+            f"{what}: parameter '{spec}' was not passed to {getattr(f, 'name', 'function')}()",
+          )
+      else:
+        avail = f" (parameters: {', '.join(pnames)})" if pnames else ""
+        raise el.error(TypeInferenceError, f"{what}: unknown parameter name {spec!r}{avail}")
+    else:
+      k = el.static_int(spec, f"the argument number passed to {what}")
+      if not 0 <= k < len(args):
+        raise el.error(
+          TypeInferenceError,
+          f"{what}: there is no positional argument {k} (the function was called with {len(args)})",
+        )
+      targets.append(("pos", k))
+  if len(set(targets)) != len(targets):
+    raise el.error(TypeInferenceError, f"{what}: differentiated arguments must be distinct")
   args = [el.bindable(a, "arg") for a in args]
+  kwargs = {k: el.bindable(v, k) for k, v in kwargs.items()}
   tape = Tape(el, outer=outer)
   el.ad_live += 1
   try:
     holders = {}
-    for k in wrt:
-      args[k], holders[k] = _wrt_leaf(el, tape, args[k], what)
+    for tgt in targets:
+      kind, key = tgt
+      if kind == "pos":
+        args[key], holders[tgt] = _wrt_leaf(el, tape, args[key], what)
+      else:
+        kwargs[key], holders[tgt] = _wrt_leaf(el, tape, kwargs[key], what)
     el.tape = tape
     try:
       out = el.call(f, args, kwargs)
@@ -1896,7 +1938,7 @@ def differentiate(el, f, argnum, args: list, kwargs: dict, with_value: bool, wha
       )
     out = el.tmp(out, "value")
     tape.backward(el, out, Const(1.0, out.type))
-    grads = [_adjoint(el, holders[k], args[k]) for k in wrt]
+    grads = [_adjoint(el, holders[tgt], args[tgt[1]] if tgt[0] == "pos" else kwargs[tgt[1]]) for tgt in targets]
   finally:
     el.ad_live -= 1
     el.tape = outer

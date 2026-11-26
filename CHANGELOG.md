@@ -1,5 +1,41 @@
 # Changelog
 
+## 1.10.0 (November 26, 2026)
+
+Pythonic custom derivative syntax (`@par.jit(jvp=..., vjp=...)`,
+`@par.jvp_for`, `@par.vjp_for`), parameter-name differentiation (`wrt="w"`),
+differentiable compiled `np.linalg.*` decompositions and solvers (including
+differentiable Kabsch 3D protein RMSD), and expanded docstrings across
+`parakeet/transforms/`.
+
+### Automatic differentiation ergonomics
+
+- **Inline & external custom rules (`parakeet/api.py`, `parakeet/lib/adverbs.py`):**
+  `@par.jit(jvp=..., vjp=...)` and `@par.jvp_for(fn)` / `@par.vjp_for(fn)` let
+  you attach custom derivatives without boilerplate wrapper decorators or tuple
+  unpacking: `jvp` receives flat `(*primals, *tangents)` arguments, and `vjp`
+  supports closure-style `vjp(*primals) -> (output, pullback)` (as well as
+  explicit `(fwd, bwd)` pairs). Legacy `@par.custom_jvp` and `@par.custom_vjp`
+  remain supported.
+- **Parameter-name differentiation & keyword arguments (`parakeet/transforms/autodiff.py`):**
+  `par.grad(loss, "w")`, `par.grad(loss, wrt=("w", "b"))`, and
+  `par.value_and_grad(loss, wrt=...)` accept parameter names, positional
+  indices, or tuples mixing both, and support calling the differentiated
+  function with keyword arguments from Python or inside `@par.jit`.
+
+### Differentiable compiled linear algebra & compiler documentation
+
+- **Analytical VJP/JVP rules for compiled `np.linalg.*` (`parakeet/lib/linalg_lib.py`):**
+  Added analytical reverse-mode and forward-mode derivatives for `det`, `inv`,
+  `solve` (1D and 2D RHS), and `cholesky`, plus analytical reverse-mode rules
+  for `eigh`, `eigvalsh`, `svd` (square, tall, wide, `compute_uv=True/False`),
+  and `pinv`. Unlocks end-to-end differentiation through Gaussian process
+  log-marginal likelihoods and branchless 3D Kabsch protein superposition
+  (`examples/bio_algorithms.py::kabsch_rmsd`).
+- **Compiler transform docstrings:** Added concise docstrings and invariant
+  comments across `derivatives.py`, `verify.py`, `ad_loops.py`,
+  `algebraic_vjp.py`, `pairwise_fold.py`, and `tile_scan.py`.
+
 ## 1.9.0 (November 26, 2026)
 
 Pythonic string sequences, constant char-dict lookup tables, multi-output and

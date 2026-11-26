@@ -18,12 +18,12 @@ friendly dense batched GEMMs:
    Rewrites into a 3-stage parallel chunkwise scan (chunk size ``C = 64``):
    - Stage 1 (parallel ``IndexMap`` over ``T / C`` chunks): compute composite
      chunk operators ``(chunk_A[c], chunk_B[c])``.
-   - Stage 2 (short sequential scan over ``T / C`` chunks — ``C x`` fewer steps):
+   - Stage 2 (short sequential scan over ``T / C`` chunks, ``C x`` fewer steps):
      compute incoming state ``prefix_in[c]`` and final state ``s``.
    - Stage 3 (parallel ``IndexMap`` over ``T / C`` chunks): sweep each chunk
      independently from ``prefix_in[c]`` and emit ``out[idx(t)]``.
 
-2. **Bilinear Matrix-State Recurrences — Mamba-2 SSD / Gated Linear Attention**::
+2. **Bilinear Matrix-State Recurrences (Mamba-2 SSD / Gated Linear Attention)**::
 
        for t in range(T):
            S = a(t) * S + k(t)[:, None] * v(t)[None, :]
@@ -82,6 +82,7 @@ SSD_CHUNK = 64
 
 
 def _is_unit_for_range(s: Stmt) -> bool:
+  """Return ``True`` for a canonical ``for t in range(0, T, 1)`` loop."""
   return (
     isinstance(s, ForRange)
     and isinstance(s.start, Const)
@@ -172,6 +173,8 @@ def _hoist_upper_checks(checks: list[Check], t_var: Var, t_stop: Expr) -> list[S
 
 @dataclass
 class _AffineLoopMatch:
+  """Parsed scalar affine recurrence ``s = a(t) * s + b(t)`` with its disjoint output stores."""
+
   state_var: Var
   elt: ScalarType
   a_expr: Expr
@@ -185,6 +188,7 @@ class _AffineLoopMatch:
 def _match_affine_for_range(
   loop: ForRange, outer_vars: dict[int, Var], buffers: BufferInfo, facts: IndexFacts
 ) -> _AffineLoopMatch | None:
+  """Match a single-state scalar affine ``ForRange`` suitable for 3-stage parallel chunkwise scan."""
   if not _is_unit_for_range(loop):
     return None
   body = [s for s in loop.body if not isinstance(s, (ir.Comment, ReleaseScope))]
@@ -435,6 +439,8 @@ def _rewrite_affine_loop(
 
 @dataclass
 class _SSDMatch:
+  """Parsed bilinear matrix-state recurrence (Mamba-2 SSD / gated linear attention) and its fast-path guard."""
+
   t_var: Var
   t_dim: Expr
   d_dim: Expr
@@ -1249,6 +1255,7 @@ def _tile_scan_block(
   owner: Scope,
   buffers: BufferInfo,
 ) -> list[Stmt]:
+  """Walk ``stmts``, lifting batched/scalar affine scans and Mamba-2 SSD recurrences."""
   out: list[Stmt] = []
   local_outer = dict(outer_vars)
   for s in stmts:
@@ -1305,6 +1312,7 @@ def _tile_scan_block(
 
 
 def _param_vars(fn: ir.Function) -> dict[int, Var]:
+  """Collect every function-parameter scalar, buffer, offset, shape, and stride ``Var`` by UID."""
   out: dict[int, Var] = {}
   for p in fn.params:
     if isinstance(p, Var):

@@ -59,7 +59,7 @@ from .analysis import IndexFacts, TileInterval, tile_predicate_guards
 from .lowering import row_major_index
 
 # ---------------------------------------------------------------------------
-# Elementwise function prober (zero heuristics — exact IR inspection)
+# Elementwise function prober (zero heuristics: exact IR inspection)
 # ---------------------------------------------------------------------------
 
 
@@ -105,6 +105,7 @@ def _unwrap_alias(node_idx: int, nodes: list, prod_by_id: dict[int, int]) -> int
 
 
 def _same_val(a, b) -> bool:
+  """Return ``True`` if ``a`` and ``b`` are identical values or identical views of the same buffer."""
   if a is b:
     return True
   if isinstance(a, ArrayVal) and isinstance(b, ArrayVal):
@@ -114,6 +115,7 @@ def _same_val(a, b) -> bool:
 
 
 def _axis_int(el, axis, rank: int) -> int | None:
+  """Normalize a static integer (or 1-tuple) axis into ``[0, rank)``, or return ``None``."""
   if isinstance(axis, Const):
     a = int(axis.value)
     return a + rank if a < 0 else a
@@ -126,6 +128,7 @@ def _axis_int(el, axis, rank: int) -> int | None:
 def _stage_from_array(
   el, arr: ArrayVal, batch_vars: tuple[Var, ...], prefix: str, transposed_last2: bool = False
 ) -> TileStage:
+  """Build a 2D ``TileStage`` reading ``arr`` at ``(*batch_vars, r, c)`` (or transposed)."""
   r_var = Var(f"{prefix}_r", I)
   c_var = Var(f"{prefix}_c", I)
   coords = (*batch_vars, c_var, r_var) if transposed_last2 else (*batch_vars, r_var, c_var)
@@ -138,6 +141,7 @@ def _stage_from_array(
 
 
 def _inline_stage(st: TileStage, coords: tuple[Expr, ...], out_stmts: list[Stmt]) -> Expr:
+  """Clone a ``TileStage`` body at ``coords`` into ``out_stmts`` and return its scalar value."""
   cl = Cloner({v.uid: c for v, c in zip(st.index, coords)})
   for v in defined(st.body).values():
     cl.var(v)
@@ -288,6 +292,7 @@ def _match_batched_matmul(el, nodes, prod_by_id, red_idx: int):
 
 
 def _bwd_softmax(tape, el, node, g: ArrayVal) -> None:
+  """Closed-form shift-invariant softmax VJP: ``p * (g - sum(g * p, axis=ax, keepdims=True))``."""
   from ..lib.numpy_lib import _reduce_prim as reduce_plain
   from .autodiff import UF
 
@@ -303,6 +308,7 @@ def _bwd_softmax(tape, el, node, g: ArrayVal) -> None:
 
 
 def _bwd_logsumexp(tape, el, node, g: ArrayVal) -> None:
+  """Closed-form logsumexp VJP: ``g * exp(x - lse)``."""
   from .autodiff import UF
 
   (x_val,) = node.inputs
@@ -317,6 +323,7 @@ def _bwd_logsumexp(tape, el, node, g: ArrayVal) -> None:
 
 
 def _bwd_norm(tape, el, node, g: ArrayVal) -> None:
+  """Single-pass closed-form LayerNorm / RMSNorm VJP avoiding the 9-node variance chain."""
   from ..lib.numpy_lib import _reduce_prim as reduce_plain
   from .autodiff import UF
 
@@ -394,7 +401,7 @@ def _stage_from_broadcast_array(
 
 def _bwd_flash_attn(tape, el, node, g: ArrayVal) -> None:
   """Law 2 FlashAttention rematerialized backward (D_i form):
-  reads ONLY (Q, K, V[, B], O, m, l, dO) — ZERO N x N tensors saved!"""
+  reads only (Q, K, V[, B], O, m, l, dO) with zero N x N tensors saved."""
   from ..lib.numpy_lib import _reduce_prim as reduce_plain
   from .autodiff import UF
 
@@ -1518,7 +1525,7 @@ def _bwd_ipa_attn(tape, el, node, g: ArrayVal) -> None:
 
 def _bwd_cce(tape, el, node, g: ArrayVal) -> None:
   """Law 2 Cut Cross-Entropy rematerialized backward:
-  reads ONLY (H, W, targets, m, s, g_diff) — ZERO M x V logits saved!"""
+  reads only (H, W, targets, m, s, g_diff) with zero M x V logits saved."""
   from .autodiff import UF
 
   h_arr, w_arr = node.inputs
@@ -1656,6 +1663,7 @@ def _bwd_cce(tape, el, node, g: ArrayVal) -> None:
 
 
 def run_algebraic_vjp(tape, el, node, g) -> None:
+  """Dispatch an ``algebraic_vjp`` tape node to its attached Law 2 backward handler."""
   handler = node.info[0]
   handler(tape, el, node, g)
 

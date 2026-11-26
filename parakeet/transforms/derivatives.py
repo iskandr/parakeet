@@ -22,38 +22,47 @@ from ..syntax.ops import cast, prim
 
 
 def _f(op: str, t: ScalarType, *args: Expr) -> Expr:
+  """Build a float primitive ``op`` after casting all operands to ``t``."""
   return prim(op, tuple(cast(a, t) for a in args), t)
 
 
 def _c(value: float, t: ScalarType) -> Const:
+  """Return a typed floating-point constant of type ``t``."""
   return Const(value, t)
 
 
 def _gt0(x: Expr) -> Expr:
+  """Boolean predicate ``x > 0`` in ``x``'s scalar type."""
   return prim("gt", (x, Const(0.0, x.type)), Bool)
 
 
 def _lt0(x: Expr) -> Expr:
+  """Boolean predicate ``x < 0`` in ``x``'s scalar type."""
   return prim("lt", (x, Const(0.0, x.type)), Bool)
 
 
 def _sign(x: Expr, t: ScalarType) -> Expr:
+  """Branchless sign function returning ``-1``, ``0``, or ``+1`` in type ``t``."""
   return ops.select(_gt0(x), _c(1.0, t), ops.select(_lt0(x), _c(-1.0, t), _c(0.0, t)))
 
 
 def _recip(x: Expr, t: ScalarType) -> Expr:
+  """Reciprocal ``1 / x`` in type ``t``."""
   return _f("div", t, _c(1.0, t), x)
 
 
 def _one_minus_square(x: Expr, t: ScalarType) -> Expr:
+  """Compute ``1 - x*x`` (shared by ``arcsin``, ``arccos``, ``tanh``, ``arctanh``)."""
   return _f("sub", t, _c(1.0, t), _f("mul", t, x, x))
 
 
 def _one_plus_square(x: Expr, t: ScalarType) -> Expr:
+  """Compute ``1 + x*x`` (shared by ``tan``, ``arctan``, ``arcsinh``)."""
   return _f("add", t, _c(1.0, t), _f("mul", t, x, x))
 
 
 def _pow(args, r, t):
+  """Partials of ``a ** b`` with zero-exponent and non-positive-base guards."""
   a, b = args
   if isinstance(b, Const) and b.value == 0:
     return (None, None)
@@ -67,6 +76,8 @@ def _pow(args, r, t):
 
 
 def _first_wins(op: str):
+  """Subgradient rule for binary ``min`` / ``max`` breaking ties in favor of the first operand."""
+
   def partials(args, r, t):
     a, b = args
     first = prim("le" if op == "min" else "ge", (a, b), Bool)
@@ -76,12 +87,15 @@ def _first_wins(op: str):
 
 
 def _atan2(args, r, t):
+  """Partials of ``arctan2(y, x)``: ``(x / (x^2 + y^2), -y / (x^2 + y^2))``."""
   y, x = args
   d = _f("add", t, _f("mul", t, x, x), _f("mul", t, y, y))
   return (_f("div", t, x, d), _f("neg", t, _f("div", t, y, d)))
 
 
 def _gauss(sign: float):
+  """Partial derivative of ``erf`` (``sign=+1``) or ``erfc`` (``sign=-1``)."""
+
   def partials(args, r, t):
     (a,) = args
     e = _f("exp", t, _f("neg", t, _f("mul", t, a, a)))
@@ -91,6 +105,7 @@ def _gauss(sign: float):
 
 
 def _flat(args, r, t):
+  """Zero-partial rule for piecewise-constant rounding and floor-division ops."""
   return tuple(None for _ in args)
 
 
@@ -145,6 +160,7 @@ _SPELLING = {"lgamma": "math.lgamma", "tgamma": "math.gamma"}
 
 
 def is_float(e: Expr) -> bool:
+  """Return ``True`` when scalar expression ``e`` has a floating-point type."""
   return isinstance(e.type, ScalarType) and e.type.kind == "f"
 
 
@@ -153,6 +169,7 @@ _USES_RESULT = frozenset({"div", "pow", "sqrt", "cbrt", "exp", "exp2", "expm1", 
 
 
 def partials(el, e: Prim, r: Expr | None = None):
+  """Look up and evaluate the partial derivatives of primitive ``e`` (reusing ``r`` when given)."""
   rule = PARTIALS.get(e.op)
   if rule is None:
     raise el.error(UnsupportedError, f"the derivative of {_SPELLING.get(e.op, e.op)} is not implemented")

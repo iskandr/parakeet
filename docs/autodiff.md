@@ -39,8 +39,8 @@ dot(jvp(f, x, v), u) == dot(v, vjp(f, x)(u))
 
 | API | Mode | What it computes |
 |---|---|---|
-| `par.grad(f, argnum=0)` | Reverse | Gradient of a scalar-valued function |
-| `par.value_and_grad(f, argnum=0)` | Reverse | Forward value and gradient in one compiled call |
+| `par.grad(f, wrt=0)` | Reverse | Gradient of a scalar-valued function by index (`0`) or parameter name (`"w"`) |
+| `par.value_and_grad(f, wrt=0)` | Reverse | Forward value and gradient in one compiled call |
 | `par.vjp(f, *primals)` | Reverse | `(y, pullback)` for vector, matrix, tuple, record, or `RaggedArray` outputs |
 | `par.jvp(f, primals, tangents)` | Forward | Directional derivative `(f(*primals), J · tangents)` in one forward pass |
 | `par.linearize(f, *primals)` | Forward | Forward value `y` plus reusable linear map `v -> J · v` |
@@ -49,7 +49,8 @@ dot(jvp(f, x, v), u) == dot(v, vjp(f, x)(u))
 | `par.jacfwd(f)` / `par.jacrev(f)` | Fwd / Rev | Full Jacobian matrix (`jacfwd` when `n <= m`, `jacrev` when `m < n`) |
 | `par.hessian(f, argnum=0)` | Fwd-over-rev | Full Hessian matrix |
 | `@par.checkpoint` | Memory | Recompute a block's intermediates during backpropagation instead of saving them |
-| `@par.custom_vjp` / `@par.custom_jvp` | Custom | Attach user-defined reverse-mode or forward-mode derivative rules |
+| `@par.jit(jvp=..., vjp=...)` | Custom | Attach flat forward-mode or closure-style reverse-mode derivative rules directly |
+| `@par.jvp_for(fn)` / `@par.vjp_for(fn)` | Custom | Register custom forward or reverse rules onto an existing function |
 
 ## Reverse-mode gradients (`grad` and `value_and_grad`)
 
@@ -58,13 +59,13 @@ import numpy as np
 import parakeet as par
 
 
-def loss(w, x, y):
-  return np.mean((np.tanh(x @ w) - y) ** 2)
+def loss(w, b, x, y):
+  return np.mean((np.tanh(x @ w + b) - y) ** 2)
 
 
-g = par.grad(loss)(w, x, y)  # d loss / d w, shaped like w
-value, g = par.value_and_grad(loss)(w, x, y)
-gw, gx = par.grad(loss, (0, 1))(w, x, y)  # several arguments at once
+g = par.grad(loss)(w, b, x, y)  # d loss / d w, shaped like w
+value, g = par.value_and_grad(loss, wrt="w")(w, b, x, y)  # differentiate by parameter name
+gw, gb = par.grad(loss, wrt=("w", "b"))(x=x, y=y, w=w, b=b)  # works with keyword arguments too
 ```
 
 For `par.grad` and `par.value_and_grad`, the function returns a single
@@ -166,7 +167,7 @@ par.grad(penalty)(w, x)  # 2 H g, reverse over reverse
 |---|---|
 | Arithmetic and math | `+ - * / **`, `np.exp`, `np.tanh`, `np.maximum`, `np.where`, `np.abs`, `np.clip`, … with broadcasting |
 | Reductions | `np.sum`, `np.mean`, `np.var`, `np.std`, `np.max`, `np.min`, `np.prod` (zero-safe), `np.linalg.norm` with `axis`/`keepdims`; `par.reduce` with `np.add`, `np.multiply`, `np.minimum`, `np.maximum`, or arbitrary user folds |
-| Linear algebra | `@`, `np.dot`, `np.matmul` for vectors, matrices, and batches; `np.einsum` |
+| Linear algebra | `@`, `np.dot`, `np.matmul` for vectors, matrices, and batches; `np.einsum`; compiled `np.linalg.det`, `inv`, `solve`, `cholesky` (reverse + forward), and `eigh`, `eigvalsh`, `svd`, `pinv` (reverse) |
 | Scans, sorting, and selection | `np.cumsum`, `par.scan`, `np.sort`, `par.topk`, `par.topk_fold` |
 | Indexing, lookup, and scatter | Views (slice, `T`, `reshape`, `ravel`, `np.transpose`), gather `x[idx]`, `FrozenHashTable.get`, `SortedIndex.get`, `np.add.at`, canonical `for`-loop `out[idx[i]] += val[i]`, `par.scatter_add` |
 | Building arrays | `np.concatenate`, `np.stack`, `np.array([a, b, c])`, comprehensions |
@@ -223,27 +224,36 @@ both sides.
 
 ## Custom rules, `stop_gradient`, and `checkpoint`
 
+* **`@par.jit(jvp=..., vjp=...)`** attaches custom forward-mode and/or
+  reverse-mode rules directly on a compiled function with plain flat signatures:
+  - A `jvp` rule takes flat `(*primals, *tangents)` and returns `(output, d_output)`.
+  - A `vjp` rule takes `(*primals)` and returns `(output, pullback)` where
+    `pullback(d_output)` returns the input cotangent(s) (or pass a `(fwd, bwd)`
+    pair for explicit residuals).
+  ```python
+  def smooth_relu_jvp(x, dx):
+    return np.maximum(x, 0.0), dx / (1.0 + np.exp(-x))
+
+
+  def smooth_relu_vjp(x):
+    return np.maximum(x, 0.0), lambda dy: dy / (1.0 + np.exp(-x))
+
+
+  @par.jit(jvp=smooth_relu_jvp, vjp=smooth_relu_vjp)
+  def smooth_relu(x):
+    return np.maximum(x, 0.0)
+  ```
+* **`@par.jvp_for(fn)` and `@par.vjp_for(fn)`** attach the same flat JVP or
+  closure-style VJP rules to an existing plain Python or `@par.jit` function
+  (this is how Parakeet registers its own analytical derivatives for compiled
+  `np.linalg.cholesky`, `solve`, `inv`, `det`, `eigh`, and `svd`). The
+  JAX-style `@par.custom_vjp` / `.defvjp(fwd, bwd)` and `@par.custom_jvp` /
+  `.defjvp(rule)` decorators remain supported as aliases.
 * **`par.stop_gradient(x)`** detaches a scalar, array, tuple, record, or
   `RaggedArray` from both reverse-mode `grad`/`vjp` and forward-mode `jvp` with
   zero copy:
   ```python
   y = x + par.stop_gradient(np.round(x) - x)
-  ```
-* **`@par.custom_vjp`** attaches custom `(fwd, bwd)` rules via `.defvjp(fwd, bwd)`: supporting `NamedTuple`, frozen `@dataclass`, and `RaggedArray` residuals,
-  higher-order AD, and Implicit Function Theorem differentiation through
-  `while`-loop equilibrium solvers without storing iteration history.
-* **`@par.custom_jvp`** attaches custom forward-mode rules via `.defjvp(jvp_rule)`:
-  ```python
-  @par.custom_jvp
-  def smooth_relu(x):
-    return np.maximum(x, 0.0)
-
-
-  @smooth_relu.defjvp
-  def _smooth_relu_jvp(primals, tangents):
-    (x,) = primals
-    (dx,) = tangents
-    return np.maximum(x, 0.0), dx / (1.0 + np.exp(-x))
   ```
 * **`@par.checkpoint`** (or `par.checkpoint(fn)(*args)`) drops a block's
   forward intermediates and rematerializes them during backpropagation,

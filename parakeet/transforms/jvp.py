@@ -493,8 +493,14 @@ def jvp_call(el, fn, primals, tangents, what: str = "jvp"):
   return (out, dout)
 
 
-def custom_jvp_call(el, fn, jvp_rule, args: list, kwargs: dict):
-  """Staged dispatch for ``@par.custom_jvp`` functions."""
+def custom_jvp_call(el, fn, jvp_rule, args: list, kwargs: dict, *, flat_args: bool = False):
+  """Staged dispatch for custom forward-mode JVP rules.
+
+  When ``flat_args`` is True (``@par.jit(jvp=...)`` / ``@par.jvp_for``), the
+  rule is called as ``jvp_rule(*primals, *tangents) -> (primal_out, tangent_out)``.
+  When False (legacy ``@par.custom_jvp``), it is called as
+  ``jvp_rule(primals_tuple, tangents_tuple)``.
+  """
   jvp = el.jvp
   if jvp is None or jvp.muted or jvp_rule is None:
     return el.call(fn, args, kwargs)
@@ -505,8 +511,9 @@ def custom_jvp_call(el, fn, jvp_rule, args: list, kwargs: dict):
 
   primals = tuple(args)
   tangents = tuple(jvp.extract_primal_and_tangent(el, a)[1] for a in args)
+  call_args = [*primals, *tangents] if flat_args else [primals, tangents]
   with jvp.computing(el):
-    res = el.call(jvp_rule, [primals, tangents], {})
+    res = el.call(jvp_rule, call_args, {})
   if not isinstance(res, tuple) or len(res) != 2:
     raise el.error(
       TypeInferenceError,
