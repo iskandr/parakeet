@@ -10,6 +10,7 @@ as 3x3 Kabsch protein superposition).
 
 import numpy as np
 
+from . import adverbs as _adverbs
 from .core import source
 
 __parakeet_lib__ = True
@@ -78,9 +79,7 @@ def _lu_solve_vec(lu, piv, b):
   return x
 
 
-@source(np.linalg.cholesky)
-def cholesky(a):
-  """Lower-triangular Cholesky decomposition ``L @ L.T == a``."""
+def _cholesky_2d(a):
   if a.ndim != 2 or a.shape[0] != a.shape[1]:
     raise ValueError("cholesky() expects a square 2-d matrix")
   n = a.shape[0]
@@ -100,9 +99,15 @@ def cholesky(a):
   return L
 
 
-@source(np.linalg.det)
-def det(a):
-  """Determinant of a square 2-d matrix via LU with partial pivoting."""
+@source(np.linalg.cholesky)
+def cholesky(a):
+  """Lower-triangular Cholesky decomposition ``L @ L.T == a`` (2-d or batched 3-d)."""
+  if a.ndim == 3:
+    return _adverbs.map(_cholesky_2d, a)
+  return _cholesky_2d(a)
+
+
+def _det_2d(a):
   lu, _, sign = _lu_factor(a)
   n = lu.shape[0]
   prod = lu.dtype.type(sign)
@@ -111,9 +116,15 @@ def det(a):
   return prod
 
 
-@source(np.linalg.solve)
-def solve(a, b):
-  """Solve ``a @ x = b`` for square 2-d ``a`` and 1-d or 2-d ``b``."""
+@source(np.linalg.det)
+def det(a):
+  """Determinant of a square 2-d or batched 3-d matrix via LU with partial pivoting."""
+  if a.ndim == 3:
+    return _adverbs.map(_det_2d, a)
+  return _det_2d(a)
+
+
+def _solve_2d(a, b):
   lu, piv, _ = _lu_factor(a)
   n = lu.shape[0]
   if b.ndim == 1:
@@ -133,9 +144,15 @@ def solve(a, b):
   raise ValueError("solve() expects a 1-d or 2-d right-hand side")
 
 
-@source(np.linalg.inv)
-def inv(a):
-  """Inverse of a square 2-d matrix via LU with partial pivoting."""
+@source(np.linalg.solve)
+def solve(a, b):
+  """Solve ``a @ x = b`` for square 2-d or batched 3-d ``a``."""
+  if a.ndim == 3:
+    return _adverbs.map(_solve_2d, a, b)
+  return _solve_2d(a, b)
+
+
+def _inv_2d(a):
   lu, piv, _ = _lu_factor(a)
   n = lu.shape[0]
   eye = np.eye(n, dtype=lu.dtype)
@@ -145,12 +162,18 @@ def inv(a):
   return out
 
 
-@source(np.linalg.qr)
-def qr(a, mode="reduced"):
-  """Householder QR factorization ``a == Q @ R``."""
+@source(np.linalg.inv)
+def inv(a):
+  """Inverse of a square 2-d or batched 3-d matrix via LU with partial pivoting."""
+  if a.ndim == 3:
+    return _adverbs.map(_inv_2d, a)
+  return _inv_2d(a)
+
+
+def _qr_2d(a, mode="reduced"):
   af = _as_float_mat(a)
   m, n = af.shape[0], af.shape[1]
-  k = m if m < n else n
+  k = min(m, n)
   R = af.copy()
   Q = np.eye(m, dtype=af.dtype)
   for j in range(k):
@@ -172,7 +195,6 @@ def qr(a, mode="reduced"):
     if v_sq == 0.0:
       continue
     beta = af.dtype.type(2.0) / v_sq
-    # R[j:, j:] -= beta * outer(v[j:], v[j:] @ R[j:, j:])
     for col in range(j, n):
       dot = af.dtype.type(0.0)
       for i in range(j, m):
@@ -180,7 +202,6 @@ def qr(a, mode="reduced"):
       scale = beta * dot
       for i in range(j, m):
         R[i, col] = R[i, col] - scale * v[i]
-    # Q[:, j:] -= beta * outer(Q[:, j:] @ v[j:], v[j:])
     for row in range(m):
       dot = af.dtype.type(0.0)
       for i in range(j, m):
@@ -193,19 +214,20 @@ def qr(a, mode="reduced"):
   return Q[:, :k], R[:k, :]
 
 
-@source(np.linalg.eigh)
-def eigh(a, UPLO="L"):
-  """Symmetric eigendecomposition ``a == V @ diag(w) @ V.T`` via cyclic Jacobi.
+@source(np.linalg.qr)
+def qr(a, mode="reduced"):
+  """Householder QR factorization ``a == Q @ R`` (2-d or batched 3-d)."""
+  if a.ndim == 3:
+    return _adverbs.map(lambda mat: _qr_2d(mat, mode), a)
+  return _qr_2d(a, mode)
 
-  Returns eigenvalues ``w`` in ascending order and corresponding orthonormal
-  eigenvector columns ``V``.
-  """
+
+def _eigh_2d(a, UPLO="L"):
   if a.ndim != 2 or a.shape[0] != a.shape[1]:
     raise ValueError("eigh() expects a square 2-d matrix")
   n = a.shape[0]
   af = _as_float_mat(a)
   dt = af.dtype
-  # Symmetrize from requested triangle
   A = np.empty((n, n), dtype=dt)
   use_upper = UPLO == "U" or UPLO == "u"
   for i in range(n):
@@ -260,7 +282,6 @@ def eigh(a, UPLO="L"):
   w = np.empty(n, dtype=dt)
   for i in range(n):
     w[i] = A[i, i]
-  # Sort eigenvalues ascending (selection sort keeps V columns in sync)
   for i in range(n):
     best = i
     for j in range(i + 1, n):
@@ -275,6 +296,23 @@ def eigh(a, UPLO="L"):
         V[r, i] = V[r, best]
         V[r, best] = tv
   return w, V
+
+
+@source(np.linalg.eigh)
+def eigh(a, UPLO="L"):
+  """Symmetric eigendecomposition ``a == V @ diag(w) @ V.T`` (2-d or batched 3-d)."""
+  if a.ndim == 3:
+    return _adverbs.map(lambda mat: _eigh_2d(mat, UPLO), a)
+  return _eigh_2d(a, UPLO)
+
+
+@source(np.linalg.eigvalsh)
+def eigvalsh(a, UPLO="L"):
+  """Eigenvalues of a symmetric 2-d or batched 3-d matrix in ascending order."""
+  if a.ndim == 3:
+    return _adverbs.map(lambda mat: _eigh_2d(mat, UPLO)[0], a)
+  w, _ = _eigh_2d(a, UPLO)
+  return w
 
 
 def _svd_tall(af, full_matrices):
@@ -395,9 +433,7 @@ def _svd_tall(af, full_matrices):
   return U, S, V.T.copy()
 
 
-@source(np.linalg.svd)
-def svd(a, full_matrices=True, compute_uv=True):
-  """Singular value decomposition ``a == U @ diag(S) @ Vt`` via one-sided Jacobi."""
+def _svd_2d(a, full_matrices=True, compute_uv=True):
   af = _as_float_mat(a)
   m, n = af.shape[0], af.shape[1]
   if m >= n:
@@ -405,8 +441,70 @@ def svd(a, full_matrices=True, compute_uv=True):
     if compute_uv:
       return U, S, Vt
     return S
-  # Wide matrix (m < n): decompose A.T (which is n x m with n > m) and transpose back
   U_t, S, Vt_t = _svd_tall(af.T.copy(), full_matrices)
   if compute_uv:
     return Vt_t.T.copy(), S, U_t.T.copy()
   return S
+
+
+@source(np.linalg.svd)
+def svd(a, full_matrices=True, compute_uv=True):
+  """Singular value decomposition ``a == U @ diag(S) @ Vt`` (2-d or batched 3-d)."""
+  if a.ndim == 3:
+    m, n = a.shape[1], a.shape[2]
+    if m >= n:
+      if compute_uv:
+        return _adverbs.map(lambda mat: _svd_tall(_as_float_mat(mat), full_matrices), a)
+      return _adverbs.map(lambda mat: _svd_tall(_as_float_mat(mat), full_matrices)[1], a)
+    if compute_uv:
+
+      def _wide_uv(mat):
+        U_t, S, Vt_t = _svd_tall(_as_float_mat(mat).T.copy(), full_matrices)
+        return Vt_t.T.copy(), S, U_t.T.copy()
+
+      return _adverbs.map(_wide_uv, a)
+    return _adverbs.map(lambda mat: _svd_tall(_as_float_mat(mat).T.copy(), full_matrices)[1], a)
+  return _svd_2d(a, full_matrices, compute_uv)
+
+
+def _pinv_2d(a, rcond=1e-15):
+  U, S, Vt = _svd_2d(a, False, True)
+  dt = S.dtype
+  cutoff = dt.type(rcond) * (S[0] if len(S) > 0 else dt.type(0.0))
+  inv_s = np.where(S > cutoff, dt.type(1.0) / np.where(S > cutoff, S, dt.type(1.0)), dt.type(0.0))
+  return (Vt.T * inv_s[None, :]) @ U.T
+
+
+@source(np.linalg.pinv)
+def pinv(a, rcond=1e-15):
+  """Moore-Penrose pseudoinverse via SVD (2-d or batched 3-d)."""
+  if a.ndim == 3:
+    return _adverbs.map(lambda mat: _pinv_2d(mat, rcond), a)
+  return _pinv_2d(a, rcond)
+
+
+@source(np.linalg.lstsq)
+def lstsq(a, b, rcond=-1.0):
+  """Minimum-norm least-squares solution to ``a @ x = b`` via SVD.
+
+  Returns ``(x, residuals, rank, s)`` matching NumPy's tuple contract.
+  """
+  U, S, Vt = _svd_2d(a, False, True)
+  dt = S.dtype
+  m, n = a.shape[0], a.shape[1]
+  eps = dt.type(1.1920929e-7) if dt == np.float32 else dt.type(2.220446049250313e-16)
+  rc = dt.type(max(m, n)) * eps if rcond < 0.0 else dt.type(rcond)
+  cutoff = rc * (S[0] if len(S) > 0 else dt.type(0.0))
+  mask = S > cutoff
+  rank = np.sum(mask.astype(np.int64))
+  inv_s = np.where(mask, dt.type(1.0) / np.where(mask, S, dt.type(1.0)), dt.type(0.0))
+  bf = b.astype(dt)
+  if bf.ndim == 1:
+    x = Vt.T @ (inv_s * (U.T @ bf))
+    diff = a.astype(dt) @ x - bf
+    res = np.array([np.sum(diff * diff)], dtype=dt) if m > n and rank == n else np.empty(0, dtype=dt)
+    return x, res, rank, S
+  x = Vt.T @ (inv_s[:, None] * (U.T @ bf))
+  diff = a.astype(dt) @ x - bf
+  res = np.sum(diff * diff, axis=0) if m > n and rank == n else np.empty(0, dtype=dt)
+  return x, res, rank, S

@@ -446,6 +446,45 @@ def batched_kabsch_rmsd(P_batch, Q_ref):
   return par.map(rmsd_one, P_batch)
 
 
+# ---------------------------------------------------------------------------
+# 8. Differentiable protein backbone Ramachandran dihedrals (phi, psi, omega)
+# ---------------------------------------------------------------------------
+
+
+def _dihedral_angles(p0, p1, p2, p3):
+  """Signed torsion angles (radians) for batches of 4-atom quartets ``(K, 3)``."""
+  b0 = p0 - p1
+  b1 = p2 - p1
+  b2 = p3 - p2
+  b1_norm = np.sqrt(np.sum(b1 * b1, axis=-1, keepdims=True))
+  b1_unit = b1 / np.maximum(b1_norm, 1e-12)
+  # Project b0 and b2 onto the plane perpendicular to the central bond b1
+  v = b0 - np.sum(b0 * b1_unit, axis=-1, keepdims=True) * b1_unit
+  w = b2 - np.sum(b2 * b1_unit, axis=-1, keepdims=True) * b1_unit
+  x = np.sum(v * w, axis=-1)
+  # Cross product b1_unit x v
+  cx = b1_unit[:, 1] * v[:, 2] - b1_unit[:, 2] * v[:, 1]
+  cy = b1_unit[:, 2] * v[:, 0] - b1_unit[:, 0] * v[:, 2]
+  cz = b1_unit[:, 0] * v[:, 1] - b1_unit[:, 1] * v[:, 0]
+  y = cx * w[:, 0] + cy * w[:, 1] + cz * w[:, 2]
+  return np.arctan2(y, x)
+
+
+@par.jit
+def backbone_dihedrals(N, CA, C):
+  """Compute Ramachandran backbone torsion angles ``(phi, psi, omega)`` from ``(L, 3)`` atoms.
+
+  Returns arrays of length ``L - 1`` (in radians):
+  - ``phi[i]`` = dihedral(C[i], N[i+1], CA[i+1], C[i+1])
+  - ``psi[i]`` = dihedral(N[i], CA[i], C[i], N[i+1])
+  - ``omega[i]`` = dihedral(CA[i], C[i], N[i+1], CA[i+1])
+  """
+  phi = _dihedral_angles(C[:-1], N[1:], CA[1:], C[1:])
+  psi = _dihedral_angles(N[:-1], CA[:-1], C[:-1], N[1:])
+  omega = _dihedral_angles(CA[:-1], C[:-1], N[1:], CA[1:])
+  return phi, psi, omega
+
+
 def main():
   # 1. Gotoh alignment + CIGAR expansion
   score, ops, lens = gotoh_global_align(b"ACGTACGTAAAACGT", b"ACGTCGTAAAAGTCGT")

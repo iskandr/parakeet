@@ -175,9 +175,17 @@ straightforward with a 2-slot (or N-slot) ring buffer:
 * **Fits inside `@par.jit`:** *Block-parallel BGZF DEFLATE inflate.* Because
   BGZF splits `.bam` / `.fastq.gz` files into independent `<= 64 KiB` compressed
   blocks whose uncompressed sizes (`ISIZE`) are known up front from the block
-  headers, a `par.parfor` over `N` BGZF blocks can decode each block's bit-stream
-  in parallel (~300 lines of `uint64` bit-reading, canonical Huffman LUT tables,
-  and LZ77 copy loops into a pre-sized output slab).
+  headers, [`examples/bgzf_and_streaming_io.py`](https://github.com/iskandr/parakeet/blob/master/examples/bgzf_and_streaming_io.py)
+  compiles a full RFC-1951 DEFLATE inflater (stored, fixed Huffman, and dynamic
+  Huffman with a 9-bit fast LUT + LZ77) in pure Python across all BGZF blocks
+  in parallel, alongside a double-buffered overlapped `zlib` + Parakeet FASTQ
+  pipeline. On 20,000 FASTQ reads (6.31 MB raw / 3.16 MB BGZF, 97 blocks) on
+  Apple M1 Pro:
+  - Raw inflate: Python `gzip` (C `zlib` 1T) **226 MB/s** vs. Parakeet BGZF
+    1T **203 MB/s** vs. Parakeet BGZF multicore **1,579 MB/s** (7.0x faster).
+  - End-to-end decompress + FASTQ QC: sequential `gzip` + QC **168 MB/s** vs.
+    overlapped double-buffered `zlib` + QC **341 MB/s** (2.0x) vs. Parakeet
+    parallel BGZF + QC **906 MB/s** (5.4x).
 * **Escapes Parakeet's semantic hull:** Single-stream sequential `gzip`/`zstd`
   decompression, container framing/CRC error recovery, file I/O syscalls, and
   unbounded dynamic output growth on GPU. Single-stream DEFLATE has a serial

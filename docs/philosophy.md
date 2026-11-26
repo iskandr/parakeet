@@ -117,15 +117,15 @@ or SciPy. Knowing the boundary up front avoids surprises.
 
 ### NumPy and SciPy coverage
 
-About 210 core NumPy functions and ufuncs are built in (see
+About 215 core NumPy functions and ufuncs are built in (see
 [Supported functions](supported.md)), covering arithmetic, reductions, scans,
-sorting, masks and fancy indexing, `@`/`dot`/`einsum`, dense 2D linear algebra
-(`np.linalg.norm`, `cholesky`, `det`, `solve`, `inv`, `qr`, `eigh`, `svd`), and
-parallel `np.random`. Not yet built in:
+sorting, masks and fancy indexing, `@`/`dot`/`einsum`, dense 2D and batched 3D
+linear algebra (`np.linalg.norm`, `cholesky`, `det`, `solve`, `inv`, `qr`,
+`eigh`, `eigvalsh`, `svd`, `pinv`, `lstsq`), and parallel `np.random`. Not yet
+built in:
 
-* Non-symmetric eigensolvers and least-squares helpers (`np.linalg.eig`,
-  `lstsq`, `pinv`, and batched 3D+ `np.linalg.*` calls; use `par.parfor` or
-  `par.map` to batch 2D `np.linalg.*` calls in parallel)
+* Non-symmetric eigensolvers (`np.linalg.eig`, `eigvals`) and 4D+ batched
+  `np.linalg.*` calls (use `par.map` for arbitrary leading batch axes)
 * Spectral transforms (`np.fft.*`; see `examples/complex_fft_and_fasta.py` for
   a compiled radix-2 FFT)
 * Variable-cardinality set operations (`np.unique`, `np.lexsort`, `np.isin`)
