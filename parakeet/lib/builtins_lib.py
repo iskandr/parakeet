@@ -21,7 +21,7 @@ from ..ragged import RaggedArray
 from ..syntax import ops
 from ..syntax.ir import Const, Expr
 from ..syntax.ops import I, cast, cmp
-from ..syntax.records import StructuredView, record_type
+from ..syntax.records import ComplexArray, ComplexScalar, ComplexTypeVal, StructuredView, record_type
 from ..syntax.values import (
   ArrayVal,
   BatchedVal,
@@ -47,6 +47,10 @@ def _len(el, x):
   if isinstance(x, ArrayVal):
     if x.rank == 0:
       raise el.error(TypeInferenceError, "len() of a 0-d array")
+    return x.shape[0]
+  if isinstance(x, ComplexArray):
+    if x.rank == 0:
+      raise el.error(TypeInferenceError, "len() of a 0-d complex array")
     return x.shape[0]
   if isinstance(x, StructuredView):
     if x.rank == 0:
@@ -471,8 +475,12 @@ def _isinstance(el, x, types):
       if t.type.weak:  # bool / int / float: Python scalars only
         return x.type.weak and (x.type.kind == t.type.kind or (t.type.kind == "i" and x.type.kind == "b"))
       return x.type is t.type
+    if isinstance(t, ComplexTypeVal):
+      if isinstance(x, ComplexScalar):
+        return x.python_complex if t.weak else (not x.python_complex and x.elt.strong is t.elt.strong)
+      return False
     if t is np.ndarray:
-      return isinstance(x, ArrayVal)
+      return isinstance(x, (ArrayVal, ComplexArray))
     if t is tuple:
       return isinstance(x, tuple)
     if t is list:

@@ -19,6 +19,7 @@ import numpy as np
 
 from ..ndtypes import (
   Float32,
+  Float64,
   ScalarType,
   WeakBool,
   WeakFloat,
@@ -26,7 +27,7 @@ from ..ndtypes import (
   from_dtype,
   is_supported_dtype,
 )
-from ..syntax.records import StructuredRecord, record_type
+from ..syntax.records import ComplexArrayRecord, ComplexScalarRecord, ComplexTypeVal, StructuredRecord, record_type
 
 Key = tuple
 
@@ -78,11 +79,20 @@ STAGED: dict = {}
 CODE_FUNCTIONS: dict[pytypes.CodeType, pytypes.FunctionType] = {}
 
 
-def type_value(obj: Any) -> ScalarType | type | None:
+def type_value(obj: Any) -> ScalarType | ComplexTypeVal | type | None:
   """Normalise a dtype-like object; ``None`` if ``obj`` is not one."""
   if obj is bool or obj is int or obj is float:
     return obj
+  if obj is complex:
+    return ComplexTypeVal(Float64, weak=True)
   if isinstance(obj, np.dtype) or (isinstance(obj, type) and issubclass(obj, np.generic)):
+    dt = np.dtype(obj)
+    if dt.kind == "c":
+      if dt.itemsize == 8:
+        return ComplexTypeVal(Float32)
+      if dt.itemsize == 16:
+        return ComplexTypeVal(Float64)
+      raise Unsupported(f"complex dtype {dt.name} is not supported; use np.complex64 or np.complex128")
     try:
       return from_dtype(obj)
     except TypeError as e:
@@ -138,6 +148,17 @@ def classify(value: Any, leaves: list, fixups: list | None = None) -> Key:
     if value.dtype.names is not None:
       rec = StructuredRecord(value.dtype, value.dtype.names, value.ndim)
       return ("rec", rec, classify(rec.values(value), leaves, fixups))
+    if value.dtype.kind == "c":
+      dt = value.dtype
+      if dt.name not in ("complex64", "complex128") or not dt.isnative or not value.flags.aligned:
+        target_dt = np.dtype(np.complex64) if dt.itemsize <= 8 else np.dtype(np.complex128)
+        converted = np.ascontiguousarray(value, dtype=target_dt)
+        if fixups is not None:
+          fixups.append((value, converted))
+        value = converted
+        dt = target_dt
+      rec = ComplexArrayRecord(dt, value.ndim)
+      return ("rec", rec, classify(rec.values(value), leaves, fixups))
     elt = _DIRECT.get(value.dtype)
     if elt is None or not value.flags.aligned or not value.dtype.isnative:
       converted = _convert_array(value)
@@ -169,6 +190,9 @@ def classify(value: Any, leaves: list, fixups: list | None = None) -> Key:
   if t is float:
     leaves.append(value)
     return _WEAK_FLOAT
+  if t is complex:
+    rec = ComplexScalarRecord(np.dtype(np.complex128), python_complex=True)
+    return ("rec", rec, classify((float(value.real), float(value.imag)), leaves, fixups))
   if t is int:
     if not _INT64_MIN <= value <= _INT64_MAX:
       raise Unsupported(f"integer {value} does not fit in 64 bits")
@@ -197,6 +221,10 @@ def classify(value: Any, leaves: list, fixups: list | None = None) -> Key:
   if value is None:
     return _NONE_KEY
   if isinstance(value, np.generic):
+    if isinstance(value, np.complexfloating):
+      dt = np.dtype(np.complex64) if value.dtype.itemsize <= 8 else np.dtype(np.complex128)
+      rec = ComplexScalarRecord(dt, python_complex=False)
+      return ("rec", rec, classify(rec.values(value), leaves, fixups))
     if value.dtype.name in ("float16", "bfloat16"):
       leaves.append(np.float32(value))
       return ("s", Float32)

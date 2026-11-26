@@ -107,7 +107,143 @@ class StructuredRowRecord:
     return StructuredRow(self.dtype, self.names, vals)
 
 
+@dataclass(frozen=True)
+class ComplexTypeVal:
+  """Compile-time complex dtype (``np.complex64``, ``np.complex128``, or Python ``complex``)."""
+
+  elt: object  # Float32 or Float64 (ScalarType)
+  weak: bool = False
+
+  @property
+  def dtype(self) -> np.dtype:
+    return np.dtype(np.complex64) if self.elt.name == "float32" else np.dtype(np.complex128)
+
+  @property
+  def name(self) -> str:
+    return self.dtype.name
+
+  @property
+  def itemsize(self) -> int:
+    return self.dtype.itemsize
+
+
+class ComplexArray:
+  """Unboxed compile-time complex array represented as ``(re, im)`` float arrays."""
+
+  __slots__ = ("re", "im", "_dtype", "_rank")
+
+  def __init__(self, re, im, dtype: np.dtype | None = None, rank: int | None = None):
+    self.re = re
+    self.im = im
+    self._dtype = dtype
+    self._rank = rank
+
+  @property
+  def elt(self):
+    return self.re.elt
+
+  @property
+  def rank(self) -> int:
+    if self._rank is not None:
+      return self._rank
+    return self.re.rank
+
+  @property
+  def shape(self) -> tuple:
+    return self.re.shape
+
+  @property
+  def dtype(self) -> np.dtype:
+    if self._dtype is not None:
+      return self._dtype
+    return np.dtype(np.complex64) if self.re.elt.name == "float32" else np.dtype(np.complex128)
+
+
+class ComplexScalar:
+  """Unboxed compile-time complex scalar represented as ``(re, im)`` float expressions."""
+
+  __slots__ = ("re", "im", "python_complex", "_dtype")
+
+  def __init__(self, re, im, python_complex: bool = False, dtype: np.dtype | None = None):
+    self.re = re
+    self.im = im
+    self.python_complex = python_complex
+    self._dtype = dtype
+
+  @property
+  def elt(self):
+    return self.re.type
+
+  @property
+  def dtype(self) -> np.dtype:
+    if self._dtype is not None:
+      return self._dtype
+    return np.dtype(np.complex64) if self.re.type.name == "float32" else np.dtype(np.complex128)
+
+
+@dataclass(frozen=True)
+class ComplexArrayRecord:
+  dtype: np.dtype
+  rank: int
+
+  @property
+  def cls(self) -> type:
+    return ComplexArray
+
+  @property
+  def names(self) -> tuple[str, str]:
+    return ("re", "im")
+
+  def values(self, obj):
+    if isinstance(obj, np.ndarray):
+      return (obj.real, obj.imag)
+    return (obj.re, obj.im)
+
+  def build(self, values):
+    re, im = values
+    if isinstance(re, np.ndarray) and isinstance(im, np.ndarray):
+      out = np.empty(re.shape, dtype=self.dtype)
+      out.real = re
+      out.imag = im
+      return out
+    return ComplexArray(re, im, dtype=self.dtype, rank=self.rank)
+
+
+@dataclass(frozen=True)
+class ComplexScalarRecord:
+  dtype: np.dtype
+  python_complex: bool = False
+
+  @property
+  def cls(self) -> type:
+    return ComplexScalar
+
+  @property
+  def names(self) -> tuple[str, str]:
+    return ("re", "im")
+
+  def values(self, obj):
+    if isinstance(obj, ComplexScalar):
+      return (obj.re, obj.im)
+    if self.dtype == np.complex64:
+      return (np.float32(obj.real), np.float32(obj.imag))
+    if self.python_complex:
+      return (float(obj.real), float(obj.imag))
+    return (np.float64(obj.real), np.float64(obj.imag))
+
+  def build(self, values):
+    re, im = values
+    if isinstance(re, (int, float, np.number)) and isinstance(im, (int, float, np.number)):
+      c = complex(float(re), float(im))
+      return c if self.python_complex else self.dtype.type(c)
+    return ComplexScalar(re, im, python_complex=self.python_complex, dtype=self.dtype)
+
+
 def record_type(obj):
+  if isinstance(obj, ComplexArray):
+    return ComplexArrayRecord(obj.dtype, obj.rank)
+  if isinstance(obj, ComplexScalar):
+    return ComplexScalarRecord(obj.dtype, python_complex=obj.python_complex)
   if isinstance(obj, StructuredView):
     return StructuredRecord(obj.dtype, obj.names, obj.rank)
   if isinstance(obj, StructuredRow):

@@ -86,6 +86,7 @@ from .lib.adverbs import (
   value_and_grad,
   vjp,
 )
+from .lib.bytes_lib import parse_float32, parse_float64, parse_int64, split_bytes
 from .lib.expand_lib import filter_pairs, flatmap
 from .lib.pure import pmap1 as _pmap1
 from .lib.pure import pmap2 as _pmap2
@@ -175,9 +176,9 @@ for _name in (
   "array asarray copy sum prod mean std var min max argmin argmax any all cumsum cumprod dot vdot "
   "inner outer transpose ravel reshape where clip diff concatenate stack vstack hstack bincount "
   "sort argsort unique searchsorted "
-  "int8 int16 int32 int64 uint8 uint16 uint32 uint64 float32 float64 bool_ "
+  "int8 int16 int32 int64 uint8 uint16 uint32 uint64 float32 float64 complex64 complex128 bool_ "
   "rad2deg deg2rad logaddexp logaddexp2 isnan isinf isfinite "
-  "tile real conjugate shape size ndim"
+  "tile real imag conj angle conjugate shape size ndim"
 ).split():
   globals()[_name] = getattr(_np, _name)
 del _name
@@ -211,10 +212,10 @@ __all__ = [
     "f32_to_bf16", "filter", "filter_pairs", "filter_reduce", "fixed_list", "flatmap", "fold", "hessian", "hvp", "ifilter_reduce",
     "imap", "ipa_attention", "ireduce", "iscan", "iscatter", "jacfwd", "jacrev", "jit", "jvp", "lib",
     "linear_transpose", "linearize", "map", "morton_order",
-    "options", "outer_map", "parfor", "pmap1", "pmap2",
+    "options", "outer_map", "parfor", "parse_float32", "parse_float64", "parse_int64", "pmap1", "pmap2",
     "pmap2_trim", "popcount", "reduce", "rotl", "rotr", "run", "scan", "scatter", "scatter_add", "seed",
     "segment_ids", "segmented_map", "segmented_reduce", "segmented_scan", "segmented_softmax",
-    "show_rewrite", "soft_align", "spatial_cutoff_sum", "stop_gradient", "tanimoto_topk", "topk", "topk_fold",
+    "show_rewrite", "soft_align", "spatial_cutoff_sum", "split_bytes", "stop_gradient", "tanimoto_topk", "topk", "topk_fold",
     "varlen_flash_attention", "vjp", "wavefront",
     "ndtypes", "openmp_available", "prims", "run_python_fn", "specialize", "target_profile",
     "to_device", "to_host", "typed_repr",

@@ -109,7 +109,7 @@ or SciPy. Knowing the boundary up front avoids surprises.
 
 | Works | Not supported yet |
 |---|---|
-| `bool`, `int8`–`int64`, `uint8`–`uint64`, `float32`, `float64` scalars and arrays (any rank or strides) | Complex numbers (`complex64`/`complex128`), native `float16` compute (`float16` is widened to `float32`), structured/record dtypes, object or string arrays |
+| `bool`, `int8`–`int64`, `uint8`–`uint64`, `float32`, `float64`, `complex64`, `complex128` scalars and arrays (any rank or strides) | Native `float16` compute (`float16` is widened to `float32`), object or string arrays |
 | Nested tuples, `NamedTuple`s, fixed string-key dicts, `@dataclass`es (frozen or non-frozen) with pure methods / `@property` / `__call__`, `slice`, `range`, `zip`, `enumerate`, `itertools` (`pairwise`, `islice`, `chain`, `product`, `batched`) | Dynamic dictionary keys, `set`, runtime string manipulation, arbitrary non-dataclass user classes with heap mutation |
 | Static compile-time lists (`.append`, `.extend`, `.pop`, `.clear`), CPU growable homogeneous lists inside loops/branches, `par.fixed_list` GPU/parallel scratch, and dynamic-shape array/`RaggedArray` loop rebinding | Heterogeneously typed lists grown dynamically across runtime loop iterations |
 | `if`/`elif`/`else`, `for`, `while`, `for`/`while ... else`, `break`, `continue`, early `return`, structural `match`/`case`, `isinstance`/`hasattr`/`getattr`, nested `def`/`lambda`, closures, `*args`/`**kwargs`, `functools.partial`, `operator.*`, `assert`, `raise` | `try`/`except`, `with`, generators (`yield`), `global`/`nonlocal`, `import` inside `@jit`, recursion |

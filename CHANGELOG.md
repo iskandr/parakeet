@@ -1,5 +1,40 @@
 # Changelog
 
+## 1.6.0 (November 25, 2026)
+
+Unboxed `complex64`/`complex128` arithmetic and Wirtinger AD, plus compiled
+byte/ASCII parsing helpers (`split_bytes`, `parse_int64`, `parse_float32`,
+`parse_float64`) for FASTA/CSV ingestion (Python Semantics Wave 3, closing
+`#81`).
+
+### Unboxed `complex64` and `complex128`
+
+- **Zero-copy `(re, im)` lowering:** `np.complex64`, `np.complex128`, and
+  Python `complex` values lower cleanly onto pairs of real `float32`/`float64`
+  views and scalar expressions, working out of the box across CPU, multicore,
+  Apple Metal (`complex64`), and CUDA without IR or backend changes.
+- **Complex math and linear algebra:** Supports `+`, `-`, `*`, `/`, `**`,
+  `==`, `!=`, `abs`, `conj`/`conjugate`, `.real`, `.imag`, `np.angle`,
+  `np.exp`, `np.log`, `np.sqrt`, `np.sin`, `np.cos`, `np.matmul`/`@`, `np.dot`,
+  `np.vdot`, `np.sum`, `np.mean`, `np.cumsum`, `np.where`, `np.concatenate`,
+  `np.stack`, indexing/slicing, and in-place updates with NEP 50 promotion.
+- **Wirtinger automatic differentiation:** `par.grad`, `par.value_and_grad`,
+  and `par.jvp` differentiate real-valued losses over `complex64`/`complex128`
+  arrays automatically.
+
+### Byte and ASCII parsing helpers
+
+- **`par.split_bytes(buf, sep, skip_empty=False)`:** Data-parallel delimiter
+  splitting of `uint8` / `bytes` buffers into `RaggedArray[uint8]` with zero
+  `PyObject` allocation.
+- **`par.parse_int64`, `par.parse_float32`, `par.parse_float64`:** Compiled
+  ASCII integer and floating-point parsers (with optional signs, decimals, and
+  exponents) operating on single `uint8` slices or in parallel over
+  `RaggedArray[uint8]`.
+- **New runnable example:** Added `examples/complex_fft_and_fasta.py`
+  (Cooley-Tukey radix-2 FFT, spectral filter Wirtinger gradient, and compiled
+  FASTA/CSV byte ingestion).
+
 ## 1.5.0 (November 25, 2026)
 
 Local Python lists, GPU-safe fixed-capacity scratch buffers, dynamic-shape
