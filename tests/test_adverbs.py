@@ -152,8 +152,10 @@ def test_patch_maps():
 
 
 def test_adverb_argument_errors():
-  with pytest.raises(parakeet.CompileError, match="tuple"):
-    parakeet.map(lambda v: (v, v), V)
+  a, b = parakeet.map(lambda v: (v, v), V)
+  assert np.array_equal(a, V) and np.array_equal(b, V)
+  with pytest.raises(parakeet.CompileError, match="empty tuple"):
+    parakeet.map(lambda v: (), V)
   with pytest.raises(TypeError, match="map"):
     parakeet.map(lambda v: v)
   with pytest.raises(ValueError, match="different lengths"):
