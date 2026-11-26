@@ -3,25 +3,25 @@
 import numpy as np
 
 import parakeet
-from parakeet import jit
+import parakeet as par
 
 
-@jit
+@par.jit
 def matmult_operator(X, Y):
   return X @ Y
 
 
-@jit
+@par.jit
 def matmult_allpairs(X, Y):
   return parakeet.allpairs(np.dot, X, Y.T)
 
 
-@jit
+@par.jit
 def matmult_comprehension(X, Y):
   return np.array([[np.dot(x, y) for y in Y.T] for x in X])
 
 
-@jit
+@par.jit
 def matmult_loops(X, Y):
   out = np.zeros((X.shape[0], Y.shape[1]))
   for i in range(X.shape[0]):

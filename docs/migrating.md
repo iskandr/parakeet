@@ -1,10 +1,10 @@
 # Migrating from Parakeet 0.x
 
-Parakeet 1.0 is a rewrite for Python 3.11+. The decorator and the operators keep
+Parakeet 1.x is a rewrite for Python 3.11+. The decorator and the operators keep
 their names, and most 0.x programs run after the usual Python 2 → 3 changes
 (`xrange` → `range`, `/` → `//` for integer division, `print(...)`).
 
-| 0.x | 1.0 |
+| 0.x | 1.x |
 |---|---|
 | Python 2.7, `dsltools`, `appdirs` | Python 3.11+, NumPy 2, nothing else |
 | `config.backend = "openmp"` | still works; default is `"auto"`, which needs no OpenMP |

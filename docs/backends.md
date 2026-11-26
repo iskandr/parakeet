@@ -10,8 +10,8 @@ parallel loops inside it are executed.
 | `"threads"` | Parakeet's persistent thread pool | POSIX; fork-safe; no extra runtime library |
 | `"gcd"` | Grand Central Dispatch | macOS |
 | `"openmp"` | the compiler's OpenMP runtime | needs `libgomp`/`libomp` (macOS: `brew install libomp`) |
-| `"metal"` / `"mps"` | the Apple GPU | `pip install "parakeet[metal]==1.0.0"` |
-| `"cuda"` | an NVIDIA GPU | `pip install "parakeet[cuda12]==1.0.0"` (CuPy) |
+| `"metal"` / `"mps"` | the Apple GPU | `pip install "parakeet[metal]"` |
+| `"cuda"` | an NVIDIA GPU | `pip install "parakeet[cuda12]"` (CuPy) |
 | `"python"` | - | runs the original function uncompiled |
 
 ```python
@@ -84,7 +84,7 @@ including `float64` are supported. The same per-loop fallback rules apply.
     *simulator* (`PARAKEET_CUDA_SIMULATE=1`) that compiles the generated kernels
     as C++ and executes their thread grid on the CPU.
 
-    The [1.0 release comparison](release-benchmarks.md) ran on a physical NVIDIA A10 with strict device dispatch. Earlier checks on an A100 (Google Colab, CuPy with CUDA 13, Python 3.13) and Tesla T4 covered the whole
+    The [benchmark suite](release-benchmarks.md) ran on physical NVIDIA L4 and A10 GPUs with strict device dispatch. Earlier checks on an A100 (Google Colab, CuPy with CUDA 13, Python 3.13) and Tesla T4 covered the whole
     test suite with every parallel loop forced onto the GPU (688 tests,
     including the tiled products, the gradient tests and arrays kept on the
     device between loops),

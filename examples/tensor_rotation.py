@@ -5,10 +5,10 @@ From http://stackoverflow.com/questions/4962606/fast-tensor-rotation-with-numpy
 
 import numpy as np
 
-from parakeet import jit
+import parakeet as par
 
 
-@jit
+@par.jit
 def rotate(T, g):
   def element(i, j, k, l):  # noqa: E741
     total = 0.0

@@ -2,14 +2,14 @@
 
 import numpy as np
 
-from parakeet import jit
+import parakeet as par
 
 
 def covariance(x, y):
   return ((x - x.mean()) * (y - y.mean())).mean()
 
 
-@jit
+@par.jit
 def fit_simple_regression(x, y):
   slope = covariance(x, y) / covariance(x, x)
   offset = y.mean() - slope * x.mean()

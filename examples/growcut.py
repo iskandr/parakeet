@@ -6,10 +6,10 @@ https://github.com/stefanv/growcut_py
 
 import numpy as np
 
-from parakeet import jit
+import parakeet as par
 
 
-@jit
+@par.jit
 def growcut(image, state, window_radius):
   height, width = image.shape[0], image.shape[1]
 
