@@ -4,19 +4,20 @@ Removes Parakeet's straight-line / ``MAX_UNROLL = 4096`` AD cliff by emitting
 native IR-level checkpointed forward and reverse loops directly into the
 operator IR:
 
-* :func:`stop_gradient_val` — zero-copy gradient barrier on scalars, arrays,
+* :func:`stop_gradient_val`: zero-copy gradient barrier on scalars, arrays,
   tuples, ``NamedTuple`` / frozen ``dataclass`` records, and ``RaggedArray``.
-* :func:`custom_vjp_call` — user-defined ``(fwd, bwd)`` reverse-mode rules with
-  full pytree/record residual & cotangent support and higher-order AD support.
-* :func:`checkpoint_call` — activation rematerialization (``par.checkpoint``)
+* :func:`custom_vjp_call`: user-defined reverse-mode rules (closure-style
+  ``vjp(*args) -> (output, pullback)`` or ``(fwd, bwd)`` pairs) with full
+  pytree/record residual and cotangent support.
+* :func:`checkpoint_call`: activation rematerialization (``par.checkpoint``)
   that drops forward intermediates and composes with Law 2 algebraic VJPs.
-* :func:`differentiate_for_loop` — 2-level ``O(sqrt(T))`` checkpointed IR
+* :func:`differentiate_for_loop`: 2-level ``O(sqrt(T))`` checkpointed IR
   reverse ``ForRange`` for runtime-bound and large static ``for`` loops.
-* :func:`differentiate_while_loop` — fixed-slot stride-doubling ``O(log T)``
+* :func:`differentiate_while_loop`: fixed-slot stride-doubling ``O(log T)``
   checkpointed IR reverse ``While`` for data-dependent ``while`` loops.
-* :func:`checkpointed_fold` — ``O(sqrt(N))`` checkpointed reverse mode for
+* :func:`checkpointed_fold`: ``O(sqrt(N))`` checkpointed reverse mode for
   general ``par.reduce(f, x)`` folds (replacing ``O(N)`` full scan storage).
-* :func:`differentiate_scan` — reverse-mode AD for ``par.scan`` (parallel
+* :func:`differentiate_scan`: reverse-mode AD for ``par.scan`` (parallel
   reverse scan for additive scans, checkpointed reverse scan for general
   combiners).
 """
@@ -109,6 +110,7 @@ def unflatten_tree(leaves: list[Any], spec: Any):
 
 
 def _is_float_leaf(v) -> bool:
+  """Return ``True`` when leaf ``v`` is a floating-point scalar ``Expr`` or ``ArrayVal``."""
   if isinstance(v, Expr):
     return is_float(v)
   if isinstance(v, ArrayVal):
@@ -117,6 +119,7 @@ def _is_float_leaf(v) -> bool:
 
 
 def zero_like_leaf(el, v):
+  """Allocate a zero cotangent/tangent matching floating-point leaf ``v``, passing discrete leaves through."""
   if isinstance(v, Expr):
     if is_float(v):
       return Const(0.0, v.type.strong)
@@ -129,6 +132,7 @@ def zero_like_leaf(el, v):
 
 
 def zero_like_tree(el, v):
+  """Map :func:`zero_like_leaf` over every leaf of a nested value tree."""
   leaves, spec = flatten_tree(v)
   return unflatten_tree([zero_like_leaf(el, x) for x in leaves], spec)
 
@@ -166,6 +170,7 @@ def _register_output_tree(el, tape, node, out) -> tuple[list[Any], Any]:
 
 
 def _scalar_adj(tape, var: Var, node):
+  """Construct a :class:`~parakeet.transforms.autodiff.ScalarAdj` without a top-level circular import."""
   from .autodiff import ScalarAdj
 
   return ScalarAdj(tape, var, node)
@@ -267,7 +272,8 @@ def stop_gradient_val(el, v):
 
 
 def custom_vjp_call(el, fn, fwd, bwd, args: list, kwargs: dict):
-  """Elaborate a ``@par.custom_vjp`` call, recording its custom VJP when active."""
+  """Elaborate a custom VJP call (either ``(fwd, bwd)`` pair or closure-style
+  ``vjp(*args) -> (output, pullback)`` when ``bwd is None``)."""
   from .autodiff import Node
 
   tape = el.tape
@@ -277,30 +283,36 @@ def custom_vjp_call(el, fn, fwd, bwd, args: list, kwargs: dict):
     raise el.error(UnsupportedError, "custom_vjp functions under grad do not yet accept keyword arguments")
   if not any(tape.is_active(el, a) for a in args):
     return el.call(fn, args, kwargs)
-  if fwd is None or bwd is None:
+  if fwd is None:
     raise el.error(UnsupportedError, f"custom_vjp rule for {getattr(fn, '__name__', 'function')} was not registered")
 
   with tape.computing(el):
     pair = el.call(fwd, args, {})
   if not isinstance(pair, tuple) or len(pair) != 2:
-    raise el.error(TypeInferenceError, "custom_vjp forward rule must return a 2-tuple (output, residuals)")
-  raw_out, res = pair
+    expected = "(output, pullback)" if bwd is None else "(output, residuals)"
+    raise el.error(TypeInferenceError, f"custom VJP forward rule must return a 2-tuple {expected}")
+  raw_out, second = pair
 
   node = Node("custom_vjp", tuple(args), None)
   tape.record(el, node)
   holders, out_spec, out = _register_output_tree(el, tape, node, raw_out)
   out_leaves, _ = flatten_tree(out)
-  node.info = (bwd, res, holders, out_leaves, out_spec, list(args), el.capture())
+  # When bwd is None, `second` is a closure `pullback(g_out)`; otherwise `second` is `residuals`.
+  node.info = (bwd, second, holders, out_leaves, out_spec, list(args), el.capture())
   return out
 
 
 def backward_custom_vjp(tape, el, node, _g) -> None:
-  bwd, res, holders, out_leaves, out_spec, args, context = node.info
+  """Execute a recorded custom VJP backward rule (``bwd(res, g)`` or ``pullback(g)``)."""
+  bwd, second, holders, out_leaves, out_spec, args, context = node.info
   any_live, g_out = _collect_cotangent_tree(el, holders, out_leaves, out_spec)
   if not any_live:
     return
   with el.restored(context):
-    d_args = el.call(bwd, [res, g_out], {})
+    if bwd is None:
+      d_args = el.call(second, [g_out], {})
+    else:
+      d_args = el.call(bwd, [second, g_out], {})
   if len(args) == 1:
     # Accept either a single cotangent or a 1-tuple (d_x,)
     if isinstance(d_args, tuple) and len(d_args) == 1 and not isinstance(args[0], tuple):
@@ -376,6 +388,7 @@ def checkpoint_call(el, fn, args: list, kwargs: dict):
 
 
 def backward_checkpoint(tape, el, node, _g) -> None:
+  """Re-execute a ``checkpoint`` body on a fresh child tape and propagate ``g_out`` backwards."""
   from .autodiff import Tape
 
   run_fn, holders, out_leaves, out_spec = node.info
@@ -402,6 +415,7 @@ def backward_checkpoint(tape, el, node, _g) -> None:
 
 
 def _store_leaf_slot(el, buf_arr: ArrayVal, slot: Expr, val) -> None:
+  """Store a scalar or array loop-state leaf into checkpoint buffer slot ``slot`` (mirroring JVP)."""
   if isinstance(val, Expr):
     el.emit(Store(buf_arr.buf, slot, cast(val, buf_arr.elt)))
     jvp = el.jvp
@@ -415,6 +429,7 @@ def _store_leaf_slot(el, buf_arr: ArrayVal, slot: Expr, val) -> None:
 
 
 def _load_leaf_slot(el, buf_arr: ArrayVal, slot: Expr, is_scalar: bool):
+  """Load a scalar element or array slice from checkpoint buffer slot ``slot``."""
   if is_scalar:
     return Load(buf_arr.buf, slot)
   return el.axis_view(buf_arr, 0, slot)
@@ -475,6 +490,7 @@ def _prepare_carried_state(el, node: ast.AST, names: frozenset[str]):
 
 
 def _coerce_to_vtype(el, v, vt):
+  """Cast every scalar/array leaf of ``v`` to match the joined loop variable type ``vt``."""
   tag = vt[0]
   if tag == "s":
     return cast(el.as_scalar(v, "loop variable"), vt[1])
@@ -488,6 +504,7 @@ def _coerce_to_vtype(el, v, vt):
 
 
 def _alloc_state_buffers(el, leaves: list[Any], count: Expr, label: str) -> list[ArrayVal]:
+  """Allocate one ``(count, *leaf.shape)`` checkpoint buffer per loop-state leaf."""
   bufs: list[ArrayVal] = []
   jvp = el.jvp
   for leaf in leaves:
@@ -532,6 +549,7 @@ def _make_fixed_targets(el, leaves: list[Any], label: str) -> list[Any]:
 
 
 def _bind_step_env(el, carried_names: list[str], state_tuple: tuple, target_node=None, target_val=None) -> dict:
+  """Bind carried loop variables (and optional loop target) in ``el.frame.env``, returning the prior env."""
   fr = el.frame
   saved = dict(fr.env)
   for name, val in zip(carried_names, state_tuple):
@@ -544,6 +562,7 @@ def _bind_step_env(el, carried_names: list[str], state_tuple: tuple, target_node
 def _read_step_outputs(
   el, node: ast.AST, carried_names: list[str], vtypes: dict[str, Any], static_vars: dict[str, Any]
 ):
+  """Read updated carried values after one loop step, widening types via restart if needed."""
   fr = el.frame
   out_vals: list[Any] = []
   for name in carried_names:
@@ -571,6 +590,7 @@ def _read_step_outputs(
 
 
 def _check_shape_invariance(el, init_leaves: list[Any], step_leaves: list[Any], node: ast.AST) -> None:
+  """Emit runtime shape checks guaranteeing carried arrays keep constant shape across iterations."""
   for init_l, step_l in zip(init_leaves, step_leaves):
     if isinstance(init_l, ArrayVal) and isinstance(step_l, ArrayVal):
       if init_l.rank != step_l.rank:
@@ -866,6 +886,7 @@ def differentiate_for_loop(
 
 
 def backward_rev_for(tape, el, node, _g) -> None:
+  """Reverse pass for checkpointed ``for`` and ``while`` loops via segment replay."""
   step_fn, ckpt_bufs, init_leaves, state_spec, total, stride, n_segs, holders, out_leaves, out_spec = node.info
   any_live, g_out = _collect_cotangent_tree(el, holders, out_leaves, out_spec)
   if not any_live:
@@ -1180,6 +1201,7 @@ def checkpointed_fold(tape, el, combine, x: ArrayVal, init, what: str):
 
 
 def backward_fold_ckpt(tape, el, node, g: Expr) -> None:
+  """Reverse pass for ``O(sqrt(N))`` checkpointed ``par.reduce`` folds."""
   from .autodiff import Tape
 
   (x,) = node.inputs
@@ -1318,6 +1340,7 @@ def differentiate_scan(tape, el, combine, x: ArrayVal, init, what: str) -> Array
 
 
 def backward_scan_ad(tape, el, node, g: ArrayVal) -> None:
+  """Reverse pass for 1-D ``par.scan`` reusing stored forward prefix outputs as per-step states."""
   from .autodiff import Tape
 
   (x,) = node.inputs

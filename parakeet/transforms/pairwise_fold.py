@@ -20,10 +20,12 @@ COLUMNS = 128
 
 
 def _depends(exprs, ids):
+  """Return ``True`` if any expression in ``exprs`` references a variable UID in ``ids``."""
   return any(isinstance(v, ir.Var) and v.uid in ids for e in exprs for v in ir.walk_expr(e))
 
 
 def _split(block, kind):
+  """Split ``block`` around the unique statement of type ``kind``, or return ``None``."""
   hits = [k for k, s in enumerate(block) if isinstance(s, kind)]
   if len(hits) == 1:
     k = hits[0]
@@ -32,6 +34,7 @@ def _split(block, kind):
 
 
 def _scalar_code(block):
+  """Return ``True`` if ``block`` consists solely of pure non-buffer scalar assignments."""
   return all(
     isinstance(s, ir.Assign) and not isinstance(s.var.type, ir.BufType) and is_pure_expr(s.value) for s in block
   )
@@ -54,6 +57,8 @@ def _pure_output_code(block):
 
 @dataclass
 class ScoreProgram:
+  """Pairwise score IR slice cached per ``(query, ref)`` tile, plus optional epilogue ``lift``."""
+
   body: list
   value: ir.Expr
   lift: list | None
@@ -147,6 +152,7 @@ def _match(rows, info):
 
 
 def _tile(rows, refs, fold, row_defs, checks, outputs, program):
+  """Build CPU cache/register-tiled ``IndexTile`` over query strips and reference column blocks."""
   row, col = rows.index[0], refs.index[0]
   base, height = ir.Var("query_base", I), ir.Var("query_count", I)
   scope = ir.Scope("loop")
@@ -329,11 +335,13 @@ def _gpu_tiles(rows, refs, fold, row_defs, checks, outputs, program, owner, targ
 
 
 def tile_pairwise_folds(fn, options):
+  """Rewrite pairwise query-vs-reference structured folds into tiled CPU or GPU schedules."""
   if not (options.tiling and options.fusion):
     return
   info = BufferInfo.analyze(fn)
 
   def visit(block, owner):
+    """Recursively replace matched pairwise ``IndexMap`` nodes within ``block``."""
     out = []
     for s in block:
       match = _match(s, info) if isinstance(s, ir.IndexMap) else None

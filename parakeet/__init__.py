@@ -71,6 +71,7 @@ from .lib.adverbs import (
   jacfwd,
   jacrev,
   jvp,
+  jvp_for,
   linear_transpose,
   linearize,
   map,  # noqa: A004
@@ -85,6 +86,7 @@ from .lib.adverbs import (
   topk_fold,
   value_and_grad,
   vjp,
+  vjp_for,
 )
 from .lib.bytes_lib import parse_float32, parse_float64, parse_int64, split_bytes
 from .lib.expand_lib import filter_pairs, flatmap
@@ -214,13 +216,13 @@ __all__ = [
     "allpairs", "available_backends", "batched_wavefront", "bf16_to_f32", "block_sparse_attention",
     "bswap", "checkpoint", "clear_cache", "clz", "config", "ctz", "custom_jvp", "custom_vjp", "each", "errors",
     "f32_to_bf16", "filter", "filter_pairs", "filter_reduce", "fixed_list", "flatmap", "fold", "hessian", "hvp", "ifilter_reduce",
-    "imap", "ipa_attention", "ireduce", "iscan", "iscatter", "jacfwd", "jacrev", "jit", "jvp", "lib",
+    "imap", "ipa_attention", "ireduce", "iscan", "iscatter", "jacfwd", "jacrev", "jit", "jvp", "jvp_for", "lib",
     "linear_transpose", "linearize", "map", "morton_order",
     "options", "outer_map", "parfor", "parse_float32", "parse_float64", "parse_int64", "partition_by_size", "pmap1", "pmap2",
     "pmap2_trim", "popcount", "ragged_partition", "reduce", "rotl", "rotr", "run", "scan", "scatter", "scatter_add", "seed",
     "segment_ids", "segmented_histogram2d", "segmented_map", "segmented_parfor", "segmented_reduce", "segmented_scan", "segmented_softmax",
     "show_rewrite", "soft_align", "spatial_cutoff_sum", "split_bytes", "stop_gradient", "tanimoto_topk", "topk", "topk_fold",
-    "varlen_flash_attention", "vjp", "wavefront",
+    "varlen_flash_attention", "vjp", "vjp_for", "wavefront",
     "ndtypes", "openmp_available", "prims", "run_python_fn", "specialize", "target_profile",
     "to_device", "to_host", "typed_repr",
     "find_broken_transform", "frontend", "macro", "syntax", "transforms", "grad", "value_and_grad",

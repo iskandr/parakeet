@@ -560,6 +560,8 @@ class jit:  # noqa: N801 - decorator, lower-case by convention
     bounds_check: bool | None = None,
     fusion: bool | None = None,
     tiling: bool | None = None,
+    jvp=None,
+    vjp=None,
   ):
     if hasattr(fn, "__parakeet_fn__"):
       fn = fn.__parakeet_fn__
@@ -574,6 +576,14 @@ class jit:  # noqa: N801 - decorator, lower-case by convention
     self.bounds_check = bounds_check
     self.fusion = fusion
     self.tiling = tiling
+    if jvp is not None:
+      from .lib.adverbs import register_custom_jvp
+
+      register_custom_jvp(fn, jvp, flat_args=True)
+    if vjp is not None:
+      from .lib.adverbs import register_custom_vjp
+
+      register_custom_vjp(fn, vjp)
     functools.update_wrapper(self, fn)
     self._signature: inspect.Signature | None = None
     self._simple: tuple | None = None

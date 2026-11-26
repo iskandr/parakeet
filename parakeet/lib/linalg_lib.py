@@ -508,3 +508,152 @@ def lstsq(a, b, rcond=-1.0):
   diff = a.astype(dt) @ x - bf
   res = np.sum(diff * diff, axis=0) if m > n and rank == n else np.empty(0, dtype=dt)
   return x, res, rank, S
+
+
+# ---------------------------------------------------------------------------
+# Analytical custom VJP / JVP rules for compiled np.linalg routines
+# ---------------------------------------------------------------------------
+
+
+def _phi_tril(M):
+  """Lower triangle of square matrix ``M`` with diagonal entries halved."""
+  n = M.shape[0]
+  idx = np.arange(n)
+  lower = idx[:, None] > idx[None, :]
+  diag = idx[:, None] == idx[None, :]
+  dt = M.dtype
+  return np.where(lower, M, np.where(diag, dt.type(0.5) * M, dt.type(0.0)))
+
+
+@_adverbs.vjp_for(_det_2d)
+def _det_2d_vjp(a):
+  d = _det_2d(a)
+
+  def pullback(g):
+    return g * d * _inv_2d(a).T
+
+  return d, pullback
+
+
+@_adverbs.jvp_for(_det_2d)
+def _det_2d_jvp(a, da):
+  d = _det_2d(a)
+  return d, d * np.sum(_inv_2d(a).T * da)
+
+
+@_adverbs.vjp_for(_inv_2d)
+def _inv_2d_vjp(a):
+  ai = _inv_2d(a)
+
+  def pullback(g):
+    return -(ai.T @ g @ ai.T)
+
+  return ai, pullback
+
+
+@_adverbs.jvp_for(_inv_2d)
+def _inv_2d_jvp(a, da):
+  ai = _inv_2d(a)
+  return ai, -(ai @ da @ ai)
+
+
+@_adverbs.vjp_for(_solve_2d)
+def _solve_2d_vjp(a, b):
+  x = _solve_2d(a, b)
+
+  def pullback(g):
+    db = _solve_2d(a.T, g)
+    if b.ndim == 1:
+      dA = -(db[:, None] * x[None, :])
+    else:
+      dA = -(db @ x.T)
+    return dA, db
+
+  return x, pullback
+
+
+@_adverbs.jvp_for(_solve_2d)
+def _solve_2d_jvp(a, b, da, db):
+  x = _solve_2d(a, b)
+  return x, _solve_2d(a, db - da @ x)
+
+
+@_adverbs.vjp_for(_cholesky_2d)
+def _cholesky_2d_vjp(a):
+  L = _cholesky_2d(a)
+
+  def pullback(g):
+    Li = _inv_2d(L)
+    P = _phi_tril(L.T @ g)
+    return L.dtype.type(0.5) * (Li.T @ (P + P.T) @ Li)
+
+  return L, pullback
+
+
+@_adverbs.jvp_for(_cholesky_2d)
+def _cholesky_2d_jvp(a, da):
+  L = _cholesky_2d(a)
+  Li = _inv_2d(L)
+  return L, L @ _phi_tril(Li @ da @ Li.T)
+
+
+@_adverbs.vjp_for(_eigh_2d)
+def _eigh_2d_vjp(a, UPLO="L"):
+  w, V = _eigh_2d(a, UPLO)
+
+  def pullback(g):
+    dw, dV = g
+    n = w.shape[0]
+    dt = w.dtype
+    diff = w[None, :] - w[:, None]
+    idx = np.arange(n)
+    off = (idx[:, None] != idx[None, :]) & (np.abs(diff) > dt.type(1e-12))
+    safe_diff = np.where(off, diff, dt.type(1.0))
+    F = np.where(off, dt.type(1.0) / safe_diff, dt.type(0.0))
+    diag_dw = np.where(idx[:, None] == idx[None, :], dw[:, None], dt.type(0.0))
+    G_sym = V @ (diag_dw + F * (V.T @ dV)) @ V.T
+    dA = dt.type(0.5) * (G_sym + G_sym.T)
+    return dA, None
+
+  return (w, V), pullback
+
+
+@_adverbs.vjp_for(_svd_2d)
+def _svd_2d_vjp(a, full_matrices=True, compute_uv=True):
+  U, S, Vt = _svd_2d(a, full_matrices, True)
+  k = S.shape[0]
+  U_k = U[:, :k]
+  Vt_k = Vt[:k, :]
+
+  if not compute_uv:
+
+    def pullback_s(dS):
+      return (U_k * dS[None, :]) @ Vt_k, None, None
+
+    return S, pullback_s
+
+  def pullback(g):
+    dU, dS, dVt = g
+    dt = S.dtype
+    dU_k = dU[:, :k]
+    dVt_k = dVt[:k, :]
+    idx = np.arange(k)
+    s2 = S * S
+    diff = s2[None, :] - s2[:, None]
+    off = (idx[:, None] != idx[None, :]) & (np.abs(diff) > dt.type(1e-12))
+    safe_diff = np.where(off, diff, dt.type(1.0))
+    F = np.where(off, dt.type(1.0) / safe_diff, dt.type(0.0))
+
+    ut_du = U_k.T @ dU_k
+    vt_dvt = Vt_k @ dVt_k.T
+    J_U = F * (ut_du - ut_du.T)
+    J_V = F * (vt_dvt - vt_dvt.T)
+    diag_dS = np.where(idx[:, None] == idx[None, :], dS[:, None], dt.type(0.0))
+    core = diag_dS + J_U * S[None, :] + S[:, None] * J_V
+    s_inv = np.where(S > dt.type(1e-12), dt.type(1.0) / np.where(S > dt.type(1e-12), S, dt.type(1.0)), dt.type(0.0))
+    dU_perp = dU_k - U_k @ ut_du
+    dVt_perp = dVt_k - vt_dvt.T @ Vt_k
+    dA = U_k @ core @ Vt_k + (dU_perp * s_inv[None, :]) @ Vt_k + U_k @ (s_inv[:, None] * dVt_perp)
+    return dA, None, None
+
+  return (U, S, Vt), pullback

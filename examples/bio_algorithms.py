@@ -409,18 +409,17 @@ def hmm_viterbi_and_posterior(obs, log_init, log_trans, log_emit):
 def kabsch_rmsd(P, Q):
   """Optimal rigid-body Kabsch superposition of ``P`` onto ``Q`` (both ``(N, 3)``).
 
-  Uses compiled ``np.linalg.svd`` and ``np.linalg.det`` with proper-rotation
-  reflection correction (``det(R) == +1``). Returns ``(rmsd, R, P_aligned)``.
+  Uses compiled ``np.linalg.svd`` and ``np.linalg.det`` with branchless
+  proper-rotation reflection correction (``det(R) == +1``), so ``kabsch_rmsd``
+  is differentiable with ``par.grad``. Returns ``(rmsd, R, P_aligned)``.
   """
   mu_p = np.mean(P, axis=0)
   mu_q = np.mean(Q, axis=0)
   Pc, Qc = P - mu_p, Q - mu_q
   U, _, Vt = np.linalg.svd(Pc.T @ Qc)
-  R = Vt.T @ U.T
-  if np.linalg.det(R) < 0.0:
-    Vt2 = Vt.copy()
-    Vt2[2, :] = -Vt2[2, :]
-    R = Vt2.T @ U.T
+  sign = np.where(np.linalg.det(Vt.T @ U.T) < 0.0, -1.0, 1.0)
+  d = np.array([1.0, 1.0, sign])
+  R = (Vt.T * d[None, :]) @ U.T
   P_aligned = Pc @ R.T + mu_q
   diff = P_aligned - Q
   rmsd = np.sqrt(np.mean(np.sum(diff * diff, axis=1)))
@@ -435,11 +434,9 @@ def batched_kabsch_rmsd(P_batch, Q_ref):
   def rmsd_one(P):
     Pc = P - np.mean(P, axis=0)
     U, _, Vt = np.linalg.svd(Pc.T @ Qc)
-    R = Vt.T @ U.T
-    if np.linalg.det(R) < 0.0:
-      Vt2 = Vt.copy()
-      Vt2[2, :] = -Vt2[2, :]
-      R = Vt2.T @ U.T
+    sign = np.where(np.linalg.det(Vt.T @ U.T) < 0.0, -1.0, 1.0)
+    d = np.array([1.0, 1.0, sign])
+    R = (Vt.T * d[None, :]) @ U.T
     diff = Pc @ R.T - Qc
     return np.sqrt(np.mean(np.sum(diff * diff, axis=1)))
 

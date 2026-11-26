@@ -42,6 +42,10 @@
 
 ::: parakeet.checkpoint
 
+::: parakeet.jvp_for
+
+::: parakeet.vjp_for
+
 ::: parakeet.custom_vjp
 
 ::: parakeet.custom_jvp

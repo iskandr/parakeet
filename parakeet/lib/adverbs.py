@@ -1123,8 +1123,10 @@ class Gradient:
     if not callable(fn):
       raise TypeError(f"{impl.__name__.replace('ient', '')} expects a function, got {type(fn).__name__}")
     nums = argnum if isinstance(argnum, tuple) else (argnum,)
-    if not nums or not all(isinstance(k, int) and not isinstance(k, bool) and k >= 0 for k in nums):
-      raise TypeError("argnum must be a non-negative integer or a tuple of them")
+    if not nums or not all(
+      (isinstance(k, int) and not isinstance(k, bool) and k >= 0) or (isinstance(k, str) and bool(k)) for k in nums
+    ):
+      raise TypeError("argnum / wrt must be a non-negative integer, parameter name, or a tuple of them")
     self.fn = fn
     self.argnum = argnum
     self.impl = impl
@@ -1145,34 +1147,37 @@ class Gradient:
     return Partial(self.impl, (el.lift(self.fn),), {"argnum": el.lift(self.argnum)})
 
 
-def grad(f, argnum=0):
-  """The gradient of the scalar-valued function ``f`` with respect to its
-  argument number ``argnum`` (or, for a tuple, to each of those arguments).
+def grad(f, argnum=0, *, wrt=None):
+  """The gradient of the scalar-valued function ``f`` with respect to ``argnum`` / ``wrt``.
 
-  ``grad(f)(*args)`` takes the arguments of ``f`` and returns an array shaped
-  like the differentiated argument (a tuple of arrays for a tuple of
-  argument numbers; nested tuples of parameters give nested tuples of
-  gradients).  Works inside compiled code and from plain Python."""
-  return Gradient(f, argnum, _gradient)
+  ``argnum`` (or its keyword alias ``wrt``) may be a positional index (``0``),
+  a parameter name (``"w"``), or a tuple of indices/names (``(0, 1)``,
+  ``("w", "b")``). Works inside compiled code and from plain Python, including
+  when calling the gradient function with keyword arguments."""
+  spec = argnum if wrt is None else wrt
+  return Gradient(f, spec, _gradient)
 
 
-def value_and_grad(f, argnum=0):
+def value_and_grad(f, argnum=0, *, wrt=None):
   """Like :func:`grad`, but the new function returns ``(f(*args), gradient)``."""
-  return Gradient(f, argnum, _value_and_gradient)
+  spec = argnum if wrt is None else wrt
+  return Gradient(f, spec, _value_and_gradient)
 
 
 @core.register(grad)
-def _grad_staged(el, f, argnum=0):
+def _grad_staged(el, f, argnum=0, *, wrt=None):
   from ..syntax.values import Partial
 
-  return Partial(_gradient, (f,), {"argnum": argnum})
+  spec = argnum if wrt is None else wrt
+  return Partial(_gradient, (f,), {"argnum": spec})
 
 
 @core.register(value_and_grad)
-def _value_and_grad_staged(el, f, argnum=0):
+def _value_and_grad_staged(el, f, argnum=0, *, wrt=None):
   from ..syntax.values import Partial
 
-  return Partial(_value_and_gradient, (f,), {"argnum": argnum})
+  spec = argnum if wrt is None else wrt
+  return Partial(_value_and_gradient, (f,), {"argnum": spec})
 
 
 def _make_minmax(name: str, ufunc, np_reduce, np_binary):
@@ -1686,6 +1691,65 @@ class CustomJVP:
     return Partial(_custom_jvp_staged, (el.lift(self.fn), el.lift(self.jvp_rule)), {})
 
 
+# Registries for clean Pythonic custom AD rules:
+#   CUSTOM_JVP_RULES[raw_fn] = (jvp_rule, flat_args)
+#   CUSTOM_VJP_RULES[raw_fn] = (fwd_or_vjp, bwd_or_None)
+CUSTOM_JVP_RULES: dict = {}
+CUSTOM_VJP_RULES: dict = {}
+
+
+def _unwrap_ad_target(target):
+  return getattr(target, "__parakeet_fn__", target)
+
+
+def register_custom_jvp(target, jvp_rule, *, flat_args: bool = True):
+  """Register a custom forward-mode JVP rule for ``target``."""
+  if not callable(jvp_rule):
+    raise TypeError(f"jvp rule must be callable, got {type(jvp_rule).__name__}")
+  CUSTOM_JVP_RULES[_unwrap_ad_target(target)] = (jvp_rule, flat_args)
+  return target
+
+
+def register_custom_vjp(target, vjp_rule):
+  """Register a custom reverse-mode VJP rule for ``target``.
+
+  ``vjp_rule`` may be either:
+  * a single callable ``vjp_rule(*args) -> (output, pullback)`` where
+    ``pullback(g_output)`` returns the input cotangent(s), or
+  * a 2-tuple ``(fwd, bwd)`` where ``fwd(*args) -> (output, residuals)`` and
+    ``bwd(residuals, g_output)`` returns the input cotangent(s).
+  """
+  if isinstance(vjp_rule, tuple):
+    if len(vjp_rule) != 2 or not callable(vjp_rule[0]) or not callable(vjp_rule[1]):
+      raise TypeError("vjp=(fwd, bwd) expects a 2-tuple of callables")
+    CUSTOM_VJP_RULES[_unwrap_ad_target(target)] = (vjp_rule[0], vjp_rule[1])
+  elif callable(vjp_rule):
+    CUSTOM_VJP_RULES[_unwrap_ad_target(target)] = (vjp_rule, None)
+  else:
+    raise TypeError(f"vjp rule must be callable or a (fwd, bwd) tuple, got {type(vjp_rule).__name__}")
+  return target
+
+
+def jvp_for(target):
+  """Decorator registering a forward-mode JVP rule ``(*primals, *tangents) -> (y, dy)`` for ``target``."""
+
+  def deco(rule):
+    register_custom_jvp(target, rule, flat_args=True)
+    return rule
+
+  return deco
+
+
+def vjp_for(target):
+  """Decorator registering a reverse-mode VJP rule ``(*args) -> (y, pullback)`` for ``target``."""
+
+  def deco(rule):
+    register_custom_vjp(target, rule)
+    return rule
+
+  return deco
+
+
 def custom_jvp(fn):
   """Decorate ``fn`` so it can register a custom forward-mode JVP with ``.defjvp(rule)``."""
   return CustomJVP(fn)
@@ -1845,7 +1909,9 @@ __all__ = [
     "LibFunction", "map", "each", "allpairs", "outer_map", "reduce", "scan", "imap", "ireduce",
     "parfor", "filter", "filter_reduce", "scatter_add", "scan_axis", "grad", "value_and_grad", "Gradient",
     "topk_fold", "topk", "tanimoto_topk", "ipa_attention", "stop_gradient", "custom_vjp", "CustomVJP",
-    "checkpoint", "Checkpointed", "jvp", "custom_jvp", "CustomJVP", "vjp", "linearize", "linear_transpose",
+    "checkpoint", "Checkpointed", "jvp", "custom_jvp", "CustomJVP", "jvp_for", "vjp_for",
+    "register_custom_jvp", "register_custom_vjp", "CUSTOM_JVP_RULES", "CUSTOM_VJP_RULES",
+    "vjp", "linearize", "linear_transpose",
     "hvp", "jacfwd", "jacrev", "hessian",
 ]  # fmt: skip
 _ = (Const, I)
