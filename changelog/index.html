@@ -1182,6 +1182,45 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#190-november-26-2026" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.9.0 (November 26, 2026)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1.9.0 (November 26, 2026)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#compiler-language-ergonomics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Compiler &amp; language ergonomics
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#bioinformatics-streaming-io-and-batched-linear-algebra" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bioinformatics, streaming I/O, and batched linear algebra
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#180-november-26-2026" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1586,6 +1625,45 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#190-november-26-2026" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.9.0 (November 26, 2026)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1.9.0 (November 26, 2026)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#compiler-language-ergonomics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Compiler &amp; language ergonomics
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#bioinformatics-streaming-io-and-batched-linear-algebra" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bioinformatics, streaming I/O, and batched linear algebra
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#180-november-26-2026" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1968,6 +2046,46 @@
 
 
 <h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Permanent link">&para;</a></h1>
+<h2 id="190-november-26-2026">1.9.0 (November 26, 2026)<a class="headerlink" href="#190-november-26-2026" title="Permanent link">&para;</a></h2>
+<p>Pythonic string sequences, constant char-dict lookup tables, multi-output and
+ragged <code>par.map</code>, compiled block-parallel BGZF DEFLATE inflate, overlapped
+streaming FASTQ I/O, batched 3D <code>np.linalg.*</code>, and differentiable protein
+backbone dihedrals.</p>
+<h3 id="compiler-language-ergonomics">Compiler &amp; language ergonomics<a class="headerlink" href="#compiler-language-ergonomics" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Direct string sequences:</strong> Passing <code>list[str]</code> or <code>list[bytes]</code> to <code>@par.jit</code>
+  packs equal-length ASCII strings into a 2D <code>uint8</code> array <code>(N, L)</code> and
+  variable-length strings into a <code>RaggedArray[uint8]</code>.</li>
+<li><strong>Single-character ASCII comparisons &amp; constant char-dict LUTs:</strong> Expressions
+  like <code>ch == "G"</code>, <code>seq == "C"</code>, <code>"A" &lt;= ch &lt;= "Z"</code>, and <code>ch in "CG"</code> compile
+  directly against <code>uint8</code> bytes. Constant single-char dictionaries
+  (<code>BASE_CODE = {"A": Base.A, ...}</code>) lower <code>BASE_CODE[seq]</code> and
+  <code>BASE_CODE.get(ch, 4)</code> into a static 256-entry L1-resident lookup table.</li>
+<li><strong>Multi-output &amp; ragged <code>par.map</code>:</strong> Mapped functions can return tuples of
+  scalars and/or fixed-shape arrays (unboxed into one fused parallel loop) and
+  map directly over <code>RaggedArray</code> inputs.</li>
+</ul>
+<h3 id="bioinformatics-streaming-io-and-batched-linear-algebra">Bioinformatics, streaming I/O, and batched linear algebra<a class="headerlink" href="#bioinformatics-streaming-io-and-batched-linear-algebra" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Block-parallel BGZF inflate &amp; overlapped FASTQ streaming
+  (<code>examples/bgzf_and_streaming_io.py</code>):</strong> Full compiled RFC-1951 DEFLATE
+  decoder (stored, fixed Huffman, and dynamic Huffman with a 9-bit fast LUT +
+  LZ77) running in parallel across BGZF blocks (1,579 MB/s multicore inflate on
+  Apple M1 Pro, 7.0x faster than Python <code>gzip</code>), paired with a double-buffered
+  overlapped <code>zlib</code> + GIL-free Parakeet FASTQ QC pipeline (341 MB/s overlapped
+  vs. 168 MB/s sequential, 906 MB/s with Parakeet BGZF + QC).</li>
+<li><strong>Batched 3D <code>np.linalg.*</code> &amp; new solvers (<code>parakeet/lib/linalg_lib.py</code>):</strong>
+  Added <code>np.linalg.eigvalsh</code>, <code>np.linalg.pinv</code>, <code>np.linalg.lstsq</code>, and batched
+  3D <code>(B, M, N)</code> support via <code>par.map</code> for <code>cholesky</code>, <code>det</code>, <code>solve</code>, <code>inv</code>,
+  <code>qr</code>, <code>eigh</code>, <code>eigvalsh</code>, <code>svd</code>, and <code>pinv</code>.</li>
+<li><strong>Differentiable protein backbone dihedrals (<code>examples/bio_algorithms.py</code>):</strong>
+  Added vectorized Ramachandran <code>backbone_dihedrals(N, CA, C)</code> returning
+  <code>(phi, psi, omega)</code> torsion angles, verified with <code>par.grad</code>.</li>
+<li><strong>Simplified Pythonic examples:</strong> Rewrote C-style loops, magic ASCII numbers,
+  and explicit <code>par.parfor</code> calls across <code>examples/bio_gallery.py</code>,
+  <code>examples/bio_algorithms.py</code>, <code>examples/patro_longread_rna.py</code>,
+  <code>examples/cudatree_gbdt.py</code>, and <code>examples/complex_fft_and_fasta.py</code>.</li>
+</ul>
 <h2 id="180-november-26-2026">1.8.0 (November 26, 2026)<a class="headerlink" href="#180-november-26-2026" title="Permanent link">&para;</a></h2>
 <p>Compiled <code>np.linalg</code> matrix decompositions and solvers, seven classic
 bioinformatics algorithms, a Rob Patro-style SSHash + Spearfish + Oarfish

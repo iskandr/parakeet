@@ -1659,15 +1659,15 @@ or SciPy. Knowing the boundary up front avoids surprises.</p>
 </tbody>
 </table>
 <h3 id="numpy-and-scipy-coverage">NumPy and SciPy coverage<a class="headerlink" href="#numpy-and-scipy-coverage" title="Permanent link">&para;</a></h3>
-<p>About 210 core NumPy functions and ufuncs are built in (see
+<p>About 215 core NumPy functions and ufuncs are built in (see
 <a href="../supported/">Supported functions</a>), covering arithmetic, reductions, scans,
-sorting, masks and fancy indexing, <code>@</code>/<code>dot</code>/<code>einsum</code>, dense 2D linear algebra
-(<code>np.linalg.norm</code>, <code>cholesky</code>, <code>det</code>, <code>solve</code>, <code>inv</code>, <code>qr</code>, <code>eigh</code>, <code>svd</code>), and
-parallel <code>np.random</code>. Not yet built in:</p>
+sorting, masks and fancy indexing, <code>@</code>/<code>dot</code>/<code>einsum</code>, dense 2D and batched 3D
+linear algebra (<code>np.linalg.norm</code>, <code>cholesky</code>, <code>det</code>, <code>solve</code>, <code>inv</code>, <code>qr</code>,
+<code>eigh</code>, <code>eigvalsh</code>, <code>svd</code>, <code>pinv</code>, <code>lstsq</code>), and parallel <code>np.random</code>. Not yet
+built in:</p>
 <ul>
-<li>Non-symmetric eigensolvers and least-squares helpers (<code>np.linalg.eig</code>,
-  <code>lstsq</code>, <code>pinv</code>, and batched 3D+ <code>np.linalg.*</code> calls; use <code>par.parfor</code> or
-  <code>par.map</code> to batch 2D <code>np.linalg.*</code> calls in parallel)</li>
+<li>Non-symmetric eigensolvers (<code>np.linalg.eig</code>, <code>eigvals</code>) and 4D+ batched
+  <code>np.linalg.*</code> calls (use <code>par.map</code> for arbitrary leading batch axes)</li>
 <li>Spectral transforms (<code>np.fft.*</code>; see <code>examples/complex_fft_and_fasta.py</code> for
   a compiled radix-2 FFT)</li>
 <li>Variable-cardinality set operations (<code>np.unique</code>, <code>np.lexsort</code>, <code>np.isin</code>)</li>
