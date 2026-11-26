@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from parakeet import jit
+import parakeet as par
 
 
 def fdtd(input_grid, steps):
@@ -28,7 +28,7 @@ def fdtd(input_grid, steps):
   return grid
 
 
-fast_fdtd = jit(fdtd)
+fast_fdtd = par.jit(fdtd)
 
 
 def main(n: int = 60, steps: int = 10):

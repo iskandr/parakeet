@@ -9,7 +9,7 @@ import sys
 import numpy as np
 
 import parakeet
-from parakeet import jit
+import parakeet as par
 
 
 def sqr_dist(a, b):
@@ -33,7 +33,7 @@ def main(n: int = 20_000, k: int = 64, d: int = 32, backend: str | None = None):
   rng = np.random.default_rng(7)
   X = rng.random((n, d), dtype=np.float32)
   C = rng.random((k, d), dtype=np.float32)
-  D = jit(all_distances, backend=backend)(X, C)
+  D = par.jit(all_distances, backend=backend)(X, C)
   ref = (X * X).sum(1)[:, None] - 2 * X @ C.T + (C * C).sum(1)[None, :]
   assert D.dtype == np.float32 and np.allclose(D, ref, rtol=1e-3, atol=1e-3)
   return backend, D

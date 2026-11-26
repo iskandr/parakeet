@@ -2,14 +2,14 @@
 
 import numpy as np
 
-from parakeet import jit
+import parakeet as par
 
 
 def sqr_dist(x, y):
   return ((x - y) ** 2).sum()
 
 
-@jit
+@par.jit
 def kmeans(X, k, niters=10):
   C = X[:k, :]
   for _ in range(niters):

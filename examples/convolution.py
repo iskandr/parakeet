@@ -2,10 +2,10 @@
 
 import numpy as np
 
-from parakeet import jit
+import parakeet as par
 
 
-@jit
+@par.jit
 def conv_3x3_trim(x, weights):
   def compute_pixel(i, j):
     total = 0.0

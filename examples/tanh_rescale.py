@@ -2,15 +2,15 @@
 
 import numpy as np
 
-from parakeet import jit
+import parakeet as par
 
 
-@jit
+@par.jit
 def vectorized(x, alpha=0.5, beta=0.3):
   return np.tanh(x * alpha) + beta
 
 
-@jit
+@par.jit
 def loopy(x, alpha=0.5, beta=0.3):
   y = np.empty_like(x, dtype=float)
   for i in range(len(x)):
@@ -18,7 +18,7 @@ def loopy(x, alpha=0.5, beta=0.3):
   return y
 
 
-@jit
+@par.jit
 def comprehension(x, alpha=0.5, beta=0.3):
   return np.array([np.tanh(xi * alpha) + beta for xi in x])
 

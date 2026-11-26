@@ -1,10 +1,10 @@
 """Julia set: a data-parallel map over pixels with a data-dependent inner loop."""
 
 import parakeet
-from parakeet import jit
+import parakeet as par
 
 
-@jit
+@par.jit
 def julia(cr, ci, n, bound=1.5, lim=1000.0, cutoff=100):
   step = 2.0 * bound / n
 

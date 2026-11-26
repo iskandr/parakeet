@@ -1,14 +1,16 @@
-"""A small convolutional network trained with parakeet.grad.
+"""A small convolutional network trained with parakeet.value_and_grad.
 
 Convolution is written the way it is defined: for every offset of the kernel,
-a matrix product between the filters and a shifted view of the image.  The
-loop over offsets runs over the shape of the kernel, so it is unrolled, and
-each specialization of the network is for one kernel size.
+a matrix product between the filters and a shifted view of the image. The loop
+over offsets runs over the shape of the kernel, so it is unrolled, and each
+specialization of the network is for one kernel size.
 """
+
+from dataclasses import dataclass, fields
 
 import numpy as np
 
-from parakeet import each, value_and_grad
+import parakeet as par
 
 
 def conv(x, w):
@@ -29,25 +31,32 @@ def pool(x):
   return np.mean(x[:, : 2 * rows, : 2 * cols].reshape(f, rows, 2, cols, 2), axis=(2, 4))
 
 
-def logits(params, image):
-  w1, b1, w2, b2, wd, bd = params
-  h = pool(np.maximum(conv(image, w1) + b1[:, None, None], 0.0))
-  h = pool(np.maximum(conv(h, w2) + b2[:, None, None], 0.0))
-  return h.ravel() @ wd + bd
+@dataclass
+class ConvNet:
+  w1: np.ndarray
+  b1: np.ndarray
+  w2: np.ndarray
+  b2: np.ndarray
+  wd: np.ndarray
+  bd: np.ndarray
+
+  def __call__(self, image):
+    h = pool(np.maximum(conv(image, self.w1) + self.b1[:, None, None], 0.0))
+    h = pool(np.maximum(conv(h, self.w2) + self.b2[:, None, None], 0.0))
+    return h.ravel() @ self.wd + self.bd
+
+  def image_loss(self, image, label):
+    z = self(image)
+    z = z - np.max(z)
+    return np.log(np.sum(np.exp(z))) - z[label]
 
 
-def image_loss(params, image, label):
-  z = logits(params, image)
-  z = z - np.max(z)
-  return np.log(np.sum(np.exp(z))) - z[label]
+def loss(model, images, labels):
+  return np.mean(par.map(lambda image, label: model.image_loss(image, label), images, labels))
 
 
-def loss(params, images, labels):
-  return np.mean(each(lambda image, label: image_loss(params, image, label), images, labels))
-
-
-def predict(params, images):
-  return np.array([np.argmax(logits(params, image)) for image in images])
+def predict(model, images):
+  return np.array([np.argmax(model(image)) for image in images])
 
 
 def bars(n, size, rng):
@@ -67,25 +76,28 @@ def bars(n, size, rng):
 
 def init(rng, size=16, filters=6, classes=3):
   after = ((size - 2) // 2 - 2) // 2
-  return (
-    rng.normal(0.0, 0.9, (filters, 1, 3, 3)), np.zeros(filters),
-    rng.normal(0.0, 0.3, (filters, filters, 3, 3)), np.zeros(filters),
-    rng.normal(0.0, 0.3, (filters * after * after, classes)), np.zeros(classes),
-  )  # fmt: skip
+  return ConvNet(
+    w1=rng.normal(0.0, 0.9, (filters, 1, 3, 3)),
+    b1=np.zeros(filters),
+    w2=rng.normal(0.0, 0.3, (filters, filters, 3, 3)),
+    b2=np.zeros(filters),
+    wd=rng.normal(0.0, 0.3, (filters * after * after, classes)),
+    bd=np.zeros(classes),
+  )
 
 
 def main(steps=60, batch=32, rate=0.3, seed=0):
   rng = np.random.default_rng(seed)
-  params = init(rng)
-  step = value_and_grad(loss)
+  model = init(rng)
+  step = par.value_and_grad(loss)
   first = None
   for _ in range(steps):
     images, labels = bars(batch, 16, rng)
-    value, grads = step(params, images, labels)
-    params = tuple(p - rate * g for p, g in zip(params, grads))
+    value, grads = step(model, images, labels)
+    model = ConvNet(*(getattr(model, f.name) - rate * getattr(grads, f.name) for f in fields(model)))
     first = value if first is None else first
   images, labels = bars(200, 16, rng)
-  accuracy = float(np.mean(predict(params, images) == labels))
+  accuracy = float(np.mean(predict(model, images) == labels))
   assert value < first and accuracy > 0.8, (first, value, accuracy)
   return first, value, accuracy
 

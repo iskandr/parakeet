@@ -24,10 +24,12 @@ sequences, each 32 characters long, for 60 steps.
 ## Normalize one position at a time
 
 One input sequence becomes a matrix of shape `(context, width)`. Each row holds
-one character's embedding. `layer_norm` normalizes across the features of that
-row. Later, each row passed to `softmax` contains the attention scores
-from one position to every position in the sequence. Subtracting
-the row maximum keeps the exponential stable.
+one character's embedding. `LayerNorm` is a plain `@dataclass` with a `__call__`
+method that normalizes across the features of each row. Parakeet lowers
+`@dataclass` modules and their pure methods directly during compilation with no
+`PyObject` overhead. Later, each row passed to `softmax` holds attention scores
+from one position to every position in the sequence; subtracting the row
+maximum keeps the exponential stable.
 
 ```python
 --8<-- "examples/nanogpt.py:gpt_setup"
@@ -35,15 +37,12 @@ the row maximum keeps the exponential stable.
 
 ## Mix information across visible characters
 
-Each attention head uses part of the model width. For each position, `q`
-represents what it is looking for, `k` what each position can match, and `v`
-what that position contributes. Their score matrix has shape `(context, context)`.
-In the `para` example, row two may give weight to the first two inputs. The
-mask suppresses the score of the third before softmax.
-
-The heads contribute to a shared output through `wo`. A transformer block adds
-this attention output back to its input. It then applies a two-layer network
-to each position and adds that result back too.
+`Block` groups one transformer layer's norms, attention projections (`wq`, `wk`,
+`wv`, `wo`), and feed-forward weights (`w1`, `b1`, `w2`, `b2`). Each attention
+head uses part of the model width, computes a `(context, context)` score matrix,
+masks future positions before softmax, and projects back through `wo`. The
+block adds the attention output to its input, runs a two-layer `tanh` MLP on
+each position, and adds that residual too.
 
 ```python
 --8<-- "examples/nanogpt.py:gpt_attention"
@@ -51,37 +50,28 @@ to each position and adds that result back too.
 
 ## Score one sequence, then a batch
 
-`wte[tokens]` looks up one embedding per character ID. Adding `wpe` gives
-each position its own embedding as well. After the transformer blocks, the
-output matrix `head` maps each position to one score per character in the
-vocabulary. `sequence_loss` converts those scores to log probabilities, picks
-the entry for the actual next character at each position, and averages the
-negative values.
+`NanoGPT.sequence_loss` embeds the token IDs (`self.wte[tokens] + self.wpe`),
+runs each block in `self.blocks`, projects to vocabulary logits with
+`self.ln_f(x) @ self.head`, and computes the mean negative log-probability of
+the next character at each position.
 
-In `loss`, both `tokens` and `targets` have shape `(batch, context)`. The two
-arguments to `loss_for_sequence` are matching rows, and every sequence shares
-the same `params` and `causal` mask. `parakeet.map` maps `loss_for_sequence`
-across the batch to produce one scalar loss per sequence, and `np.mean`
-averages them into the batch loss. `parakeet.value_and_grad(loss)` compiles a
-function returning both that scalar loss and its gradient with respect to
-`params` (the first argument of `loss`).
+In `loss`, both `tokens` and `targets` have shape `(batch, context)`.
+`par.map` applies `model.sequence_loss` across every `(inp, tgt)` pair in the
+batch, and `np.mean` averages the per-sequence losses.
+`par.value_and_grad(loss)` compiles one native function returning both the
+scalar loss and a `NanoGPT` dataclass holding the gradient of every parameter
+array.
 
 ```python
 --8<-- "examples/nanogpt.py:gpt_loss"
 ```
 
-## Build the parameter arrays
+## Build the model
 
-`init` constructs the tuple that `sequence_loss` unpacks. In order, it contains
-the token embedding table, the position embedding table, the tuple of
-transformer blocks, the final normalization gain and bias, and the output
-matrix. With the defaults, the token embedding table has shape `(vocab, 32)`
-and the output matrix has shape `(32, vocab)`.
-
-Inside `one_block`, the first gain and bias normalize the input to attention.
-The next four matrices project queries, keys, values and the combined output.
-A second gain and bias precede the two weight–bias pairs of the position-wise
-network. This is the order in which `block` unpacks them.
+`init` constructs a `NanoGPT` instance containing the token and position
+embedding tables, a tuple of `Block` modules, the final `LayerNorm`, and the
+output projection `head`. With the defaults, `wte` has shape `(vocab, 32)` and
+`head` has shape `(32, vocab)`.
 
 ```python
 --8<-- "examples/nanogpt.py:gpt_params"
@@ -89,12 +79,11 @@ network. This is the order in which `block` unpacks them.
 
 ## Update every parameter with Adam
 
-A call to `loss_and_grad` returns the batch loss and a gradient array for
-each parameter array. The gradients follow the same nested tuple structure
-as the parameters. `tree_map` walks corresponding leaves together so Adam can
-update an embedding, a bias or a projection matrix with the same formula.
-`m` tracks a moving average of the gradients and `v` tracks a moving average
-of their squares. Both travel with the parameters into the next step.
+`loss_and_grad` returns the batch loss and a `NanoGPT` gradient tree matching
+the structure of `model`. `tree_map` walks matching tuples and dataclass fields
+together so Adam can update embeddings, norms, biases, and projections with the
+same few lines. `m` tracks the moving average of gradients and `v` tracks the
+moving average of squared gradients.
 
 ```python
 --8<-- "examples/nanogpt.py:gpt_update"
@@ -104,8 +93,8 @@ of their squares. Both travel with the parameters into the next step.
 
 `main` assigns one integer ID to each distinct character in `TEXT`. For a
 sample starting at offset `i`, `tokens` starts at `i` and `targets` starts at
-`i + 1`. Stacking those windows gives the two arrays consumed by the batch map.
-The lower triangle of `causal` includes the diagonal, so a position can read
+`i + 1`. Stacking those windows gives the two arrays consumed by `par.map`.
+The lower triangle of `causal` includes the diagonal, so each position can read
 its own input when predicting the following character.
 
 ```python

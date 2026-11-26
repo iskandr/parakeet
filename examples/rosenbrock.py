@@ -5,7 +5,7 @@ From https://github.com/numfocus/python-benchmarks (Travis Oliphant, Serge Guelt
 
 import numpy as np
 
-from parakeet import jit
+import parakeet as par
 
 
 def rosenbrock_derivative(x):
@@ -16,7 +16,7 @@ def rosenbrock_derivative(x):
   return der
 
 
-fast_rosenbrock_derivative = jit(rosenbrock_derivative)
+fast_rosenbrock_derivative = par.jit(rosenbrock_derivative)
 
 
 def main(n: int = 100_000):

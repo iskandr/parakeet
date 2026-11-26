@@ -79,7 +79,7 @@ def mse_loss(w, x, y):
 loss_val, dw = par.value_and_grad(mse_loss)(w, x, y)
 ```
 
-See [Gradients](autodiff.md) for nested parameter tuples, `NamedTuple`s, frozen
+See [Gradients](autodiff.md) for nested parameter tuples, `NamedTuple`s,
 dataclasses, and training loops.
 
 ## Picking a backend

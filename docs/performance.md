@@ -1,8 +1,8 @@
 # Performance
 
 !!! tip "Looking for cross-library benchmarks?"
-    For head-to-head 1.0 comparisons against PyTorch, JAX, CuPy, Faiss, and
-    PyKeOps on CPU and an NVIDIA A10, see [Release benchmarks](release-benchmarks.md).
+    For head-to-head comparisons against PyTorch, JAX, CuPy, Faiss, and
+    PyKeOps on CPU and NVIDIA GPUs, see [Benchmarks](release-benchmarks.md).
     This page explains *when* and *why* Parakeet wins or loses on CPUs and GPUs,
     how cache tiling behaves, and practical tuning tips.
 

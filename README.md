@@ -69,7 +69,7 @@ assert np.allclose(comprehension(x), y)
 Install
 =======
 
-Parakeet 1.0 requires Python 3.11 or later and a C compiler.
+Parakeet requires Python 3.11 or later and a C compiler.
 
 ```bash
 pip install parakeet                 # CPU backends

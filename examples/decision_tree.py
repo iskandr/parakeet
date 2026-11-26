@@ -12,7 +12,7 @@ their bodies are ordinary loops, and the tree is a handful of arrays.
 
 import numpy as np
 
-from parakeet import jit, parfor
+import parakeet as par
 
 
 def gini_after_split(left, right, n_left, n_right):
@@ -57,7 +57,7 @@ def partition_feature(j, order, scratch, lo, hi, goes_left):
   order[lo:hi, j] = scratch[lo:hi, j]
 
 
-@jit
+@par.jit
 def fit(X, y, n_classes, max_depth, min_samples):
   """Grow a classification tree.  Returns its nodes as arrays: the feature and
   threshold tested at each node (feature -1 for a leaf), the index of its left
@@ -87,7 +87,7 @@ def fit(X, y, n_classes, max_depth, min_samples):
     label[node] = np.argmax(totals)
     if hi - lo < min_samples or depth >= max_depth or np.max(totals) == hi - lo:
       continue
-    parfor(lambda j: scan_feature(j, X, y, order, lo, hi, totals, counts, scores, positions), d)
+    par.parfor(lambda j: scan_feature(j, X, y, order, lo, hi, totals, counts, scores, positions), d)
     j = np.argmin(scores)
     if scores[j] == np.inf:
       continue  # no feature takes two different values here
@@ -97,7 +97,7 @@ def fit(X, y, n_classes, max_depth, min_samples):
     child[node] = n_nodes
     for i in range(lo, hi):
       goes_left[order[i, j]] = i < cut
-    parfor(lambda k: partition_feature(k, order, scratch, lo, hi, goes_left), d)
+    par.parfor(lambda k: partition_feature(k, order, scratch, lo, hi, goes_left), d)
     stack[top, 0], stack[top, 1], stack[top, 2], stack[top, 3] = n_nodes, lo, cut, depth + 1
     stack[top + 1, 0], stack[top + 1, 1], stack[top + 1, 2], stack[top + 1, 3] = n_nodes + 1, cut, hi, depth + 1
     top += 2
@@ -112,7 +112,7 @@ def descend(x, feature, threshold, child, label):
   return label[node]
 
 
-@jit
+@par.jit
 def predict(X, feature, threshold, child, label):
   return np.array([descend(x, feature, threshold, child, label) for x in X])
 
