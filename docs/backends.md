@@ -12,7 +12,7 @@ parallel loops inside it are executed.
 | `"openmp"` | the compiler's OpenMP runtime | needs `libgomp`/`libomp` (macOS: `brew install libomp`) |
 | `"metal"` / `"mps"` | the Apple GPU | `pip install "parakeet[metal]==1.0.0"` |
 | `"cuda"` | an NVIDIA GPU | `pip install "parakeet[cuda12]==1.0.0"` (CuPy) |
-| `"python"` | — | runs the original function uncompiled |
+| `"python"` | - | runs the original function uncompiled |
 
 ```python
 parakeet.available_backends()
@@ -21,7 +21,7 @@ parakeet.available_backends()
 ```
 
 A backend that cannot work fails **when you select it**, with a message saying
-what is missing and how to install it — not later with a linker error.
+what is missing and how to install it; not later with a linker error.
 
 ## Multi-core
 

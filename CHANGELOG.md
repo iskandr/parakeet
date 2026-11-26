@@ -1,5 +1,47 @@
 # Changelog
 
+## 1.4.0 (November 25, 2026)
+
+Broader idiomatic Python semantics lowered cleanly at elaboration time with
+zero `PyObject` overhead: non-frozen `@dataclass` records with pure methods,
+`@property`, `__call__`, and functional field rebinding; full structural
+`match`/`case` destructuring; compile-time `isinstance`/`hasattr`/`getattr`
+dead-branch pruning; and `*args`/`**kwargs`, `functools.partial`, and
+`operator.*` call ergonomics (Python Semantics Wave 1, closing `#79`).
+
+### Non-frozen `@dataclass`, methods & `@property`
+
+- **Non-frozen `@dataclass` records:** Both frozen and regular `@dataclass`
+  objects compile to unboxed compile-time records across `@par.jit`, `par.grad`,
+  and `par.jvp` (with discrete metadata fields treated as zero-tangent static
+  leaves).
+- **Functional local field rebinding:** `obj.x = new_x`, nested `obj.a.b = v`,
+  and augmented updates `obj.x += v` rebuild the compile-time record chain
+  functionally (value semantics, zero heap mutation); including across loops
+  and branches.
+- **Pure methods, `@property`, `@staticmethod`, `@classmethod`, & `__call__`:**
+  Methods and properties on `@dataclass` and `NamedTuple` records inline like
+  ordinary helper functions; bound methods on records can also be passed
+  directly from Python into `@par.jit` and `par.map`.
+
+### Structural `match`/`case`, `isinstance`/`hasattr`, & call ergonomics
+
+- **Extended structural `match`/`case`:** Added `MatchMapping` (`case {"k": v, **rest}:`),
+  starred array patterns (`case [first, *mid, last]:`), and class patterns for
+  non-frozen dataclasses, `RaggedArray`, `np.ndarray`, `dict`, and `tuple`.
+- **Compile-time `isinstance`, `hasattr`, & `getattr`:** Resolved statically
+  against the specialization key (including Python 3.10+ union types `A | B`,
+  user dataclasses, `NamedTuple`, and `RaggedArray`) with guaranteed dead-branch
+  pruning.
+- **Call ergonomics:** Full `**kwargs` collection and `**d` unpacking,
+  `functools.partial` (both inside `@par.jit` and passed from Python), and
+  `operator.*` callables (`operator.add`, `operator.mul`, `operator.itemgetter`,
+  `operator.attrgetter`, etc.) including associative `par.reduce`/`par.scan`
+  combiners.
+- **New runnable gallery example:** Added `examples/protein_and_layers.py`
+  (`ProteinBackbone` + `MLPBlock` with polymorphic dense/`RaggedArray` dispatch
+  and reverse-mode AD).
+
 ## 1.3.0 (November 25, 2026)
 
 Composable forward-mode, general reverse-mode, and higher-order automatic
@@ -99,7 +141,7 @@ Wave 1, closing `#75` and advancing `#77`).
 ## 1.1.0 (November 25, 2026)
 
 Major expansion of Parakeet's GPU schedules, algebraic data structures,
-scientific/bioinformatics primitives, and documentation — unified under one
+scientific/bioinformatics primitives, and documentation; unified under one
 top-level `import parakeet as par` (`@par.jit`, `par.*`) interface.
 
 ### Unified namespace, docs & benchmarks
@@ -128,7 +170,7 @@ top-level `import parakeet as par` (`@par.jit`, `par.*`) interface.
 - **Tiled GPU pairwise folds:** Broadcasting NumPy and nested-map/structured
   `par.fold` exact 1-NN and inverse-distance smoothing now stream shared-memory
   score tiles (`16 KiB`/block) on CUDA and Metal with exact first-index tie and
-  NaN semantics — **4.8× faster** (`2.60 ms → 0.54 ms`) and **21× less global
+  NaN semantics; **4.8× faster** (`2.60 ms → 0.54 ms`) and **21× less global
   scratch** (`64 MiB → 3 MiB`) at `1,024 × 16,384 × 32` on NVIDIA L4.
 - **Hardware matrix units in monoidal kernels:** Enabled Metal
   `simdgroup_matrix` and CUDA TF32 WMMA inside Law 1 rescaled-monoid kernels

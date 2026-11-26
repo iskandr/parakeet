@@ -59,10 +59,9 @@ GPU.
 
 ## One algebra underneath
 
-Since its beginnings in 2012, Parakeet has been built on a simple observation:
-most numerical Python — whether written as NumPy expressions, comprehensions,
-or explicit parallel operators — expresses the same handful of array
-computations: maps, reductions, scans, filters, and scatters.
+Most numerical Python (NumPy expressions, comprehensions, or explicit parallel
+operators) expresses the same handful of array computations: maps, reductions,
+scans, filters, and scatters.
 
 ```python
 @par.jit
@@ -95,10 +94,10 @@ general passes do the heavy lifting:
 
 ## Where to go next
 
-- **New to Parakeet?** Start with [Getting started](quickstart.md) — five
+- **New to Parakeet?** Start with [Getting started](quickstart.md): five
   minutes from `pip install` to your first compiled function and generated C.
 - **Learn by example:** Browse the [Kernel gallery](gallery.md) for runnable
   NumPy and data-parallel kernels, or check the [Release benchmarks](release-benchmarks.md).
 - **Go deeper:** Read [Ideas, history, and boundaries](philosophy.md) for the
-  continuity with the original 2012–2014 NYU compiler and an honest map of what
-  Parakeet does and does not support.
+  design principles, project history, and what Parakeet does and does not
+  support.

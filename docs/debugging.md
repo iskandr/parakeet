@@ -12,7 +12,7 @@ with a given set of argument types, as a subclass of `parakeet.CompileError`:
 | `StaticValueError` (also a `ValueError`) | something that must be a compile-time constant is not, or is invalid |
 
 The message carries the source line, a caret under the offending expression,
-and — because calls are inlined — the chain of calls that led there:
+and (because calls are inlined) the chain of calls that led there:
 
 ```text
 parakeet.errors.TypeInferenceError: indices must be a scalar, got str 'a'
@@ -82,10 +82,10 @@ floating-point operations yield `inf`/`nan` rather than raising.
     whether a problem is related to loop fusion.
 
 `parakeet.find_broken_transform(fn, inputs)`
-:   Switch the optimizations on one at a time — fusion, each pass of the
+:   Switch the optimizations on one at a time; fusion, each pass of the
     middle end (dead code, vertical fusion, filter fusion, sibling fusion,
     reduction interchange, tiling), the C optimizer, parallel loops, the
-    GPU — and name the first one that makes the
+    GPU; and name the first one that makes the
     result differ from plain Python (or from `expected`, if given).
 
 `parakeet.clear_cache()`

@@ -5,7 +5,7 @@ Parakeet is benchmarked head-to-head against general array compilers
 (`Faiss`, `PyKeOps`, `scikit-learn`, `SciPy`, `PyTorch SDPA / cross_entropy`).
 Every figure plots **all individual warmed replicates**, the **interquartile
 range (IQR, 25th–75th percentile)**, and the **median** directly from the
-committed raw JSON logs — and every workload links to its runnable source code.
+committed raw JSON logs; and every workload links to its runnable source code.
 
 ## At a glance (NVIDIA L4 & 4-thread CPU)
 
@@ -56,15 +56,15 @@ exclude index construction. Implementations:
 | Implementation | CPU 1-NN (ms) | GPU 1-NN (ms) | CPU Gaussian (ms) | GPU Gaussian (ms) |
 |---|---:|---:|---:|---:|
 | **Parakeet (broadcasting NumPy)** | **8.050** | **0.223** | **42.990** | **1.053** |
-| **Parakeet (nested `par.map`)** | **7.907** | **0.225** | — | — |
-| Faiss Flat (`IndexFlatL2` / `GpuIndexFlatL2`) | 8.417 | 0.150 | — | — |
-| scikit-learn brute | 6.492 | — | — | — |
-| `torch.compile` over `cdist` | — | 0.257 | — | 0.308 |
-| PyTorch `cdist` | — | 0.251 | — | 0.444 |
-| `torch.compile` over broadcasting | — | 0.688 | — | 0.598 |
-| JAX `jit` | — | 0.500 | — | 0.602 |
+| **Parakeet (nested `par.map`)** | **7.907** | **0.225** | - | - |
+| Faiss Flat (`IndexFlatL2` / `GpuIndexFlatL2`) | 8.417 | 0.150 | - | - |
+| scikit-learn brute | 6.492 | - | - | - |
+| `torch.compile` over `cdist` | - | 0.257 | - | 0.308 |
+| PyTorch `cdist` | - | 0.251 | - | 0.444 |
+| `torch.compile` over broadcasting | - | 0.688 | - | 0.598 |
+| JAX `jit` | - | 0.500 | - | 0.602 |
 | PyKeOps `Genred` | 29.027 | 0.953 | 66.769 | 1.254 |
-| SciPy `cKDTree` (exact) | 54.266 | — | — | — |
+| SciPy `cKDTree` (exact) | 54.266 | - | - | - |
 | NumPy / CuPy broadcasting | 472.283 | 16.932 | 505.780 | 17.177 |
 
 At the smaller `256 × 1,024 × 3` shape, CPU PyKeOps led at `0.219 ms`
@@ -166,14 +166,14 @@ pre-pairwise-fold release measurements are archived below.
 | Implementation | Small 1-NN (`256×1024×3`) | Large 1-NN (`1024×4096×32`) | Small Gaussian | Large Gaussian |
 |---|---:|---:|---:|---:|
 | Parakeet, broadcasting NumPy | 0.664 | 6.593 | 2.971 | 28.951 |
-| Parakeet, nested `par.map` | 0.638 | 6.132 | — | — |
+| Parakeet, nested `par.map` | 0.638 | 6.132 | - | - |
 | PyKeOps `Genred` | 0.255 | 18.246 | 1.087 | 38.038 |
-| Faiss `IndexFlatL2` | 0.033 | 9.577 | — | — |
-| SciPy `cKDTree` (exact) | 1.441 | 51.846 | — | — |
-| scikit-learn brute | 1.042 | 6.647 | — | — |
+| Faiss `IndexFlatL2` | 0.033 | 9.577 | - | - |
+| SciPy `cKDTree` (exact) | 1.441 | 51.846 | - | - |
+| scikit-learn brute | 1.042 | 6.647 | - | - |
 | NumPy broadcasting | 9.899 | 326.690 | 10.915 | 359.939 |
 
-### 1.0.0 NVIDIA A10 (warmed median, ms — prior to GPU pairwise-fold tiling)
+### 1.0.0 NVIDIA A10 (warmed median, ms; prior to GPU pairwise-fold tiling)
 
 | Implementation | Small 1-NN | Large 1-NN | Small Gaussian | Large Gaussian | Causal Attn | Linear CE | GBDT Split |
 |---|---:|---:|---:|---:|---:|---:|---:|
@@ -181,8 +181,8 @@ pre-pairwise-fold release measurements are archived below.
 | PyTorch eager / specialist | 0.128 | 0.323 | 0.166 | 0.568 | 0.090 | 0.069 | 0.225 |
 | `torch.compile` | 0.089 | 0.208 | 0.106 | 0.294 | 0.116 | 0.088 | 0.175 |
 | JAX `jit` | 0.115 | 0.424 | 0.098 | 0.663 | 0.217 | 0.133 | 0.188 |
-| PyKeOps `Genred` | 0.262 | 0.962 | 0.295 | 1.289 | — | — | — |
-| Faiss `GpuIndexFlatL2` | 0.079 | 0.154 | — | — | — | — | — |
+| PyKeOps `Genred` | 0.262 | 0.962 | 0.295 | 1.289 | - | - | - |
+| Faiss `GpuIndexFlatL2` | 0.079 | 0.154 | - | - | - | - | - |
 | CuPy | 0.483 | 12.359 | 0.527 | 12.736 | 0.326 | 0.255 | 0.420 |
 
 ### Methodology notes

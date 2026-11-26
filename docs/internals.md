@@ -15,9 +15,9 @@
 
 ## Specialization
 
-Calling a `@jit` function classifies its arguments — dtype, rank, and layout of
+Calling a `@jit` function classifies its arguments; dtype, rank, and layout of
 arrays, the types of scalars, the structure of tuples/records, and the identity
-of functions — into a *type key*. Each distinct key gets one compiled
+of functions; into a *type key*. Each distinct key gets one compiled
 *specialization*, cached per function. Values read from globals and closures
 are classified the same way on every call and passed as hidden arguments, so
 compiled code never sees stale data.
@@ -34,7 +34,7 @@ run time.
   elaborating its body in place, so by the time IR is produced there are no
   Python calls, closures, or tuple objects left.
 * **Arrays** are either *concrete* (a buffer plus offset, shape, and strides as
-  scalar expressions — slicing is just arithmetic on those) or *delayed*: a
+  scalar expressions; slicing is just arithmetic on those) or *delayed*: a
   function from index to element. `np.tanh(x * a) + b` builds a delayed array
   three layers deep, and no operator is emitted until something consumes it: a
   store, a reduction, or `return`. That consumer's operator evaluates the whole
@@ -44,9 +44,9 @@ run time.
 Three questions cannot be answered in one forward pass, so elaboration is
 *restarted* with what it learned:
 
-1. the type of a variable modified in a loop (`x = 0` then `x += 0.5` — restart
+1. the type of a variable modified in a loop (`x = 0` then `x += 0.5`; restart
    with `x: float`);
-2. whether a delayed array must be evaluated eagerly — because it would be
+2. whether a delayed array must be evaluated eagerly; because it would be
    evaluated twice, inside a loop, or after an array it reads has been modified
    (which would change the answer);
 3. which arguments must be compile-time constants (`axis=axis`), in which case
@@ -144,7 +144,7 @@ and runtime error reporting.
 * The **host** program is always C. Each `ParLoop` body is outlined into a
   function taking a context struct (identical bodies up to alpha-renaming share
   one compiled function) and dispatched through a function pointer supplied at
-  call time — the thread pool, OpenMP, GCD, or a sequential loop — so one
+  call time (the thread pool, OpenMP, GCD, or a sequential loop) so one
   compiled library serves every CPU backend.
 * For **GPU** backends, eligible `ParLoop`s and tiled plans are also emitted as
   Metal or CUDA kernels. Arrays stay resident on the device across consecutive

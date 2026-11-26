@@ -94,12 +94,12 @@ All follow NumPy's broadcasting and type promotion rules exactly.
 |  |  |  |  |
 |---|---|---|---|
 | `abs` | `all` | `any` | `divmod` |
-| `enumerate` | `filter` | `isinstance` | `len` |
-| `list` | `map` | `max` | `min` |
-| `ord` | `pow` | `print` | `range` |
-| `reversed` | `round` | `slice` | `sorted` |
-| `sum` | `tuple` | `zip` | `bool` |
-| `float` | `int` |  |  |
+| `enumerate` | `filter` | `getattr` | `hasattr` |
+| `isinstance` | `len` | `list` | `map` |
+| `max` | `min` | `ord` | `pow` |
+| `print` | `range` | `reversed` | `round` |
+| `slice` | `sorted` | `sum` | `tuple` |
+| `zip` | `bool` | `float` | `int` |
 
 ## `math`
 

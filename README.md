@@ -26,7 +26,7 @@ outside it.
 Example
 =======
 
-Wrap a function with **`@parakeet.jit`** — or call data-parallel operators like
+Wrap a function with **`@parakeet.jit`**, or call data-parallel operators like
 `parakeet.map` and `parakeet.imap` directly from Python (their callable
 arguments are JIT-compiled automatically). NumPy expressions, explicit loops,
 comprehensions, and data-parallel operators compile to the same fused native
@@ -107,9 +107,9 @@ and array expressions stay *delayed* until something consumes them, so
 `np.tanh(x * alpha) + beta` becomes a single loop with no temporary arrays.
 What comes out is a small core operator IR (`IndexMap`, `IndexReduce`,
 `IndexScan`, `IndexFilter`, `IndexExpand`, `IndexScatter`, `IndexWavefront`,
-and `IndexTile`). Middle-end passes apply algebraic rewrites — vertical and
+and `IndexTile`). Middle-end passes apply algebraic rewrites (vertical and
 sibling fusion, filter fusion, contraction reassociation, rescaled-monoid and
-pairwise fold tiling, chunkwise scans, and cache/GPU blocking — before lowering
+pairwise fold tiling, chunkwise scans, and cache/GPU blocking) before lowering
 to loops, emitting C (plus Metal or CUDA kernels for eligible parallel loops),
 compiling with your system C compiler, and caching the result on disk.
 
@@ -128,10 +128,10 @@ Parakeet compiles a static-type numerical subset of Python:
 * Scalar arithmetic, bitwise, and comparison operations (`math`, `uint8`–`uint64`, `int8`–`int64`, `float32`, `float64`, `bool`, `bfloat16` conversions, `popcount`/`clz`/`ctz`)
 * Control flow (`if`/`elif`/`else`, `for`, `while`, `for`/`while ... else`, `break`, `continue`, early `return`, scalar `match`/`case`)
 * Nested functions, lambdas, and closures; default, keyword, and `*args` arguments
-* Nested tuples, `NamedTuple`s, fixed string-key dicts, plain frozen dataclasses, `RaggedArray`, `SortedIndex`, `FrozenHashTable`, and `BlockMask`
+* Nested tuples, `NamedTuple`s, fixed string-key dicts, `@dataclass`es (frozen or non-frozen) with pure methods and `@property`, `RaggedArray`, `SortedIndex`, `FrozenHashTable`, and `BlockMask`
 * Slices, `range`, `zip`, `enumerate`
 * NumPy array expressions (`x[1:, :] + 2 * y[:-1, ::2]`), with broadcasting, boolean masks, integer-array indexing, and in-place updates
-* About 200 NumPy functions and methods (`np.ones`, `np.sin`, `x.sum(axis=0)`, `np.einsum`, `np.bincount`, `np.sort`, `np.argsort`, `np.searchsorted`, `np.random`, and the usual builtins — see the [full list](https://rubinsteyn.com/parakeet/supported/))
+* About 200 NumPy functions and methods (`np.ones`, `np.sin`, `x.sum(axis=0)`, `np.einsum`, `np.bincount`, `np.sort`, `np.argsort`, `np.searchsorted`, `np.random`, and the usual builtins: see the [full list](https://rubinsteyn.com/parakeet/supported/))
 * Explicit data-parallel operators (`par.map`, `par.imap`, `par.ireduce`, `par.reduce`, `par.fold`, `par.scan`, `par.filter`, `par.filter_reduce`, `par.flatmap`, `par.filter_pairs`, `par.allpairs`, `par.outer_map`, `par.parfor`, `par.scatter_add`, `par.wavefront`)
 * Composable reverse-mode, forward-mode, and higher-order automatic differentiation (`par.grad`, `par.value_and_grad`, `par.jvp`, `par.vjp`, `par.linearize`, `par.linear_transpose`, `par.hvp`, `par.jacfwd`, `par.jacrev`, `par.hessian`, `par.stop_gradient`, `@par.checkpoint`, `@par.custom_vjp`, `@par.custom_jvp`) with checkpointed `for`/`while` loops and algebraic rematerialization for attention, cross-entropy, norms, and soft sequence alignment
 
@@ -162,7 +162,7 @@ backends with `parakeet.config.backend`:
 * `"gcd"`: multi-core via Grand Central Dispatch (macOS)
 * `"metal"` (or `"mps"`): runs eligible parallel operations on an Apple GPU
 * `"cuda"`: runs eligible parallel operations on an NVIDIA GPU
-* `"python"`: runs your original function uncompiled — handy for checking whether a bug is in your code or the compiler
+* `"python"`: runs your original function uncompiled, handy for checking whether a bug is in your code or the compiler
 
 You can also pick a backend per function (`@par.jit(backend="metal")`), per call
 (`f(x, _backend="c")`), or for a block (`with par.options(backend="c"): ...`).
@@ -181,7 +181,7 @@ Parakeet wins where NumPy or CuPy allocates large intermediates (pairwise
 distance matrices, attention scores, chained element-wise passes) or where you
 would otherwise drop into a Python loop. Specialist libraries (`Faiss`,
 `cuDNN SDPA`, `cuBLAS`, `PyTorch` / `JAX` on standard dense layers) still lead
-on their tuned primitives — the benchmark suite reports both wins and gaps side
+on their tuned primitives; the benchmark suite reports both wins and gaps side
 by side.
 
 ![Pairwise exact 1-NN and Gaussian kernel regression latency on NVIDIA L4 and 4-thread CPU showing all replicates, IQR, and median](docs/assets/bench-pairwise-l4.svg)
@@ -194,7 +194,7 @@ Warmed medians from [`docs/assets/colab-l4-0dcb7d5.json`](docs/assets/colab-l4-0
 | Workload | Parakeet | Baseline / Reference | Implementation |
 |---|---:|---:|---|
 | Exact 1-NN, GPU (`1,024 × 4,096 × 32`) | **0.223 ms** | Faiss `0.150`, `torch.compile(cdist)` `0.257`, JAX `0.500`, PyKeOps `0.953`, CuPy `16.93` ms | [`nearest_numpy`](examples/algebraic_gallery.py) / [`exact_1nn`](examples/algebraic_gallery.py) |
-| Exact 1-NN, GPU scaling (`R = 16,384`) | **0.542 ms** (3 MiB scratch) | Parakeet 1.0.0 `2.597 ms` (64 MiB) — **4.8× faster, 21× less memory** | [`benchmarks/gpu_pairwise_fold.py`](benchmarks/gpu_pairwise_fold.py) |
+| Exact 1-NN, GPU scaling (`R = 16,384`) | **0.542 ms** (3 MiB scratch) | Parakeet 1.0.0 `2.597 ms` (64 MiB); **4.8× faster, 21× less memory** | [`benchmarks/gpu_pairwise_fold.py`](benchmarks/gpu_pairwise_fold.py) |
 | Exact 1-NN, 4-thread CPU (`1,024 × 4,096 × 32`) | **7.91 ms** | scikit-learn `6.49`, Faiss `8.42`, PyKeOps `29.0`, SciPy `54.3`, NumPy `472` ms | [`nearest_numpy`](examples/algebraic_gallery.py) / [`exact_1nn`](examples/algebraic_gallery.py) |
 | Gaussian regression, 4-thread CPU (`1,024 × 4,096 × 32`) | **42.99 ms** | PyKeOps `66.77`, NumPy `505.8` ms (**11.8× faster than NumPy**) | [`rbf_kernel_regression`](examples/algebraic_gallery.py) |
 | Gaussian regression, GPU (`1,024 × 4,096 × 32`) | **1.053 ms** | `torch.compile(cdist)` `0.308`, JAX `0.602`, PyKeOps `1.254`, CuPy `17.18` ms | [`rbf_kernel_regression`](examples/algebraic_gallery.py) |
@@ -236,40 +236,36 @@ More information
 History
 =======
 
-Parakeet began between 2012 and 2014 in the Computer Science Department at New
-York University (Courant Institute), created by **Alex Rubinsteyn** and **Eric
-Hielscher** with **Nathaniel Weinman** and advisor **Dennis Shasha** (with
-early advice from **Russell Power**). Built for Python 2 and NumPy 1, it tested
-a clean bet: instead of trying to recover array structure from opaque scalar
-loops or forcing programmers into a static graph DSL, lower numerical Python to
-a typed SSA IR whose core constructs are higher-order data-parallel adverbs
-(`Map`, `Reduce`, `Scan`, `OuterMap`, `Filter`) — then fuse and tile
-algebraically *before* emitting C, OpenMP, or CUDA.
+Parakeet began as an OCaml compiler modeling the array language Q, then shifted
+to modeling Python, and was later reimplemented in Python at New York
+University (Courant Institute) by **Alex Rubinsteyn** and **Eric Hielscher**
+with **Nathaniel Weinman** and advisor **Dennis Shasha** (with early advice
+from **Russell Power**). The Python 2 / NumPy 1 implementation lowered
+numerical Python to a typed SSA IR built around higher-order data-parallel
+adverbs (`Map`, `Reduce`, `Scan`, `OuterMap`, `Filter`), fusing and tiling
+algebraically before emitting C, OpenMP, or CUDA.
 
 The original research is documented in:
 
 * **Alex Rubinsteyn**, [*Runtime Compilation of Array-Oriented Python Programs*](https://cs.nyu.edu/media/publications/rubinsteyn_alex.pdf)
-  (PhD thesis, NYU, 2014) — runtime type and value specialization, typed
+  (PhD thesis, NYU, 2014): runtime type and value specialization, typed
   adverb IR, algebraic vertical/nested/horizontal fusion, and multi-core/CUDA
   code generation.
 * **Eric Hielscher, Alex Rubinsteyn, and Dennis Shasha**,
   [*Locality Optimization for Data Parallel Programs*](https://arxiv.org/abs/1304.1835)
   (NYU CS Technical Report TR2013-955 / Eric Hielscher's 2013 NYU PhD thesis
-  work) — `TiledMap` / `TiledReduce` / `TiledScan` for unified cache and
+  work): `TiledMap` / `TiledReduce` / `TiledScan` for unified cache and
   register tiling over adverb trees.
 * **Alex Rubinsteyn, Eric Hielscher, Nathaniel Weinman, and Dennis Shasha**,
   [*Parakeet: A Just-In-Time Parallel Accelerator for Python*](https://www.usenix.org/conference/hotpar12/workshop-program/presentation/rubinsteyn)
   (USENIX HotPar '12), plus the [PyData Boston 2013](https://vimeo.com/73895275)
   and [PyData NYC 2013](https://vimeo.com/79556629) talks.
 
-When the Python 2 codebase was retired, its closing note observed that
-high-performance numerical code belongs on explicit data-parallel operators.
-Parakeet 1.0 is a ground-up rewrite for Python 3.11+ and NumPy 2 that carries
-that exact spirit forward: keeping ordinary `@jit` NumPy and explicit operators
-unified in one namespace, generalizing the adverb algebra to scatter reductions,
-structured multi-state folds, ragged compaction, wavefront DP, chunkwise scans,
-rescaled-monoid GPU tiling, and reverse-mode `grad`, and targeting modern
-multi-core CPUs, Apple Metal, and NVIDIA CUDA. The original 2012–2014 code
-lives on in the Git history.
+Parakeet 1.x is a rewrite for Python 3.11+ and NumPy 2 that keeps ordinary
+`@jit` NumPy and explicit data-parallel operators in one namespace, extends
+the adverb algebra with scatter reductions, structured multi-state folds,
+ragged compaction, wavefront DP, chunkwise scans, rescaled-monoid GPU tiling,
+and composable automatic differentiation, and targets multi-core CPUs, Apple
+Metal, and NVIDIA CUDA. The older Python 2 codebase remains in the Git history.
 
 BSD 3-clause licensed; see [LICENSE](LICENSE).

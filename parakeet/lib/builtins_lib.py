@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import builtins
 import dataclasses
+import functools
+import inspect
 import math
+import operator
+import types as pytypes
 
 import numpy as np
 
@@ -66,7 +70,7 @@ def _ord(el, c):
 def _dataclass_replace(el, obj, **changes):
   rec = record_type(obj)
   if rec is None or not dataclasses.is_dataclass(rec.cls):
-    raise el.error(TypeInferenceError, f"replace() expects a frozen dataclass instance, got {describe(obj)}")
+    raise el.error(TypeInferenceError, f"replace() expects a dataclass instance, got {describe(obj)}")
   if hasattr(rec.cls, "__post_init__"):
     raise el.error(UnsupportedError, f"replace() on dataclass {rec.cls.__name__} with __post_init__ is not supported")
   init_fields = {f.name for f in dataclasses.fields(rec.cls) if f.init}
@@ -336,6 +340,8 @@ def _sorted(el, x):
 @register(isinstance)
 def _isinstance(el, x, types):
   def one(t) -> bool:
+    if isinstance(t, pytypes.UnionType):
+      return builtins.any(one(sub) for sub in t.__args__)
     if isinstance(t, TypeVal):
       if not isinstance(x, Expr):
         return False
@@ -346,6 +352,12 @@ def _isinstance(el, x, types):
       return isinstance(x, ArrayVal)
     if t is tuple:
       return isinstance(x, tuple)
+    if t is dict:
+      return isinstance(x, dict)
+    if t is range:
+      return isinstance(x, RangeVal)
+    if t is slice:
+      return isinstance(x, slice)
     if t is type(None):
       return x is None
     if t is str:
@@ -360,10 +372,225 @@ def _isinstance(el, x, types):
       return isinstance(x, Expr)
     if t is numbers.Integral:
       return isinstance(x, Expr) and x.type.kind in "iu"
+    if isinstance(t, type):
+      rec = record_type(x)
+      if rec is not None:
+        return issubclass(rec.cls, t)
+      if isinstance(x, (ArrayVal, Expr, RangeVal, ZipVal, EnumerateVal, TypeVal)) or x is None:
+        return False
+      return builtins.isinstance(x, t)
     raise el.error(UnsupportedError, f"isinstance() with {describe(t)} is not supported")
 
   ts = types if isinstance(types, tuple) else (types,)
   return Const(builtins.any(one(t) for t in ts), WeakBool)
+
+
+_MISSING_ATTR = object()
+
+
+def _has_attr_static(el, obj, name: str) -> bool:
+  from .. import lib
+  from ..syntax.records import StructuredRow
+  from ..syntax.values import BoundMethod, Closure, Partial, PyFunc
+
+  if isinstance(obj, (np.ufunc, prims.UFunc)):
+    return name == "at" or builtins.hasattr(obj, name)
+  if isinstance(obj, (ArrayVal, Expr)):
+    return lib.lookup_property(name) is not None or lib.lookup_method(obj, name) is not None
+  if isinstance(obj, StructuredView):
+    return name in ("shape", "ndim", "size", "dtype") or name in obj.names
+  if isinstance(obj, StructuredRow):
+    return name in obj.names
+  if isinstance(obj, RaggedArray):
+    if name in ("values", "offsets", "num_segments", "lengths"):
+      return True
+    return inspect.getattr_static(RaggedArray, name, _MISSING_ATTR) is not _MISSING_ATTR
+  rec = record_type(obj)
+  if rec is not None:
+    if rec.cls is dict:
+      return False
+    if name in rec.names:
+      return True
+    if issubclass(rec.cls, tuple) and name == "_replace":
+      return True
+    if rec.cls.__module__ == "parakeet.index":
+      if (rec.cls.__name__ == "SortedIndex" and name in ("get", "range")) or (
+        rec.cls.__name__ == "FrozenHashTable" and name == "get"
+      ):
+        return True
+    raw = inspect.getattr_static(rec.cls, name, _MISSING_ATTR)
+    return isinstance(raw, (property, pytypes.FunctionType, staticmethod, classmethod))
+  if isinstance(obj, TypeVal):
+    return name in ("itemsize", "type")
+  if isinstance(obj, (tuple, PyFunc, Closure, BoundMethod, Partial, RangeVal)) or obj is None:
+    return False
+  return builtins.hasattr(obj, name)
+
+
+@register(hasattr)
+def _hasattr(el, obj, name):
+  if not isinstance(name, str):
+    raise el.error(StaticValueError, f"hasattr() attribute name must be a compile-time string, got {describe(name)}")
+  return Const(_has_attr_static(el, obj, name), WeakBool)
+
+
+_NO_DEFAULT = object()
+
+
+@register(getattr)
+def _getattr_builtin(el, obj, name, default=_NO_DEFAULT):
+  if not isinstance(name, str):
+    raise el.error(StaticValueError, f"getattr() attribute name must be a compile-time string, got {describe(name)}")
+  if _has_attr_static(el, obj, name):
+    return el.getattr(obj, name)
+  if default is not _NO_DEFAULT:
+    return default
+  raise el.error(TypeInferenceError, f"{describe(obj)} has no attribute {name!r}")
+
+
+@register(functools.partial, name="functools.partial")
+def _functools_partial(el, fn, *args, **kwargs):
+  from ..syntax.values import Partial
+
+  if isinstance(fn, Partial):
+    return Partial(fn.fn, (*fn.args, *args), {**fn.kwargs, **kwargs})
+  return Partial(fn, tuple(args), dict(kwargs))
+
+
+# ---------------------------------------------------------------------------
+# operator module
+# ---------------------------------------------------------------------------
+
+
+for _op_name, _bin_name in {
+  "add": "add",
+  "sub": "sub",
+  "mul": "mul",
+  "truediv": "div",
+  "floordiv": "floordiv",
+  "mod": "mod",
+  "pow": "pow",
+  "and_": "bitand",
+  "or_": "bitor",
+  "xor": "bitxor",
+  "lshift": "lshift",
+  "rshift": "rshift",
+}.items():
+  _op_fn = getattr(operator, _op_name)
+
+  def _make_bin(bn):
+    def _impl(el, a, b):
+      return el.binop(bn, a, b)
+
+    return _impl
+
+  register(_op_fn, name=f"operator.{_op_name}")(_make_bin(_bin_name))
+
+
+@register(operator.matmul, name="operator.matmul")
+def _op_matmul(el, a, b):
+  return el.matmul(a, b)
+
+
+for _cmp_name, _ast_cmp in {
+  "eq": "Eq",
+  "ne": "NotEq",
+  "lt": "Lt",
+  "le": "LtE",
+  "gt": "Gt",
+  "ge": "GtE",
+  "is_": "Is",
+  "is_not": "IsNot",
+}.items():
+  import ast as _ast
+
+  _cmp_cls = getattr(_ast, _ast_cmp)
+
+  def _make_cmp(ccls):
+    def _impl(el, a, b):
+      return el.compare(ccls(), a, b)
+
+    return _impl
+
+  register(getattr(operator, _cmp_name), name=f"operator.{_cmp_name}")(_make_cmp(_cmp_cls))
+
+
+@register(operator.neg, name="operator.neg")
+def _op_neg(el, a):
+  return el.apply_ufunc(UF["neg"], [a], python=True)
+
+
+@register(operator.pos, name="operator.pos")
+def _op_pos(el, a):
+  return el.apply_ufunc(UF["pos"], [a], python=True)
+
+
+@register(operator.abs, name="operator.abs")
+def _op_abs(el, a):
+  return el.apply_ufunc(UF["abs"], [a], python=True)
+
+
+@register(operator.invert, name="operator.invert")
+def _op_invert(el, a):
+  return el.apply_ufunc(UF["invert"], [a], python=True)
+
+
+@register(operator.not_, name="operator.not_")
+def _op_not(el, a):
+  return ops.lnot(el.truth(a))
+
+
+@register(operator.truth, name="operator.truth")
+def _op_truth(el, a):
+  return el.truth(a)
+
+
+@register(operator.index, name="operator.index")
+def _op_index(el, a):
+  return el.as_index(a, "index")
+
+
+@register(operator.getitem, name="operator.getitem")
+def _op_getitem(el, a, b):
+  return el.getitem(a, b)
+
+
+@register(operator.itemgetter, name="operator.itemgetter")
+def _op_itemgetter(el, *items):
+  if not items:
+    raise el.error(TypeInferenceError, "itemgetter expected 1 argument, got 0")
+
+  def _get(el_, obj, _items=items):
+    if len(_items) == 1:
+      return el_.getitem(obj, _items[0])
+    return tuple(el_.getitem(obj, it) for it in _items)
+
+  from .adverbs import LibFunction
+
+  return LibFunction("itemgetter", _get)
+
+
+@register(operator.attrgetter, name="operator.attrgetter")
+def _op_attrgetter(el, *attrs):
+  if not attrs:
+    raise el.error(TypeInferenceError, "attrgetter expected 1 argument, got 0")
+  if not builtins.all(isinstance(a, str) for a in attrs):
+    raise el.error(StaticValueError, "attrgetter() attribute names must be compile-time strings")
+
+  def _get_one(el_, obj, path: str):
+    cur = obj
+    for part in path.split("."):
+      cur = el_.getattr(cur, part)
+    return cur
+
+  def _get(el_, obj, _attrs=attrs):
+    if len(_attrs) == 1:
+      return _get_one(el_, obj, _attrs[0])
+    return tuple(_get_one(el_, obj, a) for a in _attrs)
+
+  from .adverbs import LibFunction
+
+  return LibFunction("attrgetter", _get)
 
 
 @register(print)

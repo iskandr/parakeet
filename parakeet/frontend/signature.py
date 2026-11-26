@@ -9,6 +9,7 @@ globals a function reads.
 
 from __future__ import annotations
 
+import functools
 import mmap
 import threading
 import types as pytypes
@@ -263,10 +264,22 @@ def classify(value: Any, leaves: list, fixups: list | None = None) -> Key:
     finally:
       active.discard(id(value))
     return ("fn", code, id(value.__globals__), tuple(cell_keys))
+  if isinstance(value, functools.partial):
+    return (
+      "partial",
+      classify(value.func, leaves, fixups),
+      classify(value.args, leaves, fixups),
+      classify(dict(value.keywords), leaves, fixups),
+    )
   if isinstance(value, pytypes.MethodType):
+    if record_type(value.__self__) is not None:
+      return (
+        "bm",
+        classify(value.__func__, leaves, fixups),
+        classify(value.__self__, leaves, fixups),
+      )
     raise Unsupported(
-      f"bound methods ({value.__qualname__}) cannot be compiled; "
-      "use a plain function and pass the object's arrays explicitly"
+      f"bound methods ({value.__qualname__}) cannot be compiled; use a plain function, dataclass, or NamedTuple instead"
     )
   if callable(value) or isinstance(value, pytypes.ModuleType):
     return ("o", Ref(value))
@@ -306,6 +319,10 @@ def describe(key: Key) -> str:
     return repr(key[1])
   if tag == "fn":
     return f"<function {key[1].co_name}>"
+  if tag == "bm":
+    return f"<bound method {describe(key[1])} of {describe(key[2])}>"
+  if tag == "partial":
+    return f"partial({describe(key[1])})"
   if tag == "ty":
     return f"<type {getattr(key[1], 'name', None) or key[1].__name__}>"
   if tag == "o":
@@ -329,6 +346,10 @@ def count_leaves(key: Key) -> int:
     return count_leaves(key[2])
   if tag in ("t",):
     return sum(count_leaves(k) for k in key[1:])
+  if tag == "bm":
+    return count_leaves(key[1]) + count_leaves(key[2])
+  if tag == "partial":
+    return count_leaves(key[1]) + count_leaves(key[2]) + count_leaves(key[3])
   if tag == "sl":
     return sum(count_leaves(k) for k in key[1:])
   if tag == "fn" and isinstance(key[3], tuple):
@@ -364,6 +385,19 @@ def with_static_leaves(key: Key, leaves: list, static: frozenset[int], _pos: lis
     return (tag, key[1], with_static_leaves(key[2], leaves, static, pos))
   if tag in ("t", "sl"):
     return (tag, *[with_static_leaves(k, leaves, static, pos) for k in key[1:]])
+  if tag == "bm":
+    return (
+      tag,
+      with_static_leaves(key[1], leaves, static, pos),
+      with_static_leaves(key[2], leaves, static, pos),
+    )
+  if tag == "partial":
+    return (
+      tag,
+      with_static_leaves(key[1], leaves, static, pos),
+      with_static_leaves(key[2], leaves, static, pos),
+      with_static_leaves(key[3], leaves, static, pos),
+    )
   if tag == "fn" and isinstance(key[3], tuple):
     cells = tuple((n, with_static_leaves(k, leaves, static, pos)) for n, k in key[3])
     return (tag, key[1], key[2], cells)

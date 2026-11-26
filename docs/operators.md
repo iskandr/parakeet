@@ -26,8 +26,8 @@ import parakeet as par
 | `par.flatmap(count_fn, emit_fn, n)` / `par.filter_pairs(...)` | two-pass 1-to-K ragged compaction (`IndexExpand`) |
 | `par.scatter_add(n, idx, vals, where=None)` / `par.scatter_add(n, ((k, v) for ...))` | index-directed associative scatter-add (`IndexScatter`) with thread-privatized parallel lowering and exact gather adjoint (also targeted automatically by `np.bincount`, `np.add.at`, canonical `for i: out[idx[i]] += vals[i]` loops, and filtered comprehensions like `[np.sum(vals[idx == b]) for b in range(n)]`) |
 | `par.wavefront(...)` / `par.batched_wavefront(...)` / `par.soft_align(...)` | 2D and banded semiring dynamic programming (`IndexWavefront`) with checkpointed VJP |
-| `par.grad`, `par.value_and_grad`, `par.jvp`, `par.vjp`, `par.hvp`, `par.linearize`, `par.linear_transpose`, `par.jacfwd`, `par.jacrev`, `par.hessian` | composable reverse-mode, forward-mode, and higher-order AD — see [Automatic differentiation](autodiff.md) |
-| `par.show_rewrite(f, *args)` | inspect which algebraic optimizations rewrote `f` and view before/after IR — see [Algebraic laws](algebra.md) |
+| `par.grad`, `par.value_and_grad`, `par.jvp`, `par.vjp`, `par.hvp`, `par.linearize`, `par.linear_transpose`, `par.jacfwd`, `par.jacrev`, `par.hessian` | composable reverse-mode, forward-mode, and higher-order AD; see [Automatic differentiation](autodiff.md) |
+| `par.show_rewrite(f, *args)` | inspect which algebraic optimizations rewrote `f` and view before/after IR; see [Algebraic laws](algebra.md) |
 
 ```python
 par.map(lambda row: row / np.sum(row), X)  # normalise rows
@@ -57,7 +57,7 @@ The function given to `map` may return an array; the results are stacked.
 par.map(lambda row: np.cumsum(row), X)  # shape (n, m)
 ```
 
-All results must have the same shape — this is checked at run time
+All results must have the same shape; this is checked at run time
 (`ValueError`).
 
 ## Parallelism and associativity
@@ -65,7 +65,7 @@ All results must have the same shape — this is checked at run time
 `map`-like operators evaluate elements in parallel, in no particular order.
 `reduce` runs in parallel when the combining function is recognisably one of
 `+`, `*`, `min`, `max`, `and`, `or`, `&`, `|`, `^` (whether written as
-`np.add`, `lambda a, b: a + b`, or `par.add`), and sequentially otherwise — so a
+`np.add`, `lambda a, b: a + b`, or `par.add`), and sequentially otherwise; so a
 non-associative function such as `lambda acc, x: acc * 0.5 + x` still gives the
 same answer as `functools.reduce`. Floating-point sums are reassociated, like
 NumPy's own pairwise summation: expect differences in the last digits.
