@@ -117,14 +117,17 @@ or SciPy. Knowing the boundary up front avoids surprises.
 
 ### NumPy and SciPy coverage
 
-About 200 core NumPy functions and ufuncs are built in (see
+About 210 core NumPy functions and ufuncs are built in (see
 [Supported functions](supported.md)), covering arithmetic, reductions, scans,
-sorting, masks and fancy indexing, `@`/`dot`/`einsum`, `np.linalg.norm`, and
+sorting, masks and fancy indexing, `@`/`dot`/`einsum`, dense 2D linear algebra
+(`np.linalg.norm`, `cholesky`, `det`, `solve`, `inv`, `qr`, `eigh`, `svd`), and
 parallel `np.random`. Not yet built in:
 
-* Matrix decompositions and solvers (`np.linalg.svd`, `solve`, `inv`, `eig`,
-  `cholesky`, `qr`, `det`, `lstsq`)
-* Spectral transforms (`np.fft.*`)
+* Non-symmetric eigensolvers and least-squares helpers (`np.linalg.eig`,
+  `lstsq`, `pinv`, and batched 3D+ `np.linalg.*` calls; use `par.parfor` or
+  `par.map` to batch 2D `np.linalg.*` calls in parallel)
+* Spectral transforms (`np.fft.*`; see `examples/complex_fft_and_fasta.py` for
+  a compiled radix-2 FFT)
 * Variable-cardinality set operations (`np.unique`, `np.lexsort`, `np.isin`)
 * SciPy modules (`scipy.special`, `scipy.optimize`, `scipy.ndimage`, ...)
 

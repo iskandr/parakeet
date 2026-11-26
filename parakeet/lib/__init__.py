@@ -6,6 +6,7 @@ from . import (  # noqa: F401, I001  (index_lib overrides pure.searchsorted)
   bytes_lib,
   complex_lib,
   expand_lib,
+  linalg_lib,
   numpy_lib,
   pure,
   index_lib,

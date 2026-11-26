@@ -137,6 +137,40 @@ losses match across all arms (`4.200 → 1.426` on the smaller configuration).
 
 ---
 
+## Bioinformatics and structural biology (Apple M1 Pro, 10 cores)
+
+Head-to-head comparison of compiled Parakeet `1.8.0` kernels against
+specialist C/C++/Cython libraries (`edlib 1.3.9`, `Biopython 1.88` C
+`PairwiseAligner`, `Biotite 2.0.0`, `RDKit 2026.9.2`, and `NumPy 2.5.5`),
+verified for exact output agreement before timing (`n = 11` warmed replicates).
+[Download raw JSON](assets/bio-benchmarks-m1pro.json).
+
+![Bioinformatics head-to-head benchmarks on Apple M1 Pro comparing Parakeet against edlib, Biopython, Biotite, RDKit, and NumPy](assets/bench-bio-m1pro.svg)
+
+| Workload | Parakeet (multicore) | Parakeet (`c`, 1T) | Specialist / Baseline | Speedup vs. Baseline | Implementation |
+|---|---:|---:|---:|---:|---|
+| Edit distance (`1,000 × 256 bp`, Myers) | **2.043 ms** (±0.61) | 3.778 ms (±0.08) | `edlib` (C++ Myers): 7.577 ms | **3.7×** (2.0× at 1T) | [`examples/bio_algorithms.py`](https://github.com/iskandr/parakeet/blob/master/examples/bio_algorithms.py) |
+| Affine-gap Gotoh + traceback (`200 × 128 bp`) | **3.816 ms** (±1.39) | 19.685 ms (±2.46) | `Biopython` C (score-only): 8.555 ms; `Biotite` Cython: 22.723 ms | **2.2×** vs Biopython, **6.0×** vs Biotite | [`examples/bio_algorithms.py`](https://github.com/iskandr/parakeet/blob/master/examples/bio_algorithms.py) |
+| 2048-bit Tanimoto 1-NN (`256 × 8,192`) | **16.829 ms** (±5.89) | 59.056 ms (±12.62) | `RDKit` (C++ BulkTanimoto): 461.748 ms | **27.4×** (7.8× at 1T) | [`examples/bio_gallery.py`](https://github.com/iskandr/parakeet/blob/master/examples/bio_gallery.py) |
+| Batched Kabsch 3D RMSD (`2,000 × 128` CA) | **2.915 ms** (±0.73) | 12.094 ms (±5.69) | `Biotite` (batched f32): 21.352 ms; `NumPy` batched SVD (f64): 25.152 ms | **7.3×** vs Biotite, **8.6×** vs NumPy | [`examples/bio_algorithms.py`](https://github.com/iskandr/parakeet/blob/master/examples/bio_algorithms.py) |
+| 6-channel BAM pileup (`2M` alignments) | **17.576 ms** (±1.68) | 32.160 ms (±14.79) | `NumPy` (6× `bincount`): 40.317 ms | **2.3×** (1.3× at 1T) | [`examples/bio_gallery.py`](https://github.com/iskandr/parakeet/blob/master/examples/bio_gallery.py) |
+| SSHash + delta-map long-read RNA (`3.01 Mbp`, 80 human Ensembl isoforms) | **5.480 ms** (**548.6 Mbp/s**) | 21.705 ms (138.5 Mbp/s) | 9.70× unitig collapse, 92.2% hash-probe skip, Oarfish EM `r = 0.965` | 4.0× multicore scaling | [`examples/patro_longread_rna.py`](https://github.com/iskandr/parakeet/blob/master/examples/patro_longread_rna.py) |
+
+Notes on fairness:
+
+* On single-threaded Gotoh alignment, Biopython's C `PairwiseAligner.score()`
+  (`8.555 ms`) is 2.3× faster than Parakeet 1T (`19.685 ms`) because Biopython
+  computes scores only whereas Parakeet's `gotoh_global_align` populates full
+  traceback tables and builds run-length-encoded CIGAR arrays; across cores,
+  Parakeet multicore (`3.816 ms`) finishes 2.2× ahead.
+* On Kabsch 3D RMSD, Biotite internally converts coordinates to `float32`, while
+  both Parakeet (compiled `np.linalg.svd` + `det`) and NumPy compute in `float64`.
+* On `edlib` and `RDKit`, part of Parakeet's advantage comes from batching the
+  entire query set inside one GIL-free compiled loop instead of crossing the
+  Python-to-C boundary once per read or fingerprint.
+
+---
+
 ## Benchmark implementations and reproduction
 
 Every table and figure on this page is backed by runnable repository code and
@@ -145,6 +179,7 @@ raw JSON samples:
 | Suite / Workload | Runnable code | Repro command |
 |---|---|---|
 | Release cross-framework suite (CPU & GPU) | [`benchmarks/release_comparison.py`](https://github.com/iskandr/parakeet/blob/master/benchmarks/release_comparison.py) | `python benchmarks/release_comparison.py` / `modal run tools/modal_release_bench.py` |
+| Bioinformatics head-to-head suite | [`benchmarks/bio_head_to_head.py`](https://github.com/iskandr/parakeet/blob/master/benchmarks/bio_head_to_head.py) | `python benchmarks/bio_head_to_head.py` |
 | GPU exact 1-NN pairwise fold scaling | [`benchmarks/gpu_pairwise_fold.py`](https://github.com/iskandr/parakeet/blob/master/benchmarks/gpu_pairwise_fold.py) | `python benchmarks/gpu_pairwise_fold.py` / `modal run tools/modal_pairwise_fold.py` |
 | Gallery kernels (1-NN, smoothing, RBF, attention, CCE, MLA, GQA, Mamba-2, tropical, GBDT) | [`examples/algebraic_gallery.py`](https://github.com/iskandr/parakeet/blob/master/examples/algebraic_gallery.py) | `python -m examples.algebraic_gallery` |
 | Character-level nanoGPT training | [`examples/nanogpt.py`](https://github.com/iskandr/parakeet/blob/master/examples/nanogpt.py) | `python examples/nanogpt.py` |
