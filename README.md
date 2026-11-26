@@ -184,7 +184,7 @@ would otherwise drop into a Python loop. Specialist libraries (`Faiss`,
 on their tuned primitives; the benchmark suite reports both wins and gaps side
 by side.
 
-![Pairwise exact 1-NN and Gaussian kernel regression latency on NVIDIA L4 and 4-thread CPU showing all replicates, IQR, and median](docs/assets/bench-pairwise-l4.svg)
+![GPU exact 1-NN search latency on NVIDIA L4 showing all replicates, IQR, and median](docs/assets/bench-1nn-gpu-l4.svg)
 
 ### Highlights (NVIDIA L4 GPU & 4-thread CPU, `float32`)
 

@@ -59,20 +59,76 @@ GPU.
 
 ## Algebraic primitives
 
-Rather than building hundreds of one-off C or GPU kernels for individual NumPy
-functions, Parakeet lowers array expressions, comprehensions, matrix products,
-and explicit parallel operators onto a small set of composable array
-primitives:
+Rather than shipping hundreds of hand-written C or GPU kernels for individual
+NumPy functions, Parakeet lowers ordinary Python, NumPy, and `par.*` calls onto
+**seven composable operators**. Inside the compiler IR, each operator carries an
+`Index` prefix (`IndexMap`, `IndexReduce`, ...) to mark that it runs over an
+explicit N-D coordinate space, while your code stays idiomatic NumPy or `par.*`.
+[Read the full primitives guide and end-to-end compilation walkthrough](primitives.md).
 
-| Primitive | What it expresses | Examples in Python / NumPy |
-|---|---|---|
-| **Map (`IndexMap`)** | Independent per-element computation over an N-D index space | Element-wise NumPy, broadcasting, comprehensions, `par.map`, `par.allpairs` |
-| **Reduce / Fold (`IndexReduce`)** | Associative or ordered reductions, including multi-field carries | `np.sum`, `np.argmin`, `logsumexp`, Welford variance, `par.fold` |
-| **Scan (`IndexScan`)** | Prefix accumulations and associative recurrences | `np.cumsum`, `par.scan`, affine/bilinear `for` loops (IIR filters, SSMs) |
-| **Filter & Expand (`IndexFilter`, `IndexExpand`)** | Stream compaction (1-to-0/1) and ragged expansion (1-to-K) | Boolean masking `x[x > 0]`, `par.flatmap`, `par.filter_pairs` |
-| **Scatter (`IndexScatter`)** | Associative accumulation into shared bins | `np.bincount`, `np.add.at`, indexed `+=` loops, `par.scatter_add` |
-| **Wavefront (`IndexWavefront`)** | Anti-diagonal and banded 2D dynamic programming | `par.wavefront`, `par.soft_align` |
-| **Tile (`IndexTile`)** | Cache and GPU shared-memory staging emitted by the middle end | Matrix products, `einsum`, tiled pairwise folds, online softmax / attention |
+<div class="pk-prim-grid" markdown>
+
+<div class="pk-prim-card" markdown>
+<div class="pk-prim-head"><strong>Map</strong> <code>IndexMap</code></div>
+Independent per-element work over an N-D index space: broadcasting, comprehensions, <code>par.map</code>, <code>par.allpairs</code>.
+```python
+np.tanh(x * 0.5) + 0.3
+```
+[Details & fusion rules](primitives.md#map)
+</div>
+
+<div class="pk-prim-card" markdown>
+<div class="pk-prim-head"><strong>Reduce &amp; Fold</strong> <code>IndexReduce</code></div>
+Associative reductions (<code>np.sum</code>, <code>par.reduce</code>) and ordered multi-state folds (<code>np.argmin</code>, <code>par.fold</code>).
+```python
+np.argmin(d2, axis=1)
+```
+[Details &amp; <code>reduce</code> vs <code>fold</code>](primitives.md#reduce-and-fold)
+</div>
+
+<div class="pk-prim-card" markdown>
+<div class="pk-prim-head"><strong>Scan</strong> <code>IndexScan</code></div>
+Prefix sums (<code>np.cumsum</code>, <code>par.scan</code>) and affine/bilinear <code>for</code> recurrences (IIR filters, Mamba-2 SSMs).
+```python
+np.cumsum(x)  # or affine for-loop
+```
+[Details &amp; chunkwise duality](primitives.md#scan)
+</div>
+
+<div class="pk-prim-card" markdown>
+<div class="pk-prim-head"><strong>Filter &amp; Expand</strong> <code>IndexFilter</code> <code>IndexExpand</code></div>
+Stream compaction (1-to-0/1 boolean masking) and 2-pass ragged expansion (1-to-K <code>par.flatmap</code>).
+```python
+np.sum(x[x > 0.0])  # 0-alloc FilterReduce
+```
+[Details &amp; filter fusion](primitives.md#filter-and-expand)
+</div>
+
+<div class="pk-prim-card" markdown>
+<div class="pk-prim-head"><strong>Scatter</strong> <code>IndexScatter</code></div>
+Associative bin accumulation (<code>np.bincount</code>, <code>np.add.at</code>, <code>out[idx[i]] += v</code>, <code>par.scatter_add</code>).
+```python
+np.bincount(bins, weights=grads, minlength=256)
+```
+[Details &amp; histogram fusion](primitives.md#scatter)
+</div>
+
+<div class="pk-prim-card" markdown>
+<div class="pk-prim-head"><strong>Wavefront</strong> <code>IndexWavefront</code></div>
+Anti-diagonal and banded 2D dynamic programming for sequence alignment and differentiable DP.
+```python
+par.soft_align(scores, gamma=1.0)
+```
+[Details &amp; banded DP](primitives.md#wavefront)
+</div>
+
+<div class="pk-prim-card pk-prim-card--wide" markdown>
+<div class="pk-prim-head"><strong>Tile</strong> <code>IndexTile</code></div>
+Emitted automatically by the middle end for CPU cache/register micro-tiles and GPU shared memory on matrix products, <code>einsum</code>, 1-NN, and online softmax attention.
+[Walk through causal attention from 4 lines of NumPy to a single tiled kernel](primitives.md#walkthrough-attention)
+</div>
+
+</div>
 
 ```python
 @par.jit
@@ -96,7 +152,8 @@ domains:
 - **Tiling and single-pass reductions.** Associative reductions and bilinear
   products tile into CPU cache or GPU shared memory, so Gaussian kernel
   regression, nearest-neighbor search, and attention stream blocks instead of
-  allocating giant pairwise matrices. [Read the algebraic laws](algebra.md).
+  allocating giant pairwise matrices. [Read the algebraic laws](algebra.md) or
+  [follow the worked compilation walkthrough](primitives.md#worked-end-to-end-compilation-walkthroughs).
 - **Differentiation.** `par.grad`, `par.value_and_grad`, and `par.jvp`
   differentiate the primitives directly, compiling a full training step into
   one native function. [Learn about gradients](autodiff.md).

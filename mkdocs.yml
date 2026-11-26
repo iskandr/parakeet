@@ -43,6 +43,7 @@ nav:
       - Ideas, history, and boundaries: philosophy.md
       - The compiled language: language.md
       - Backends and GPUs: backends.md
+      - Algebraic primitives & walkthrough: primitives.md
       - Data-parallel operators: operators.md
       - Gradients: autodiff.md
       - Algebraic laws: algebra.md
@@ -65,7 +66,11 @@ markdown_extensions:
   - tables
   - toc: { permalink: true }
   - pymdownx.highlight: { anchor_linenums: true }
-  - pymdownx.superfences
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
   - pymdownx.inlinehilite
   - pymdownx.snippets: { base_path: ["."] , check_paths: true }
   - pymdownx.tabbed: { alternate_style: true }

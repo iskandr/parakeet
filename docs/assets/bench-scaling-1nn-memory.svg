@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 320" width="880" height="320" role="img" aria-label="Global device scratch memory scaling for exact 1-NN on NVIDIA L4">
+<rect x="0.5" y="0.5" width="879" height="319" rx="10" fill="#ffffff" stroke="#d8dee9"/>
+<text x="24" y="30" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#0f172a">Exact 1-NN Global Device Scratch Memory (21× Reduction)</text>
+<text x="24" y="50" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#475569">Full Q × R score matrix (1.0.0) vs. tiled partial winners (+ 16 KiB shared-memory tile per block).</text>
+<rect x="76.0" y="76.0" width="764.0" height="178.0" rx="5" fill="#fafbfc" stroke="#e2e8f0"/>
+<line x1="76.0" y1="252.0" x2="840.0" y2="252.0" stroke="#e2e8f0"/>
+<text x="66.0" y="256.0" text-anchor="end" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" fill="#64748b">0</text>
+<line x1="76.0" y1="216.4" x2="840.0" y2="216.4" stroke="#e2e8f0"/>
+<text x="66.0" y="220.4" text-anchor="end" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" fill="#64748b">16</text>
+<line x1="76.0" y1="180.9" x2="840.0" y2="180.9" stroke="#e2e8f0"/>
+<text x="66.0" y="184.9" text-anchor="end" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" fill="#64748b">32</text>
+<line x1="76.0" y1="145.3" x2="840.0" y2="145.3" stroke="#e2e8f0"/>
+<text x="66.0" y="149.3" text-anchor="end" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" fill="#64748b">48</text>
+<line x1="76.0" y1="109.8" x2="840.0" y2="109.8" stroke="#e2e8f0"/>
+<text x="66.0" y="113.8" text-anchor="end" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" fill="#64748b">64</text>
+<text x="24" y="165.0" text-anchor="middle" transform="rotate(-90 24 165.0)" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#64748b">Global scratch (MiB)</text>
+<rect x="141.3" y="243.1" width="56.0" height="8.9" rx="4" fill="#d97706" fill-opacity="0.85"/>
+<text x="169.3" y="237.1" text-anchor="middle" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="700" fill="#d97706">4 MiB</text>
+<rect x="209.3" y="249.0" width="56.0" height="3.0" rx="4" fill="#0d9488"/>
+<text x="237.3" y="243.0" text-anchor="middle" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="700" fill="#0f766e">192 KiB</text>
+<text x="203.3" y="274.0" text-anchor="middle" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12" fill="#0f172a">R = 1,024</text>
+<rect x="396.0" y="216.4" width="56.0" height="35.6" rx="4" fill="#d97706" fill-opacity="0.85"/>
+<text x="424.0" y="210.4" text-anchor="middle" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="700" fill="#d97706">16 MiB</text>
+<rect x="464.0" y="249.0" width="56.0" height="3.0" rx="4" fill="#0d9488"/>
+<text x="492.0" y="243.0" text-anchor="middle" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="700" fill="#0f766e">768 KiB</text>
+<text x="458.0" y="274.0" text-anchor="middle" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12" fill="#0f172a">R = 4,096</text>
+<rect x="650.7" y="109.8" width="56.0" height="142.2" rx="4" fill="#d97706" fill-opacity="0.85"/>
+<text x="678.7" y="103.8" text-anchor="middle" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="700" fill="#d97706">64 MiB</text>
+<rect x="718.7" y="245.3" width="56.0" height="6.7" rx="4" fill="#0d9488"/>
+<text x="746.7" y="239.3" text-anchor="middle" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="700" fill="#0f766e">3.0 MiB</text>
+<text x="712.7" y="274.0" text-anchor="middle" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12" fill="#0f172a">R = 16,384</text>
+<rect x="90.0" y="88.0" width="256" height="50" rx="6" fill="#ffffff" fill-opacity="0.94" stroke="#e2e8f0"/>
+<rect x="100.0" y="98.0" width="14" height="11" rx="2" fill="#d97706"/>
+<text x="122.0" y="108.0" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#0f172a">Parakeet 1.0.0 (full Q×R matrix)</text>
+<rect x="100.0" y="117.0" width="14" height="11" rx="2" fill="#0d9488"/>
+<text x="122.0" y="127.0" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#0f172a">Parakeet tiled partial winners</text>
+<text x="24" y="310" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10.5" fill="#64748b">Source: docs/assets/colab-l4-0dcb7d5.json · Exact memory measured via CUDA allocator · Generated by tools/gen_benchmark_figures.py</text>
+</svg>
