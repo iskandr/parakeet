@@ -1407,8 +1407,8 @@ code deliberately differs from running the same function in CPython.</p>
 <td>compile-time structures of the above</td>
 </tr>
 <tr>
-<td>NamedTuples and plain frozen dataclasses</td>
-<td>fields can hold scalar and array leaves and are accessible by name</td>
+<td>NamedTuples and <code>@dataclass</code> objects (frozen or non-frozen)</td>
+<td>fields hold scalar, array, or nested record leaves; supports pure methods, <code>@property</code>, <code>__call__</code>, and local functional field rebinding (<code>obj.x = v</code>)</td>
 </tr>
 <tr>
 <td>dictionaries with fixed string keys</td>
@@ -1452,10 +1452,11 @@ reduction. Inner iterators with observable setup and dependent domains such as
 <code>for j in range(i)</code> are outside this subset.</p>
 <h2 id="functions">Functions<a class="headerlink" href="#functions" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Any Python function called from compiled code is <strong>inlined</strong> — helpers do not
+<li>Any Python function called from compiled code is <strong>inlined</strong>: helpers do not
   need <code>@jit</code>. Recursion is therefore not possible and is reported as an error.</li>
-<li>Positional, keyword, default, keyword-only and <code>*args</code> arguments work;
-  <code>**kwargs</code> does not.</li>
+<li>Positional, keyword, default, keyword-only, <code>*args</code>, and <code>**kwargs</code> arguments
+  (as well as <code>**d</code> unpacking from compile-time dicts, <code>functools.partial</code>, and
+  <code>operator.*</code> callables) all work cleanly.</li>
 <li>Functions are first-class at compile time: pass them as arguments, store them
   in variables, close over local variables.</li>
 <li><strong>Globals and closure variables are read on every call</strong>, like in Python. If a
@@ -1486,7 +1487,7 @@ reduction. Inner iterators with observable setup and dependent domains such as
 :   A variable assigned an <code>int</code> on one path and a <code>float</code> on another is a
     <code>float</code> everywhere (the usual numeric promotion). A function returning <code>1</code>
     in one branch and <code>2.5</code> in another returns a <code>float</code> from both. Types that
-    cannot be unified — say an array and <code>None</code> — are an error if the variable
+    cannot be unified (say an array and <code>None</code>) are an error if the variable
     is used afterwards.</p>
 <p>Rank is static
 :   The number of dimensions of every array is fixed at compile time. Functions
@@ -1517,12 +1518,16 @@ reduction. Inner iterators with observable setup and dependent domains such as
     function assume it is associative only when Parakeet can prove it (for
     <code>+</code>, <code>*</code>, <code>min</code>, <code>max</code>, <code>&amp;</code>, <code>|</code>, <code>^</code>); otherwise they run sequentially.</p>
 <h2 id="fixed-records-at-the-call-boundary">Fixed records at the call boundary<a class="headerlink" href="#fixed-records-at-the-call-boundary" title="Permanent link">&para;</a></h2>
-<p>Named tuples preserve their field names and result type. Plain frozen dataclasses
-and dictionaries with fixed string keys can contain arrays or nested records.
-Fields and keys are part of the specialization, while array data and scalar
-fields remain ordinary runtime arguments. A dictionary lookup in compiled code
-requires a known string key. Returning these containers reconstructs their
-structure and keeps the usual array view semantics.</p>
+<p>Named tuples preserve their field names and result type. <code>@dataclass</code> objects
+(frozen or non-frozen) and dictionaries with fixed string keys can contain
+arrays, scalars, discrete metadata, or nested records. Pure methods,
+<code>@property</code>, <code>@staticmethod</code>, <code>@classmethod</code>, and <code>__call__</code> on dataclasses and
+named tuples are inlined directly at elaboration time with zero <code>PyObject</code>
+overhead, and local field assignments (<code>obj.x = v</code>, <code>obj.x += v</code>) on non-frozen
+dataclasses functionally rebind the compile-time record (value semantics, zero
+heap mutation). Fields and keys are part of the specialization, while array data
+and scalar fields remain ordinary runtime arguments. Returning these containers
+reconstructs their structure and keeps the usual array view semantics.</p>
 
 
 

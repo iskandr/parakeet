@@ -1441,11 +1441,11 @@ fuses into surrounding NumPy code) <strong>and</strong> directly from ordinary P
 </tr>
 <tr>
 <td><code>par.grad</code>, <code>par.value_and_grad</code>, <code>par.jvp</code>, <code>par.vjp</code>, <code>par.hvp</code>, <code>par.linearize</code>, <code>par.linear_transpose</code>, <code>par.jacfwd</code>, <code>par.jacrev</code>, <code>par.hessian</code></td>
-<td>composable reverse-mode, forward-mode, and higher-order AD — see <a href="../autodiff/">Automatic differentiation</a></td>
+<td>composable reverse-mode, forward-mode, and higher-order AD; see <a href="../autodiff/">Automatic differentiation</a></td>
 </tr>
 <tr>
 <td><code>par.show_rewrite(f, *args)</code></td>
-<td>inspect which algebraic optimizations rewrote <code>f</code> and view before/after IR — see <a href="../algebra/">Algebraic laws</a></td>
+<td>inspect which algebraic optimizations rewrote <code>f</code> and view before/after IR; see <a href="../algebra/">Algebraic laws</a></td>
 </tr>
 </tbody>
 </table>
@@ -1468,13 +1468,13 @@ re-exporting these same operators alongside compact dtype shorthands
 <p>The function given to <code>map</code> may return an array; the results are stacked.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">par</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">row</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">cumsum</span><span class="p">(</span><span class="n">row</span><span class="p">),</span> <span class="n">X</span><span class="p">)</span>  <span class="c1"># shape (n, m)</span>
 </code></pre></div>
-<p>All results must have the same shape — this is checked at run time
+<p>All results must have the same shape; this is checked at run time
 (<code>ValueError</code>).</p>
 <h2 id="parallelism-and-associativity">Parallelism and associativity<a class="headerlink" href="#parallelism-and-associativity" title="Permanent link">&para;</a></h2>
 <p><code>map</code>-like operators evaluate elements in parallel, in no particular order.
 <code>reduce</code> runs in parallel when the combining function is recognisably one of
 <code>+</code>, <code>*</code>, <code>min</code>, <code>max</code>, <code>and</code>, <code>or</code>, <code>&amp;</code>, <code>|</code>, <code>^</code> (whether written as
-<code>np.add</code>, <code>lambda a, b: a + b</code>, or <code>par.add</code>), and sequentially otherwise — so a
+<code>np.add</code>, <code>lambda a, b: a + b</code>, or <code>par.add</code>), and sequentially otherwise; so a
 non-associative function such as <code>lambda acc, x: acc * 0.5 + x</code> still gives the
 same answer as <code>functools.reduce</code>. Floating-point sums are reassociated, like
 NumPy's own pairwise summation: expect differences in the last digits.</p>

@@ -1444,7 +1444,7 @@ how cache tiling behaves, and practical tuning tips.</p>
 <p>All numbers on this page were measured with <code>python benchmarks/run.py</code> on an
 Apple M1 Pro (10 cores, 32 GB), macOS 26.5, Python 3.12.6, NumPy 2.5.5; best of
 five runs, compilation excluded. "NumPy" is the same computation written with
-NumPy alone; "×" is the speed-up over it. Run the script on your own machine —
+NumPy alone; "×" is the speed-up over it. Run the script on your own machine -
 results vary a lot between CPUs, compilers and array sizes.</p>
 <h2 id="cpu-float64">CPU (float64)<a class="headerlink" href="#cpu-float64" title="Permanent link">&para;</a></h2>
 <table>
@@ -1519,13 +1519,13 @@ results vary a lot between CPUs, compilers and array sizes.</p>
 </tr>
 <tr>
 <td>explicit summation loop (4M)</td>
-<td style="text-align: right;">—</td>
+<td style="text-align: right;">-</td>
 <td style="text-align: right;">3.8 ms</td>
 <td style="text-align: right;">3.8 ms</td>
 </tr>
 <tr>
 <td>GrowCut step (64², radius 5)</td>
-<td style="text-align: right;">—</td>
+<td style="text-align: right;">-</td>
 <td style="text-align: right;">1.9 ms</td>
 <td style="text-align: right;">0.47 ms</td>
 </tr>
@@ -1938,9 +1938,9 @@ GrowCut, pairwise kernels), and anything that can use all cores.</p>
 over data picked by each member of the pair: a matrix product, <code>allpairs</code>
 distances, a tropical product. Evaluated row by row, every row of the result
 sweeps over all of the second operand, which stops fitting in cache long before
-the arrays are large. Parakeet recognises the shape — any two-dimensional map
+the arrays are large. Parakeet recognises the shape; any two-dimensional map
 whose element function is one reduction plus straight-line code, whoever wrote
-it — and does two things:</p>
+it; and does two things:</p>
 <ul>
 <li><strong>tiles</strong> the inner dimension, so a cache-sized block of the second operand is
   reused for every row before moving on (<code>config.tile_bytes</code>, by default half of

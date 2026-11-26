@@ -898,7 +898,7 @@
   <a href="#law-1-rescaled-semiring-monoids" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Law 1 — Rescaled semiring monoids
+        Law 1: Rescaled semiring monoids
       
     </span>
   </a>
@@ -909,7 +909,7 @@
   <a href="#law-2-algebraic-rematerialization-in-reverse-mode-ad" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Law 2 — Algebraic rematerialization in reverse-mode AD
+        Law 2: Algebraic rematerialization in reverse-mode AD
       
     </span>
   </a>
@@ -920,7 +920,7 @@
   <a href="#law-3-bilinear-contraction-reassociation-shared-kv-tiling" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Law 3 — Bilinear contraction reassociation &amp; shared-KV tiling
+        Law 3: Bilinear contraction reassociation &amp; shared-KV tiling
       
     </span>
   </a>
@@ -931,7 +931,7 @@
   <a href="#law-4-chunkwise-state-space-duality" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Law 4 — Chunkwise state-space duality
+        Law 4: Chunkwise state-space duality
       
     </span>
   </a>
@@ -942,7 +942,7 @@
   <a href="#law-5-affine-tile-interval-mask-pruning" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Law 5 — Affine tile-interval mask pruning
+        Law 5: Affine tile-interval mask pruning
       
     </span>
   </a>
@@ -953,7 +953,7 @@
   <a href="#law-6-privatized-scatter-multi-state-carries" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Law 6 — Privatized scatter &amp; multi-state carries
+        Law 6: Privatized scatter &amp; multi-state carries
       
     </span>
   </a>
@@ -1350,7 +1350,7 @@
   <a href="#law-1-rescaled-semiring-monoids" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Law 1 — Rescaled semiring monoids
+        Law 1: Rescaled semiring monoids
       
     </span>
   </a>
@@ -1361,7 +1361,7 @@
   <a href="#law-2-algebraic-rematerialization-in-reverse-mode-ad" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Law 2 — Algebraic rematerialization in reverse-mode AD
+        Law 2: Algebraic rematerialization in reverse-mode AD
       
     </span>
   </a>
@@ -1372,7 +1372,7 @@
   <a href="#law-3-bilinear-contraction-reassociation-shared-kv-tiling" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Law 3 — Bilinear contraction reassociation &amp; shared-KV tiling
+        Law 3: Bilinear contraction reassociation &amp; shared-KV tiling
       
     </span>
   </a>
@@ -1383,7 +1383,7 @@
   <a href="#law-4-chunkwise-state-space-duality" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Law 4 — Chunkwise state-space duality
+        Law 4: Chunkwise state-space duality
       
     </span>
   </a>
@@ -1394,7 +1394,7 @@
   <a href="#law-5-affine-tile-interval-mask-pruning" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Law 5 — Affine tile-interval mask pruning
+        Law 5: Affine tile-interval mask pruning
       
     </span>
   </a>
@@ -1405,7 +1405,7 @@
   <a href="#law-6-privatized-scatter-multi-state-carries" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Law 6 — Privatized scatter &amp; multi-state carries
+        Law 6: Privatized scatter &amp; multi-state carries
       
     </span>
   </a>
@@ -1444,10 +1444,10 @@
 
 
 <h1 id="algebraic-laws">Algebraic laws<a class="headerlink" href="#algebraic-laws" title="Permanent link">&para;</a></h1>
-<p>Parakeet started in 2012 with a small algebra of data-parallel operators —
-maps, reductions, scans, and filters — and a set of fusion and tiling rules
-over them. Those rules eliminate temporary arrays and improve cache locality
-for ordinary array expressions, comprehensions, and matrix products.</p>
+<p>Parakeet lowers numerical Python to a small algebra of data-parallel operators
+(maps, reductions, scans, and filters) with fusion and tiling rules over them.
+Those rules eliminate temporary arrays and improve cache locality for ordinary
+array expressions, comprehensions, and matrix products.</p>
 <p>Many modern numerical and machine-learning kernels need one step further:
 eliminating quadratic <code>O(N²)</code> or <code>O(M · V)</code> intermediates, turning long serial
 recurrences into parallel block passes, and avoiding saving giant intermediates
@@ -1468,9 +1468,9 @@ reassociation, chunkwise affine scans, privatized scatter-add) rely on
 order may differ in the last ULP relative to a left-to-right loop, just as in
 NumPy's pairwise summation or cuBLAS. That assumption is explicit and
 deliberate in Parakeet.</p>
-<p>Where order <em>is</em> semantically observable — equal-distance ties and first-NaN
+<p>Where order <em>is</em> semantically observable; equal-distance ties and first-NaN
 propagation in <code>argmin</code> / <code>argmax</code>, non-commutative structured <code>parakeet.fold</code>
-merges, or general sequential reductions — Parakeet preserves <strong>exact
+merges, or general sequential reductions; Parakeet preserves <strong>exact
 left-to-right merge order</strong> across chunks and tiles (and refuses to
 parallelize non-associative combiners).</p>
 <h2 id="the-six-laws-at-a-glance">The six laws at a glance<a class="headerlink" href="#the-six-laws-at-a-glance" title="Permanent link">&para;</a></h2>
@@ -1485,37 +1485,37 @@ parallelize non-associative combiners).</p>
 </thead>
 <tbody>
 <tr>
-<td><strong>Law 1</strong> — Rescaled semiring monoids</td>
+<td><strong>Law 1</strong>: Rescaled semiring monoids</td>
 <td>Associative rescaling fold <code>(m₁, l₁, o₁) ⊕ (m₂, l₂, o₂)</code></td>
 <td><code>monoidal tiling</code></td>
 <td>Softmax attention, Split-K decoding, linear cross-entropy, Gaussian (RBF) kernel regression, 1-pass <code>logsumexp</code></td>
 </tr>
 <tr>
-<td><strong>Law 2</strong> — Algebraic AD rematerialization</td>
+<td><strong>Law 2</strong>: Algebraic AD rematerialization</td>
 <td>Sufficient-statistic VJPs that recompute score tiles on the fly</td>
 <td><code>algebraic_vjp</code> (in <code>autodiff</code>)</td>
 <td>Attention backward (no <code>N × N</code> saved), cross-entropy backward (no <code>M × V</code> saved), 1-pass LayerNorm / RMSNorm VJP</td>
 </tr>
 <tr>
-<td><strong>Law 3</strong> — Bilinear contraction reassociation &amp; shared-KV tiling</td>
+<td><strong>Law 3</strong>: Bilinear contraction reassociation &amp; shared-KV tiling</td>
 <td><code>(U @ Vᵀ) @ Wᵀ = U @ (Vᵀ @ Wᵀ)</code> + folding shared-KV query groups into tiles</td>
 <td><code>contraction reassociation</code></td>
 <td>Multi-head latent attention absorption, grouped-query attention, low-rank <code>(X @ A) @ B</code> chains</td>
 </tr>
 <tr>
-<td><strong>Law 4</strong> — Chunkwise state-space duality</td>
+<td><strong>Law 4</strong>: Chunkwise state-space duality</td>
 <td>Affine composition <code>(a₂, b₂) ∘ (a₁, b₁) = (a₂ a₁, a₂ b₁ + b₂)</code> and block duality</td>
 <td><code>chunkwise scan</code></td>
 <td>Parallel IIR / EMA / Kalman filters, Mamba-2 and gated linear attention recurrences</td>
 </tr>
 <tr>
-<td><strong>Law 5</strong> — Affine tile-interval pruning</td>
+<td><strong>Law 5</strong>: Affine tile-interval pruning</td>
 <td>Interval bounds <code>[i₀, i₀+Bₘ-1] × [j₀, j₀+Bₙ-1]</code> over index predicates</td>
 <td><code>TileInterval</code> in <code>analysis</code></td>
 <td>Causal and sliding-window masks, banded matrices, spatial cutoffs, runtime boolean tile skipping</td>
 </tr>
 <tr>
-<td><strong>Law 6</strong> — Privatized scatter &amp; multi-state carries</td>
+<td><strong>Law 6</strong>: Privatized scatter &amp; multi-state carries</td>
 <td>Commutative/associative scatter-add and ordered multi-field folds</td>
 <td><code>IndexScatter</code>, <code>Fold.carries</code>, <code>pairwise fold tiling</code></td>
 <td>GBDT histogram splits, exact 1-NN search, <code>argmin</code>/<code>argmax</code> with values, sparse updates</td>
@@ -1523,7 +1523,7 @@ parallelize non-associative combiners).</p>
 </tbody>
 </table>
 <hr />
-<h2 id="law-1-rescaled-semiring-monoids">Law 1 — Rescaled semiring monoids<a class="headerlink" href="#law-1-rescaled-semiring-monoids" title="Permanent link">&para;</a></h2>
+<h2 id="law-1-rescaled-semiring-monoids">Law 1: Rescaled semiring monoids<a class="headerlink" href="#law-1-rescaled-semiring-monoids" title="Permanent link">&para;</a></h2>
 <p>Any reduction whose output depends on a global normalizing statistic (a row
 maximum <code>m</code>, a sum of exponentials <code>l</code>, or a norm) can fuse with a downstream
 weighted sum in a single tiled pass whenever its running state forms an
@@ -1556,15 +1556,14 @@ allocating an <code>N × M</code> or <code>M × V</code> matrix:</p>
    Nadaraya-Watson smoothing into one <code>O(N + M)</code>-memory kernel.</li>
 </ol>
 <hr />
-<h2 id="law-2-algebraic-rematerialization-in-reverse-mode-ad">Law 2 — Algebraic rematerialization in reverse-mode AD<a class="headerlink" href="#law-2-algebraic-rematerialization-in-reverse-mode-ad" title="Permanent link">&para;</a></h2>
+<h2 id="law-2-algebraic-rematerialization-in-reverse-mode-ad">Law 2: Algebraic rematerialization in reverse-mode AD<a class="headerlink" href="#law-2-algebraic-rematerialization-in-reverse-mode-ad" title="Permanent link">&para;</a></h2>
 <p>A naive reverse-mode tape saves every forward intermediate, which would bring
 back <code>O(N²)</code> memory for attention and <code>O(M · V)</code> memory for linear
 cross-entropy. Parakeet's tape optimizer (<code>parakeet/transforms/algebraic_vjp.py</code>)
 runs at the operator level before lowering and substitutes sufficient-statistic
 adjoints where an algebraic identity exists:</p>
 <ul>
-<li><strong>Attention backward (<code>flash_monoid_bwd</code>):</strong> saves only <code>(Q, K, V, O, lse)</code> —
-  no <code>N × N</code> tensor is kept. A cheap <code>O(N · D)</code> pass computes
+<li><strong>Attention backward (<code>flash_monoid_bwd</code>):</strong> saves only <code>(Q, K, V, O, lse)</code>: no <code>N × N</code> tensor is kept. A cheap <code>O(N · D)</code> pass computes
   <code>Dᵢ = sum_d dO[i, d] · O[i, d]</code>, and the tiled backward kernel recomputes
   each score tile <code>P = exp(S - lse)</code> and <code>dS = P · (dO @ Vᵀ - D)</code> in on-chip
   memory while accumulating <code>dK</code> and <code>dV</code>.</li>
@@ -1577,7 +1576,7 @@ adjoints where an algebraic identity exists:</p>
   <code>dS = P · (dP - sum(P · dP))</code>.</li>
 </ul>
 <hr />
-<h2 id="law-3-bilinear-contraction-reassociation-shared-kv-tiling">Law 3 — Bilinear contraction reassociation &amp; shared-KV tiling<a class="headerlink" href="#law-3-bilinear-contraction-reassociation-shared-kv-tiling" title="Permanent link">&para;</a></h2>
+<h2 id="law-3-bilinear-contraction-reassociation-shared-kv-tiling">Law 3: Bilinear contraction reassociation &amp; shared-KV tiling<a class="headerlink" href="#law-3-bilinear-contraction-reassociation-shared-kv-tiling" title="Permanent link">&para;</a></h2>
 <p>For a chain of two bilinear contractions sharing a single-use intermediate <code>T</code>:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>T[u, k] = sum_r U[u, r] · V[k, r]
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>Y[p, u] = sum_k W[p, k] · T[u, k]
@@ -1605,7 +1604,7 @@ adjoints where an algebraic identity exists:</p>
   shared-memory load of <code>K</code> and <code>V</code>.</li>
 </ul>
 <hr />
-<h2 id="law-4-chunkwise-state-space-duality">Law 4 — Chunkwise state-space duality<a class="headerlink" href="#law-4-chunkwise-state-space-duality" title="Permanent link">&para;</a></h2>
+<h2 id="law-4-chunkwise-state-space-duality">Law 4: Chunkwise state-space duality<a class="headerlink" href="#law-4-chunkwise-state-space-duality" title="Permanent link">&para;</a></h2>
 <p>A sequential loop of length <code>T</code> has <code>O(T)</code> serial depth and cannot use multiple
 cores or GPU threadblocks directly. <code>parakeet/transforms/tile_scan.py</code>
 recognizes two associative recurrence patterns inside plain Python
@@ -1636,7 +1635,7 @@ recognizes two associative recurrence patterns inside plain Python
    2, and 4 automatically flow into CPU register tiling, Metal
    <code>simdgroup_matrix</code>, and CUDA <code>nvcuda::wmma</code> Tensor Cores.</p>
 <hr />
-<h2 id="law-5-affine-tile-interval-mask-pruning">Law 5 — Affine tile-interval mask pruning<a class="headerlink" href="#law-5-affine-tile-interval-mask-pruning" title="Permanent link">&para;</a></h2>
+<h2 id="law-5-affine-tile-interval-mask-pruning">Law 5: Affine tile-interval mask pruning<a class="headerlink" href="#law-5-affine-tile-interval-mask-pruning" title="Permanent link">&para;</a></h2>
 <p>In <code>parakeet/transforms/analysis.py</code>, <code>TileInterval</code> propagates coordinate
 bounds <code>[i₀, i₀ + B_M - 1]</code> and <code>[j₀, j₀ + B_N - 1]</code> through affine index
 expressions and boolean connectives:</p>
@@ -1652,7 +1651,7 @@ expressions and boolean connectives:</p>
   empty tiles before loading values.</li>
 </ul>
 <hr />
-<h2 id="law-6-privatized-scatter-multi-state-carries">Law 6 — Privatized scatter &amp; multi-state carries<a class="headerlink" href="#law-6-privatized-scatter-multi-state-carries" title="Permanent link">&para;</a></h2>
+<h2 id="law-6-privatized-scatter-multi-state-carries">Law 6: Privatized scatter &amp; multi-state carries<a class="headerlink" href="#law-6-privatized-scatter-multi-state-carries" title="Permanent link">&para;</a></h2>
 <p>Two patterns show up constantly outside dense linear algebra: accumulating into
 shared bins (<code>np.bincount</code>, <code>parakeet.scatter_add</code>) and folding structured
 state (<code>argmin</code>, Welford variance, custom <code>parakeet.fold</code>).</p>
@@ -1666,7 +1665,7 @@ state (<code>argmin</code>, Welford variance, custom <code>parakeet.fold</code>)
   chunk order (so leftmost ties in <code>argmin</code> or non-commutative compositions in
   <code>parakeet.fold</code> stay exact). <code>pairwise fold tiling</code> fuses a pairwise score
   producer directly into an ordered fold over bounded tiles on both CPU and
-  GPU — eliminating the full <code>N × M</code> distance matrix in both broadcasting NumPy
+  GPU; eliminating the full <code>N × M</code> distance matrix in both broadcasting NumPy
   and nested-map 1-NN.</li>
 </ul>
 <hr />

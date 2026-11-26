@@ -1406,7 +1406,7 @@ parsing and 2-bit k-mer packing, multi-channel alignment pileups, 2048-bit
 chemical fingerprint screening, 3D protein coordinate message passing, and
 banded dynamic programming alignments.</p>
 <p>Parakeet compiles these workloads directly from concise NumPy and data-parallel
-operators into fused, multi-core CPU and GPU code — without hand-writing C,
+operators into fused, multi-core CPU and GPU code; without hand-writing C,
 CUDA, or Metal.</p>
 <p>Every snippet below is included from <a href="https://github.com/iskandr/parakeet/blob/master/examples/bio_gallery.py"><code>examples/bio_gallery.py</code></a>.
 Run the gallery checks or reproducible benchmarks from a source checkout:</p>
@@ -1575,7 +1575,7 @@ first-index ties:</p>
 uses the same <a href="../algebra/#law-1-rescaled-semiring-monoids">rescaled-monoid</a>
 structure as softmax attention. Online monoidal tiling fuses the
 squared-distance computation, softmax normalization, and feature aggregation
-into a single tiled pass with zero O(N²) score allocation — and <code>par.grad</code>
+into a single tiled pass with zero O(N²) score allocation; and <code>par.grad</code>
 differentiates through the 3D coordinates directly:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nd">@par</span><span class="o">.</span><span class="n">jit</span>
 <a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">protein_rbf_message_passing</span><span class="p">(</span><span class="n">coords</span><span class="p">,</span> <span class="n">features</span><span class="p">,</span> <span class="n">neg_inv_2sigma2</span><span class="p">):</span>

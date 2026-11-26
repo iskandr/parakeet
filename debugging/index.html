@@ -1338,7 +1338,7 @@ with a given set of argument types, as a subclass of <code>parakeet.CompileError
 </tbody>
 </table>
 <p>The message carries the source line, a caret under the offending expression,
-and — because calls are inlined — the chain of calls that led there:</p>
+and (because calls are inlined) the chain of calls that led there:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>parakeet.errors.TypeInferenceError: indices must be a scalar, got str 'a'
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>  File "model.py", line 15, in helper
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    return v[k] * 2
@@ -1417,10 +1417,10 @@ floating-point operations yield <code>inf</code>/<code>nan</code> rather than ra
 :   Evaluate every array expression into its own temporary. Useful to check
     whether a problem is related to loop fusion.</p>
 <p><code>parakeet.find_broken_transform(fn, inputs)</code>
-:   Switch the optimizations on one at a time — fusion, each pass of the
+:   Switch the optimizations on one at a time; fusion, each pass of the
     middle end (dead code, vertical fusion, filter fusion, sibling fusion,
     reduction interchange, tiling), the C optimizer, parallel loops, the
-    GPU — and name the first one that makes the
+    GPU; and name the first one that makes the
     result differ from plain Python (or from <code>expected</code>, if given).</p>
 <p><code>parakeet.clear_cache()</code>
 :   Delete cached compiled modules (they are keyed by the generated source and

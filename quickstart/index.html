@@ -1454,7 +1454,7 @@ functions:</p>
 </code></pre></div>
 <h2 id="loops-comprehensions-helpers">Loops, comprehensions, helpers<a class="headerlink" href="#loops-comprehensions-helpers" title="Permanent link">&para;</a></h2>
 <p>Anything in the <a href="../language/">supported subset</a> can be mixed freely. Helper
-functions are inlined automatically — they do not need their own <code>@par.jit</code>.</p>
+functions are inlined automatically; they do not need their own <code>@par.jit</code>.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">sqr_dist</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>  <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">((</span><span class="n">a</span> <span class="o">-</span> <span class="n">b</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span>
 <a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
@@ -1528,14 +1528,14 @@ bug in your code from a limitation of the compiler. More in
 <a href="../debugging/">Errors and debugging</a>.</p>
 <h2 id="where-to-go-next">Where to go next<a class="headerlink" href="#where-to-go-next" title="Permanent link">&para;</a></h2>
 <ul>
-<li><a href="../gallery/">Kernel gallery</a> — runnable examples ranging from nearest-neighbor
+<li><a href="../gallery/">Kernel gallery</a>: runnable examples ranging from nearest-neighbor
   search and tree splits to attention, state-space recurrences, and classic
   numerical kernels.</li>
-<li><a href="../language/">The compiled language</a> — exact types, statements, and where
+<li><a href="../language/">The compiled language</a>: exact types, statements, and where
   Parakeet differs from CPython.</li>
-<li><a href="../philosophy/">Ideas, history, and boundaries</a> — how Parakeet's 2012–2014
-  design evolved into 1.0 and what is not supported yet.</li>
-<li><a href="../performance/">Performance</a> and <a href="../release-benchmarks/">Release benchmarks</a> —
+<li><a href="../philosophy/">Ideas, history, and boundaries</a>: design principles, project
+  history, and current limits.</li>
+<li><a href="../performance/">Performance</a> and <a href="../release-benchmarks/">Release benchmarks</a>:
   when Parakeet wins, when it doesn't, and measured numbers on CPU and GPU.</li>
 </ul>
 

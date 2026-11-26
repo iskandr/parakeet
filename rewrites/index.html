@@ -1571,14 +1571,14 @@ runs, in one place, and how that compares with the two theses that describe
 the original system:</p>
 <ul>
 <li><strong>[R]</strong> Alex Rubinsteyn, <em>Runtime Compilation of Array-Oriented Python
-  Programs</em> (NYU, 2014) — the operators and their fusion rules.</li>
+  Programs</em> (NYU, 2014); the operators and their fusion rules.</li>
 <li><strong>[H]</strong> Eric Hielscher, <em>Locality Optimization for Data Parallel Programs</em>
-  (NYU, 2013) — tiling.</li>
+  (NYU, 2013); tiling.</li>
 </ul>
 <p>The short version: the rules are the same algebra, applied in two places.</p>
 <ul>
-<li><strong>While elaborating.</strong> An array expression is a <em>delayed</em> value — a function
-  from index to element — and the vertical fusion rules fire at the moment an
+<li><strong>While elaborating.</strong> An array expression is a <em>delayed</em> value: a function
+  from index to element; and the vertical fusion rules fire at the moment an
   operator is applied to one. <code>F ∘ G</code> below means "the element function of
   the result is <code>F</code> applied to the element function of the argument"; no pass
   looks for the pattern afterwards.</li>
@@ -1653,18 +1653,18 @@ the original system:</p>
 </tr>
 <tr>
 <td><code>FilterReduce</code>, <code>IndexFilterReduce</code></td>
-<td><code>filter_reduce(⊕, pred, x1, ..., xn, map=, init=, axis=)</code> — and any reduction over a filter also <em>becomes</em> one (see fusion)</td>
+<td><code>filter_reduce(⊕, pred, x1, ..., xn, map=, init=, axis=)</code>; and any reduction over a filter also <em>becomes</em> one (see fusion)</td>
 </tr>
 <tr>
 <td><code>IndexScan(f, ⊕, emit, shape)</code></td>
 <td>what <code>scan</code>, <code>np.cumsum</code> and <code>np.cumprod</code> are built on: an <code>IndexScan</code> statement, whose <code>emit</code> is a block (it stores the running value)</td>
 </tr>
 <tr>
-<td>—</td>
+<td>-</td>
 <td><code>IndexScatter</code> (<code>par.scatter_add</code>, keyed generators <code>par.scatter_add(n, ((k, v) for ...))</code>, <code>np.bincount</code>, <code>np.add.at</code>, canonical <code>for i: out[idx[i]] += val</code> loops, and inverted filtered comprehensions <code>[np.sum(vals[idx == b]) for b in range(n)]</code>): index-directed associative scatter-add with thread-privatized parallel lowering and exact gather adjoint</td>
 </tr>
 <tr>
-<td>—</td>
+<td>-</td>
 <td><code>grad</code>, <code>value_and_grad</code>, <code>jvp</code>, <code>vjp</code>, <code>linearize</code>, <code>linear_transpose</code>, <code>hvp</code>, <code>jacfwd</code>, <code>jacrev</code>, <code>hessian</code></td>
 </tr>
 </tbody>
@@ -1684,7 +1684,7 @@ comprehension an <code>imap</code>.</p>
 <tbody>
 <tr>
 <td><code>Map(g, Map(f, X))</code> ⇒ <code>Map(g∘f, X)</code></td>
-<td>yes — including affine coordinate inversion (<code>AffineInlineBufferLoad</code>) for transpose, shifted-slice, and stencil fusion, plus cost-bounded multi-consumer fusion</td>
+<td>yes; including affine coordinate inversion (<code>AffineInlineBufferLoad</code>) for transpose, shifted-slice, and stencil fusion, plus cost-bounded multi-consumer fusion</td>
 </tr>
 <tr>
 <td><code>Map(g, IndexMap(f, σ))</code> ⇒ <code>IndexMap(g∘f, σ)</code></td>
@@ -1770,7 +1770,7 @@ thesis's rules.</p>
 writing directly into its row of one output array (no per-row allocation), and
 the middle-end <code>vertical fusion</code> pass (<code>CombineNestedMaps</code>) flattens it into a
 single multi-dimensional <code>IndexMap</code> whenever the inner shape does not depend on
-the outer index — exposing the full 2D/ND index space to multi-core CPUs and
+the outer index; exposing the full 2D/ND index space to multi-core CPUs and
 GPUs.</p>
 <h3 id="horizontal-two-consumers-of-one-array">Horizontal: two consumers of one array<a class="headerlink" href="#horizontal-two-consumers-of-one-array" title="Permanent link">&para;</a></h3>
 <table>
@@ -1793,7 +1793,7 @@ GPUs.</p>
 </table>
 <p>Conditions the thesis leaves out: the index spaces must be provably equal
 (the same expression once shape variables are resolved), both seeded or both
-unseeded, and both must stay vectorizable — a float sum is not fused with a
+unseeded, and both must stay vectorizable; a float sum is not fused with a
 <code>max</code>, which would cost the sum its SIMD loop. Scalar definitions between the
 two statements are stepped over when they do not use the first result.</p>
 <p>Tiling (below) uses the same rule on copies of one reduction.</p>
@@ -1917,7 +1917,7 @@ a map of reductions over two different operands, so they are never tiled here.</
 </ul>
 <p><strong>Specialization on values</strong> ([R] ch. 6.6 partially evaluates on inputs equal
 to 0 or 1). Here: a dimension of length 1 is always a constant (which is what
-makes broadcasting static — [R] lists <code>200x1 + 1x300</code> as giving a wrong
+makes broadcasting static; [R] lists <code>200x1 + 1x300</code> as giving a wrong
 answer); a scalar argument or an array dimension becomes a constant when the
 code needs one (<code>axis=</code>, the length of a tuple, a loop that has to be
 unrolled).</p>

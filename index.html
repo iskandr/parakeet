@@ -1368,10 +1368,9 @@ distance matrix. Ties preserve NumPy's first-index rule.</p>
 install <code>parakeet[metal]</code> on Apple Silicon or <code>parakeet[cuda12]</code> with an NVIDIA
 GPU.</p>
 <h2 id="one-algebra-underneath">One algebra underneath<a class="headerlink" href="#one-algebra-underneath" title="Permanent link">&para;</a></h2>
-<p>Since its beginnings in 2012, Parakeet has been built on a simple observation:
-most numerical Python — whether written as NumPy expressions, comprehensions,
-or explicit parallel operators — expresses the same handful of array
-computations: maps, reductions, scans, filters, and scatters.</p>
+<p>Most numerical Python (NumPy expressions, comprehensions, or explicit parallel
+operators) expresses the same handful of array computations: maps, reductions,
+scans, filters, and scatters.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nd">@par</span><span class="o">.</span><span class="n">jit</span>
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">scaled_tanh_numpy</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">beta</span><span class="o">=</span><span class="mf">0.3</span><span class="p">):</span>
 <a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>  <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">x</span> <span class="o">*</span> <span class="n">alpha</span><span class="p">)</span> <span class="o">+</span> <span class="n">beta</span>
@@ -1401,13 +1400,13 @@ general passes do the heavy lifting:</p>
 </ul>
 <h2 id="where-to-go-next">Where to go next<a class="headerlink" href="#where-to-go-next" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>New to Parakeet?</strong> Start with <a href="quickstart/">Getting started</a> — five
+<li><strong>New to Parakeet?</strong> Start with <a href="quickstart/">Getting started</a>: five
   minutes from <code>pip install</code> to your first compiled function and generated C.</li>
 <li><strong>Learn by example:</strong> Browse the <a href="gallery/">Kernel gallery</a> for runnable
   NumPy and data-parallel kernels, or check the <a href="release-benchmarks/">Release benchmarks</a>.</li>
 <li><strong>Go deeper:</strong> Read <a href="philosophy/">Ideas, history, and boundaries</a> for the
-  continuity with the original 2012–2014 NYU compiler and an honest map of what
-  Parakeet does and does not support.</li>
+  design principles, project history, and what Parakeet does and does not
+  support.</li>
 </ul>
 
 

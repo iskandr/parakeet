@@ -786,7 +786,7 @@
   <a href="#100-nvidia-a10-warmed-median-ms-prior-to-gpu-pairwise-fold-tiling" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1.0.0 NVIDIA A10 (warmed median, ms — prior to GPU pairwise-fold tiling)
+        1.0.0 NVIDIA A10 (warmed median, ms; prior to GPU pairwise-fold tiling)
       
     </span>
   </a>
@@ -1519,7 +1519,7 @@
   <a href="#100-nvidia-a10-warmed-median-ms-prior-to-gpu-pairwise-fold-tiling" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1.0.0 NVIDIA A10 (warmed median, ms — prior to GPU pairwise-fold tiling)
+        1.0.0 NVIDIA A10 (warmed median, ms; prior to GPU pairwise-fold tiling)
       
     </span>
   </a>
@@ -1568,7 +1568,7 @@
 (<code>Faiss</code>, <code>PyKeOps</code>, <code>scikit-learn</code>, <code>SciPy</code>, <code>PyTorch SDPA / cross_entropy</code>).
 Every figure plots <strong>all individual warmed replicates</strong>, the <strong>interquartile
 range (IQR, 25th–75th percentile)</strong>, and the <strong>median</strong> directly from the
-committed raw JSON logs — and every workload links to its runnable source code.</p>
+committed raw JSON logs; and every workload links to its runnable source code.</p>
 <h2 id="at-a-glance-nvidia-l4-4-thread-cpu">At a glance (NVIDIA L4 &amp; 4-thread CPU)<a class="headerlink" href="#at-a-glance-nvidia-l4-4-thread-cpu" title="Permanent link">&para;</a></h2>
 <p>Latest measurements come from one Google Colab VM with an <strong>NVIDIA L4</strong> GPU and
 a <strong>4-thread CPU</strong> at compiler revision <code>0dcb7d5</code> (<code>float32</code>, GPU inputs
@@ -1630,49 +1630,49 @@ exclude index construction. Implementations:
 <td><strong>Parakeet (nested <code>par.map</code>)</strong></td>
 <td style="text-align: right;"><strong>7.907</strong></td>
 <td style="text-align: right;"><strong>0.225</strong></td>
-<td style="text-align: right;">—</td>
-<td style="text-align: right;">—</td>
+<td style="text-align: right;">-</td>
+<td style="text-align: right;">-</td>
 </tr>
 <tr>
 <td>Faiss Flat (<code>IndexFlatL2</code> / <code>GpuIndexFlatL2</code>)</td>
 <td style="text-align: right;">8.417</td>
 <td style="text-align: right;">0.150</td>
-<td style="text-align: right;">—</td>
-<td style="text-align: right;">—</td>
+<td style="text-align: right;">-</td>
+<td style="text-align: right;">-</td>
 </tr>
 <tr>
 <td>scikit-learn brute</td>
 <td style="text-align: right;">6.492</td>
-<td style="text-align: right;">—</td>
-<td style="text-align: right;">—</td>
-<td style="text-align: right;">—</td>
+<td style="text-align: right;">-</td>
+<td style="text-align: right;">-</td>
+<td style="text-align: right;">-</td>
 </tr>
 <tr>
 <td><code>torch.compile</code> over <code>cdist</code></td>
-<td style="text-align: right;">—</td>
+<td style="text-align: right;">-</td>
 <td style="text-align: right;">0.257</td>
-<td style="text-align: right;">—</td>
+<td style="text-align: right;">-</td>
 <td style="text-align: right;">0.308</td>
 </tr>
 <tr>
 <td>PyTorch <code>cdist</code></td>
-<td style="text-align: right;">—</td>
+<td style="text-align: right;">-</td>
 <td style="text-align: right;">0.251</td>
-<td style="text-align: right;">—</td>
+<td style="text-align: right;">-</td>
 <td style="text-align: right;">0.444</td>
 </tr>
 <tr>
 <td><code>torch.compile</code> over broadcasting</td>
-<td style="text-align: right;">—</td>
+<td style="text-align: right;">-</td>
 <td style="text-align: right;">0.688</td>
-<td style="text-align: right;">—</td>
+<td style="text-align: right;">-</td>
 <td style="text-align: right;">0.598</td>
 </tr>
 <tr>
 <td>JAX <code>jit</code></td>
-<td style="text-align: right;">—</td>
+<td style="text-align: right;">-</td>
 <td style="text-align: right;">0.500</td>
-<td style="text-align: right;">—</td>
+<td style="text-align: right;">-</td>
 <td style="text-align: right;">0.602</td>
 </tr>
 <tr>
@@ -1685,9 +1685,9 @@ exclude index construction. Implementations:
 <tr>
 <td>SciPy <code>cKDTree</code> (exact)</td>
 <td style="text-align: right;">54.266</td>
-<td style="text-align: right;">—</td>
-<td style="text-align: right;">—</td>
-<td style="text-align: right;">—</td>
+<td style="text-align: right;">-</td>
+<td style="text-align: right;">-</td>
+<td style="text-align: right;">-</td>
 </tr>
 <tr>
 <td>NumPy / CuPy broadcasting</td>
@@ -1938,8 +1938,8 @@ pre-pairwise-fold release measurements are archived below.
 <td>Parakeet, nested <code>par.map</code></td>
 <td style="text-align: right;">0.638</td>
 <td style="text-align: right;">6.132</td>
-<td style="text-align: right;">—</td>
-<td style="text-align: right;">—</td>
+<td style="text-align: right;">-</td>
+<td style="text-align: right;">-</td>
 </tr>
 <tr>
 <td>PyKeOps <code>Genred</code></td>
@@ -1952,22 +1952,22 @@ pre-pairwise-fold release measurements are archived below.
 <td>Faiss <code>IndexFlatL2</code></td>
 <td style="text-align: right;">0.033</td>
 <td style="text-align: right;">9.577</td>
-<td style="text-align: right;">—</td>
-<td style="text-align: right;">—</td>
+<td style="text-align: right;">-</td>
+<td style="text-align: right;">-</td>
 </tr>
 <tr>
 <td>SciPy <code>cKDTree</code> (exact)</td>
 <td style="text-align: right;">1.441</td>
 <td style="text-align: right;">51.846</td>
-<td style="text-align: right;">—</td>
-<td style="text-align: right;">—</td>
+<td style="text-align: right;">-</td>
+<td style="text-align: right;">-</td>
 </tr>
 <tr>
 <td>scikit-learn brute</td>
 <td style="text-align: right;">1.042</td>
 <td style="text-align: right;">6.647</td>
-<td style="text-align: right;">—</td>
-<td style="text-align: right;">—</td>
+<td style="text-align: right;">-</td>
+<td style="text-align: right;">-</td>
 </tr>
 <tr>
 <td>NumPy broadcasting</td>
@@ -1978,7 +1978,7 @@ pre-pairwise-fold release measurements are archived below.
 </tr>
 </tbody>
 </table>
-<h3 id="100-nvidia-a10-warmed-median-ms-prior-to-gpu-pairwise-fold-tiling">1.0.0 NVIDIA A10 (warmed median, ms — prior to GPU pairwise-fold tiling)<a class="headerlink" href="#100-nvidia-a10-warmed-median-ms-prior-to-gpu-pairwise-fold-tiling" title="Permanent link">&para;</a></h3>
+<h3 id="100-nvidia-a10-warmed-median-ms-prior-to-gpu-pairwise-fold-tiling">1.0.0 NVIDIA A10 (warmed median, ms; prior to GPU pairwise-fold tiling)<a class="headerlink" href="#100-nvidia-a10-warmed-median-ms-prior-to-gpu-pairwise-fold-tiling" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
 <tr>
@@ -2039,19 +2039,19 @@ pre-pairwise-fold release measurements are archived below.
 <td style="text-align: right;">0.962</td>
 <td style="text-align: right;">0.295</td>
 <td style="text-align: right;">1.289</td>
-<td style="text-align: right;">—</td>
-<td style="text-align: right;">—</td>
-<td style="text-align: right;">—</td>
+<td style="text-align: right;">-</td>
+<td style="text-align: right;">-</td>
+<td style="text-align: right;">-</td>
 </tr>
 <tr>
 <td>Faiss <code>GpuIndexFlatL2</code></td>
 <td style="text-align: right;">0.079</td>
 <td style="text-align: right;">0.154</td>
-<td style="text-align: right;">—</td>
-<td style="text-align: right;">—</td>
-<td style="text-align: right;">—</td>
-<td style="text-align: right;">—</td>
-<td style="text-align: right;">—</td>
+<td style="text-align: right;">-</td>
+<td style="text-align: right;">-</td>
+<td style="text-align: right;">-</td>
+<td style="text-align: right;">-</td>
+<td style="text-align: right;">-</td>
 </tr>
 <tr>
 <td>CuPy</td>

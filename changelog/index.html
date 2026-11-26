@@ -1182,6 +1182,45 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#140-november-25-2026" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.4.0 (November 25, 2026)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1.4.0 (November 25, 2026)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#non-frozen-dataclass-methods-property" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-frozen @dataclass, methods &amp; @property
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#structural-matchcase-isinstancehasattr-call-ergonomics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Structural match/case, isinstance/hasattr, &amp; call ergonomics
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#130-november-25-2026" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1413,6 +1452,45 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#140-november-25-2026" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.4.0 (November 25, 2026)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1.4.0 (November 25, 2026)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#non-frozen-dataclass-methods-property" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-frozen @dataclass, methods &amp; @property
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#structural-matchcase-isinstancehasattr-call-ergonomics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Structural match/case, isinstance/hasattr, &amp; call ergonomics
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#130-november-25-2026" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1622,6 +1700,46 @@
 
 
 <h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Permanent link">&para;</a></h1>
+<h2 id="140-november-25-2026">1.4.0 (November 25, 2026)<a class="headerlink" href="#140-november-25-2026" title="Permanent link">&para;</a></h2>
+<p>Broader idiomatic Python semantics lowered cleanly at elaboration time with
+zero <code>PyObject</code> overhead: non-frozen <code>@dataclass</code> records with pure methods,
+<code>@property</code>, <code>__call__</code>, and functional field rebinding; full structural
+<code>match</code>/<code>case</code> destructuring; compile-time <code>isinstance</code>/<code>hasattr</code>/<code>getattr</code>
+dead-branch pruning; and <code>*args</code>/<code>**kwargs</code>, <code>functools.partial</code>, and
+<code>operator.*</code> call ergonomics (Python Semantics Wave 1, closing <code>#79</code>).</p>
+<h3 id="non-frozen-dataclass-methods-property">Non-frozen <code>@dataclass</code>, methods &amp; <code>@property</code><a class="headerlink" href="#non-frozen-dataclass-methods-property" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Non-frozen <code>@dataclass</code> records:</strong> Both frozen and regular <code>@dataclass</code>
+  objects compile to unboxed compile-time records across <code>@par.jit</code>, <code>par.grad</code>,
+  and <code>par.jvp</code> (with discrete metadata fields treated as zero-tangent static
+  leaves).</li>
+<li><strong>Functional local field rebinding:</strong> <code>obj.x = new_x</code>, nested <code>obj.a.b = v</code>,
+  and augmented updates <code>obj.x += v</code> rebuild the compile-time record chain
+  functionally (value semantics, zero heap mutation); including across loops
+  and branches.</li>
+<li><strong>Pure methods, <code>@property</code>, <code>@staticmethod</code>, <code>@classmethod</code>, &amp; <code>__call__</code>:</strong>
+  Methods and properties on <code>@dataclass</code> and <code>NamedTuple</code> records inline like
+  ordinary helper functions; bound methods on records can also be passed
+  directly from Python into <code>@par.jit</code> and <code>par.map</code>.</li>
+</ul>
+<h3 id="structural-matchcase-isinstancehasattr-call-ergonomics">Structural <code>match</code>/<code>case</code>, <code>isinstance</code>/<code>hasattr</code>, &amp; call ergonomics<a class="headerlink" href="#structural-matchcase-isinstancehasattr-call-ergonomics" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Extended structural <code>match</code>/<code>case</code>:</strong> Added <code>MatchMapping</code> (<code>case {"k": v, **rest}:</code>),
+  starred array patterns (<code>case [first, *mid, last]:</code>), and class patterns for
+  non-frozen dataclasses, <code>RaggedArray</code>, <code>np.ndarray</code>, <code>dict</code>, and <code>tuple</code>.</li>
+<li><strong>Compile-time <code>isinstance</code>, <code>hasattr</code>, &amp; <code>getattr</code>:</strong> Resolved statically
+  against the specialization key (including Python 3.10+ union types <code>A | B</code>,
+  user dataclasses, <code>NamedTuple</code>, and <code>RaggedArray</code>) with guaranteed dead-branch
+  pruning.</li>
+<li><strong>Call ergonomics:</strong> Full <code>**kwargs</code> collection and <code>**d</code> unpacking,
+  <code>functools.partial</code> (both inside <code>@par.jit</code> and passed from Python), and
+  <code>operator.*</code> callables (<code>operator.add</code>, <code>operator.mul</code>, <code>operator.itemgetter</code>,
+  <code>operator.attrgetter</code>, etc.) including associative <code>par.reduce</code>/<code>par.scan</code>
+  combiners.</li>
+<li><strong>New runnable gallery example:</strong> Added <code>examples/protein_and_layers.py</code>
+  (<code>ProteinBackbone</code> + <code>MLPBlock</code> with polymorphic dense/<code>RaggedArray</code> dispatch
+  and reverse-mode AD).</li>
+</ul>
 <h2 id="130-november-25-2026">1.3.0 (November 25, 2026)<a class="headerlink" href="#130-november-25-2026" title="Permanent link">&para;</a></h2>
 <p>Composable forward-mode, general reverse-mode, and higher-order automatic
 differentiation (<code>jvp</code>, <code>vjp</code>, <code>linearize</code>, <code>linear_transpose</code>, <code>hvp</code>,
@@ -1716,7 +1834,7 @@ Wave 1, closing <code>#75</code> and advancing <code>#77</code>).</p>
 </ul>
 <h2 id="110-november-25-2026">1.1.0 (November 25, 2026)<a class="headerlink" href="#110-november-25-2026" title="Permanent link">&para;</a></h2>
 <p>Major expansion of Parakeet's GPU schedules, algebraic data structures,
-scientific/bioinformatics primitives, and documentation — unified under one
+scientific/bioinformatics primitives, and documentation; unified under one
 top-level <code>import parakeet as par</code> (<code>@par.jit</code>, <code>par.*</code>) interface.</p>
 <h3 id="unified-namespace-docs-benchmarks">Unified namespace, docs &amp; benchmarks<a class="headerlink" href="#unified-namespace-docs-benchmarks" title="Permanent link">&para;</a></h3>
 <ul>
@@ -1744,7 +1862,7 @@ top-level <code>import parakeet as par</code> (<code>@par.jit</code>, <code>par.
 <li><strong>Tiled GPU pairwise folds:</strong> Broadcasting NumPy and nested-map/structured
   <code>par.fold</code> exact 1-NN and inverse-distance smoothing now stream shared-memory
   score tiles (<code>16 KiB</code>/block) on CUDA and Metal with exact first-index tie and
-  NaN semantics — <strong>4.8× faster</strong> (<code>2.60 ms → 0.54 ms</code>) and <strong>21× less global
+  NaN semantics; <strong>4.8× faster</strong> (<code>2.60 ms → 0.54 ms</code>) and <strong>21× less global
   scratch</strong> (<code>64 MiB → 3 MiB</code>) at <code>1,024 × 16,384 × 32</code> on NVIDIA L4.</li>
 <li><strong>Hardware matrix units in monoidal kernels:</strong> Enabled Metal
   <code>simdgroup_matrix</code> and CUDA TF32 WMMA inside Law 1 rescaled-monoid kernels

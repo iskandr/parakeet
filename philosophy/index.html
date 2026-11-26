@@ -865,6 +865,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#history" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        History
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1491,6 +1502,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#history" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        History
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1512,36 +1534,6 @@
 
 
 <h1 id="ideas-history-and-boundaries">Ideas, history, and boundaries<a class="headerlink" href="#ideas-history-and-boundaries" title="Permanent link">&para;</a></h1>
-<p>Parakeet began at New York University in 2012 as a research compiler by <strong>Alex
-Rubinsteyn</strong> (<code>@iskandr</code>), with major contributions from <strong>Eric Hielscher</strong>
-(<code>@hielscher</code>) and <strong>Nathaniel Weinman</strong>, guidance from <strong>Dennis Shasha</strong>, and
-advice from <strong>Russell Power</strong>. The original project was hosted at
-<code>parakeetpython.com</code> and documented in:</p>
-<ul>
-<li><strong>Alex Rubinsteyn</strong>, <a href="https://cs.nyu.edu/media/publications/rubinsteyn_alex.pdf"><em>Runtime Compilation of Array-Oriented Python Programs</em></a>
-  (PhD thesis, NYU, 2014) — type and value specialization, data-parallel
-  adverbs, and algebraic fusion.</li>
-<li><strong>Eric Hielscher, Alex Rubinsteyn, and Dennis Shasha</strong>,
-  <a href="https://arxiv.org/abs/1304.1835"><em>Locality Optimization for Data Parallel Programs</em></a>
-  (NYU CS Technical Report TR2013-955 / Eric Hielscher's 2013 NYU PhD thesis
-  work) — <code>TiledMap</code>, <code>TiledReduce</code>, and <code>TiledScan</code> for unified cache tiling,
-  register blocking, and loop interchange over adverb trees.</li>
-<li>Papers and talks: <a href="https://www.usenix.org/conference/hotpar12/workshop-program/presentation/rubinsteyn">HotPar '12</a>
-  (<em>Parakeet: A Just-In-Time Parallel Accelerator for Python</em>),
-  <a href="https://vimeo.com/73895275">PyData Boston '13</a>, and
-  <a href="https://vimeo.com/79556629">PyData NYC '13</a> (<em>Python on the GPU with Parakeet</em>).</li>
-</ul>
-<p>When the original Python 2 codebase was retired, its README left behind a
-lesson: general Python is the wrong abstraction for high-performance numerical
-code, and compilers do much better when programs are expressed over a small set
-of explicit data-parallel operators.</p>
-<p>Parakeet 1.0 is a ground-up rewrite for Python 3.11+ and NumPy 2 that tests how
-far those original ideas can go on modern hardware. It keeps the familiar
-<code>@jit</code> interface and NumPy frontend, preserves the adverb algebra in its middle
-end, fixes the soundness gaps noted in the theses, and extends the same
-machinery to Apple Metal, NVIDIA CUDA, reverse-mode automatic differentiation
-(<code>grad</code>), and tiled monoidal reductions.</p>
-<hr />
 <h2 id="five-ideas-that-shape-parakeet">Five ideas that shape Parakeet<a class="headerlink" href="#five-ideas-that-shape-parakeet" title="Permanent link">&para;</a></h2>
 <h3 id="1-specialize-on-types-and-shapes-at-call-time">1. Specialize on types and shapes at call time<a class="headerlink" href="#1-specialize-on-types-and-shapes-at-call-time" title="Permanent link">&para;</a></h3>
 <p>Python is dynamically typed, yet numerical functions are almost always called
@@ -1549,8 +1541,8 @@ with the same dtypes and ranks at a given call site. Parakeet treats your
 Python function as a template and compiles a native <em>specialization</em> for each
 distinct combination of argument dtypes, array ranks, memory layouts
 (contiguous vs. strided), and container structure.</p>
-<p>When an expression's type or rank depends on a value — such as <code>axis=</code>, a tuple
-length, or a unit dimension of length <code>1</code> that controls broadcasting — Parakeet
+<p>When an expression's type or rank depends on a value; such as <code>axis=</code>, a tuple
+length, or a unit dimension of length <code>1</code> that controls broadcasting; Parakeet
 specializes on that value automatically. That resolves the broadcasting corner
 case noted in Rubinsteyn's thesis (<code>200×1 + 1×300</code>) statically at compile time.</p>
 <h3 id="2-lower-everything-to-a-small-index-operator-core">2. Lower everything to a small index-operator core<a class="headerlink" href="#2-lower-everything-to-a-small-index-operator-core" title="Permanent link">&para;</a></h3>
@@ -1559,18 +1551,18 @@ NumPy function, Parakeet defines array expressions, comprehensions, matrix
 products, <code>einsum</code>, and user-written adverbs in terms of a small set of core
 index-operator statements:</p>
 <ul>
-<li><code>IndexMap</code> — independent computation over an index space</li>
-<li><code>IndexReduce</code> — associative or sequential folds (including multi-carry state
+<li><code>IndexMap</code>: independent computation over an index space</li>
+<li><code>IndexReduce</code>: associative or sequential folds (including multi-carry state
   such as <code>argmin</code>/<code>argmax</code> and online <code>logsumexp</code>, plus guarded filtered
   reductions)</li>
-<li><code>IndexScan</code> — prefix folds with an optional emit stage</li>
-<li><code>IndexFilter</code> — 1-to-0/1 stream compaction of indices matching a predicate</li>
-<li><code>IndexExpand</code> — 1-to-K ragged compaction (<code>flatmap</code>, <code>filter_pairs</code>)</li>
-<li><code>IndexScatter</code> — associative index-directed scatter-add (<code>np.bincount</code>,
+<li><code>IndexScan</code>: prefix folds with an optional emit stage</li>
+<li><code>IndexFilter</code>: 1-to-0/1 stream compaction of indices matching a predicate</li>
+<li><code>IndexExpand</code>: 1-to-K ragged compaction (<code>flatmap</code>, <code>filter_pairs</code>)</li>
+<li><code>IndexScatter</code>: associative index-directed scatter-add (<code>np.bincount</code>,
   <code>parakeet.scatter_add</code>)</li>
-<li><code>IndexWavefront</code> — anti-diagonal / banded 2D semiring dynamic programming
+<li><code>IndexWavefront</code>: anti-diagonal / banded 2D semiring dynamic programming
   (<code>wavefront</code>, <code>batched_wavefront</code>, <code>soft_align</code>)</li>
-<li><code>IndexTile</code> — explicit cache and GPU shared-memory tile staging emitted by
+<li><code>IndexTile</code>: explicit cache and GPU shared-memory tile staging emitted by
   the middle end</li>
 </ul>
 <p>You can inspect a function at this level at any time via
@@ -1579,7 +1571,7 @@ index-operator statements:</p>
 <p>Because programs stay in this small operator IR until the end of the pipeline,
 optimizations are algebraic identities rather than fragile loop-nest analyses:</p>
 <ul>
-<li><strong>Vertical fusion</strong> collapses producer-consumer chains — map into map
+<li><strong>Vertical fusion</strong> collapses producer-consumer chains: map into map
   (including transposes, slices, stencils, and matmul epilogues like
   <code>np.tanh(a @ b + c)</code>), map into reduce/scan/filter/scatter, map after scan,
   filter into filter, and filter into reduce (turning <code>np.sum(x[x &gt; 0])</code> into
@@ -1649,16 +1641,16 @@ or SciPy. Knowing the boundary up front avoids surprises.</p>
 <td>Complex numbers (<code>complex64</code>/<code>complex128</code>), native <code>float16</code> compute (<code>float16</code> is widened to <code>float32</code>), structured/record dtypes, object or string arrays</td>
 </tr>
 <tr>
-<td>Nested tuples, <code>NamedTuple</code>s, fixed string-key dicts, plain frozen dataclasses, <code>slice</code>, <code>range</code>, <code>zip</code>, <code>enumerate</code></td>
-<td>Dynamic dictionary keys, <code>set</code>, runtime string manipulation, arbitrary user classes and methods</td>
+<td>Nested tuples, <code>NamedTuple</code>s, fixed string-key dicts, <code>@dataclass</code>es (frozen or non-frozen) with pure methods / <code>@property</code> / <code>__call__</code>, <code>slice</code>, <code>range</code>, <code>zip</code>, <code>enumerate</code></td>
+<td>Dynamic dictionary keys, <code>set</code>, runtime string manipulation, arbitrary non-dataclass user classes with heap mutation</td>
 </tr>
 <tr>
 <td>List literals and comprehensions as fixed-shape arrays</td>
 <td>Mutable or dynamically resized Python lists (<code>.append</code>, <code>.extend</code>, ragged lists)</td>
 </tr>
 <tr>
-<td><code>if</code>/<code>elif</code>/<code>else</code>, <code>for</code>, <code>while</code>, <code>for</code>/<code>while ... else</code>, <code>break</code>, <code>continue</code>, early <code>return</code>, nested <code>def</code>/<code>lambda</code>, closures, <code>assert</code>, <code>raise</code></td>
-<td><code>try</code>/<code>except</code>, <code>with</code>, generators (<code>yield</code>), <code>global</code>/<code>nonlocal</code>, <code>import</code> inside <code>@jit</code>, <code>**kwargs</code>, recursion</td>
+<td><code>if</code>/<code>elif</code>/<code>else</code>, <code>for</code>, <code>while</code>, <code>for</code>/<code>while ... else</code>, <code>break</code>, <code>continue</code>, early <code>return</code>, structural <code>match</code>/<code>case</code>, <code>isinstance</code>/<code>hasattr</code>/<code>getattr</code>, nested <code>def</code>/<code>lambda</code>, closures, <code>*args</code>/<code>**kwargs</code>, <code>functools.partial</code>, <code>operator.*</code>, <code>assert</code>, <code>raise</code></td>
+<td><code>try</code>/<code>except</code>, <code>with</code>, generators (<code>yield</code>), <code>global</code>/<code>nonlocal</code>, <code>import</code> inside <code>@jit</code>, recursion</td>
 </tr>
 <tr>
 <td>Static array rank; compile-time specialization on <code>axis</code>, <code>keepdims</code>, <code>dtype</code>, tuple lengths</td>
@@ -1688,7 +1680,7 @@ operations, reductions (<code>sum</code>, zero-safe <code>prod</code>, <code>min
 <code>SortedIndex.get</code>, <code>@</code>, <code>einsum</code>, views and concatenation, gather and scatter
 (<code>np.add.at</code>, canonical <code>for</code>-loop scatter-add, <code>par.scatter_add</code>),
 <code>map</code>/<code>allpairs</code> with user functions, pure runtime <code>if</code> branches, and
-checkpointed <code>for</code>/<code>while</code> loops — enough to train transformers
+checkpointed <code>for</code>/<code>while</code> loops; enough to train transformers
 (<a href="https://github.com/iskandr/parakeet/blob/master/examples/nanogpt.py"><code>examples/nanogpt.py</code></a>)
 and convnets
 (<a href="https://github.com/iskandr/parakeet/blob/master/examples/convnet.py"><code>examples/convnet.py</code></a>).
@@ -1738,6 +1730,35 @@ Current boundaries:</p>
   recurrences; general cache-tiled <code>TiledScan</code> for arbitrary scans is not
   implemented.</li>
 </ul>
+<hr />
+<h2 id="history">History<a class="headerlink" href="#history" title="Permanent link">&para;</a></h2>
+<p>Parakeet started in OCaml as an array compiler modeling the array language Q,
+later shifted to modeling Python, and was eventually reimplemented in Python at
+New York University by <strong>Alex Rubinsteyn</strong> (<code>@iskandr</code>), with major
+contributions from <strong>Eric Hielscher</strong> (<code>@hielscher</code>) and <strong>Nathaniel Weinman</strong>,
+guidance from <strong>Dennis Shasha</strong>, and advice from <strong>Russell Power</strong>. That earlier
+work was hosted at <code>parakeetpython.com</code> and documented in:</p>
+<ul>
+<li><strong>Alex Rubinsteyn</strong>, <a href="https://cs.nyu.edu/media/publications/rubinsteyn_alex.pdf"><em>Runtime Compilation of Array-Oriented Python Programs</em></a>
+  (PhD thesis, NYU, 2014): type and value specialization, data-parallel adverbs,
+  and algebraic fusion.</li>
+<li><strong>Eric Hielscher, Alex Rubinsteyn, and Dennis Shasha</strong>,
+  <a href="https://arxiv.org/abs/1304.1835"><em>Locality Optimization for Data Parallel Programs</em></a>
+  (NYU CS Technical Report TR2013-955 / Eric Hielscher's 2013 NYU PhD thesis
+  work): <code>TiledMap</code>, <code>TiledReduce</code>, and <code>TiledScan</code> for unified cache tiling,
+  register blocking, and loop interchange over adverb trees.</li>
+<li>Papers and talks: <a href="https://www.usenix.org/conference/hotpar12/workshop-program/presentation/rubinsteyn">HotPar '12</a>
+  (<em>Parakeet: A Just-In-Time Parallel Accelerator for Python</em>),
+  <a href="https://vimeo.com/73895275">PyData Boston '13</a>, and
+  <a href="https://vimeo.com/79556629">PyData NYC '13</a> (<em>Python on the GPU with Parakeet</em>).</li>
+</ul>
+<p>When the Python 2 codebase was retired, its README noted that general Python is
+a poor fit for high-performance numerical code and that compilers work much
+better over a small set of explicit data-parallel operators. Parakeet 1.x is a
+rewrite for Python 3.11+ and NumPy 2 that keeps <code>@jit</code> and NumPy alongside
+those explicit operators, fixes the soundness gaps from the earlier design, and
+adds Apple Metal, NVIDIA CUDA, composable automatic differentiation, and tiled
+monoidal reductions.</p>
 
 
 

@@ -1569,7 +1569,7 @@ at a point, and <code>par.linear_transpose(L, *example_inputs)</code> constructs
 adjoint <code>Lᵀ</code> of a linear operator.</p>
 <h2 id="higher-order-derivatives-hvps-and-jacobians">Higher-order derivatives, HVPs, and Jacobians<a class="headerlink" href="#higher-order-derivatives-hvps-and-jacobians" title="Permanent link">&para;</a></h2>
 <p><code>par.hvp</code> computes Hessian-vector products via <strong>forward-over-reverse AD</strong>
-(<code>jvp(grad(f))</code>) in one fused pass — including through checkpointed loops,
+(<code>jvp(grad(f))</code>) in one fused pass; including through checkpointed loops,
 LayerNorm, and <strong>zero-$O(T^2)$ rematerialized attention</strong>:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">objective</span><span class="p">(</span><span class="n">w</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
 <a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>  <span class="n">h</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">x</span> <span class="o">@</span> <span class="n">w</span><span class="p">)</span>
@@ -1645,7 +1645,7 @@ conventions: ties share the derivative equally.</p>
   over a heterogeneous tuple of weight matrices) are <strong>unrolled</strong> onto the tape
   for zero checkpoint overhead and cross-iteration fusion.</li>
 <li><strong>Runtime-bound and long <code>for</code> loops</strong> (<code>for t in range(n):</code>, <code>for x in arr:</code>,
-  or static ranges longer than 32 iterations — including 10,000+ iterations)
+  or static ranges longer than 32 iterations; including 10,000+ iterations)
   compile to an <strong>IR-level <code>O(sqrt(T))</code> checkpointed reverse loop</strong> (<code>ForRange</code>)
   with constant IR size and bounded memory.</li>
 <li><strong>Data-dependent <code>while</code> loops</strong> (<code>while err &gt; tol:</code>) compile to a fixed-slot
@@ -1684,8 +1684,7 @@ both sides.</p>
   zero copy:
   <div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="n">y</span> <span class="o">=</span> <span class="n">x</span> <span class="o">+</span> <span class="n">par</span><span class="o">.</span><span class="n">stop_gradient</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">round</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">-</span> <span class="n">x</span><span class="p">)</span>
 </code></pre></div></li>
-<li><strong><code>@par.custom_vjp</code></strong> attaches custom <code>(fwd, bwd)</code> rules via <code>.defvjp(fwd, bwd)</code>
-  — supporting <code>NamedTuple</code>, frozen <code>@dataclass</code>, and <code>RaggedArray</code> residuals,
+<li><strong><code>@par.custom_vjp</code></strong> attaches custom <code>(fwd, bwd)</code> rules via <code>.defvjp(fwd, bwd)</code>: supporting <code>NamedTuple</code>, frozen <code>@dataclass</code>, and <code>RaggedArray</code> residuals,
   higher-order AD, and Implicit Function Theorem differentiation through
   <code>while</code>-loop equilibrium solvers without storing iteration history.</li>
 <li><strong><code>@par.custom_jvp</code></strong> attaches custom forward-mode rules via <code>.defjvp(jvp_rule)</code>:
@@ -1721,9 +1720,9 @@ value that an earlier operation's derivative still has to read
 <code>tanh</code> needs the original <code>h</code>.</p>
 <h2 id="the-gradient-is-right-or-there-is-none">The gradient is right or there is none<a class="headerlink" href="#the-gradient-is-right-or-there-is-none" title="Permanent link">&para;</a></h2>
 <p>Parakeet never returns a derivative that silently drops part of your function.
-If something on the path from inputs to output lacks a derivative rule — such
+If something on the path from inputs to output lacks a derivative rule; such
 as <code>np.cumprod</code>, <code>np.convolve</code>, or an arbitrary indexed overwrite
-<code>out[idx] = v</code> — you get an <code>UnsupportedError</code> naming it:</p>
+<code>out[idx] = v</code>; you get an <code>UnsupportedError</code> naming it:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>UnsupportedError: cannot differentiate through cumprod() (line 12): its derivative is not implemented
 </code></pre></div>
 <h2 id="how-it-works">How it works<a class="headerlink" href="#how-it-works" title="Permanent link">&para;</a></h2>
@@ -1735,7 +1734,7 @@ primals). Because rules operate at the index-operator level before lowering:</p>
 <li><code>parakeet/transforms/algebraic_vjp.py</code> runs a composable registry of
   algebraic rematerialization rules (<code>ALGEBRAIC_AD_RULES</code>) for FlashAttention
   (VJP, JVP, and HVP with zero $O(T^2)$ allocations), linear cross-entropy,
-  softmax, and LayerNorm / RMSNorm — both at top level and inside checkpointed
+  softmax, and LayerNorm / RMSNorm; both at top level and inside checkpointed
   loops.</li>
 <li>Scalars and views are not recorded on the tape: scalar adjoints push straight
   down the expression tree, and a view of an array is the same view of its

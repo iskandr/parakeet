@@ -1390,9 +1390,9 @@
 <a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a> system C compiler ─► shared library, cached on disk ─► called through ctypes
 </code></pre></div>
 <h2 id="specialization">Specialization<a class="headerlink" href="#specialization" title="Permanent link">&para;</a></h2>
-<p>Calling a <code>@jit</code> function classifies its arguments — dtype, rank, and layout of
+<p>Calling a <code>@jit</code> function classifies its arguments; dtype, rank, and layout of
 arrays, the types of scalars, the structure of tuples/records, and the identity
-of functions — into a <em>type key</em>. Each distinct key gets one compiled
+of functions; into a <em>type key</em>. Each distinct key gets one compiled
 <em>specialization</em>, cached per function. Values read from globals and closures
 are classified the same way on every call and passed as hidden arguments, so
 compiled code never sees stale data.</p>
@@ -1407,7 +1407,7 @@ run time.</p>
   elaborating its body in place, so by the time IR is produced there are no
   Python calls, closures, or tuple objects left.</li>
 <li><strong>Arrays</strong> are either <em>concrete</em> (a buffer plus offset, shape, and strides as
-  scalar expressions — slicing is just arithmetic on those) or <em>delayed</em>: a
+  scalar expressions; slicing is just arithmetic on those) or <em>delayed</em>: a
   function from index to element. <code>np.tanh(x * a) + b</code> builds a delayed array
   three layers deep, and no operator is emitted until something consumes it: a
   store, a reduction, or <code>return</code>. That consumer's operator evaluates the whole
@@ -1417,9 +1417,9 @@ run time.</p>
 <p>Three questions cannot be answered in one forward pass, so elaboration is
 <em>restarted</em> with what it learned:</p>
 <ol>
-<li>the type of a variable modified in a loop (<code>x = 0</code> then <code>x += 0.5</code> — restart
+<li>the type of a variable modified in a loop (<code>x = 0</code> then <code>x += 0.5</code>; restart
    with <code>x: float</code>);</li>
-<li>whether a delayed array must be evaluated eagerly — because it would be
+<li>whether a delayed array must be evaluated eagerly; because it would be
    evaluated twice, inside a loop, or after an array it reads has been modified
    (which would change the answer);</li>
 <li>which arguments must be compile-time constants (<code>axis=axis</code>), in which case
@@ -1511,7 +1511,7 @@ and runtime error reporting.</p>
 <li>The <strong>host</strong> program is always C. Each <code>ParLoop</code> body is outlined into a
   function taking a context struct (identical bodies up to alpha-renaming share
   one compiled function) and dispatched through a function pointer supplied at
-  call time — the thread pool, OpenMP, GCD, or a sequential loop — so one
+  call time (the thread pool, OpenMP, GCD, or a sequential loop) so one
   compiled library serves every CPU backend.</li>
 <li>For <strong>GPU</strong> backends, eligible <code>ParLoop</code>s and tiled plans are also emitted as
   Metal or CUDA kernels. Arrays stay resident on the device across consecutive

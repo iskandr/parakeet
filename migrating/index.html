@@ -1305,7 +1305,7 @@ their names, and most 0.x programs run after the usual Python 2 → 3 changes
 </tr>
 <tr>
 <td><code>@macro</code></td>
-<td>still there, with a different contract: the function gets the compiler and the compile-time <em>values</em> of its arguments instead of syntax nodes (this is how <code>map</code>, <code>reduce</code> and the NumPy functions are defined). <code>@typed_macro</code> and <code>@staged_macro</code> are gone — arguments such as <code>axis</code> are specialised automatically</td>
+<td>still there, with a different contract: the function gets the compiler and the compile-time <em>values</em> of its arguments instead of syntax nodes (this is how <code>map</code>, <code>reduce</code> and the NumPy functions are defined). <code>@typed_macro</code> and <code>@staged_macro</code> are gone; arguments such as <code>axis</code> are specialised automatically</td>
 </tr>
 <tr>
 <td><code>parakeet.testing_helpers</code></td>
@@ -1348,7 +1348,7 @@ their names, and most 0.x programs run after the usual Python 2 → 3 changes
   no longer upcast <code>float32</code> arrays.</li>
 <li><strong>Bounds are checked</strong> by default. Programs that silently read out of bounds
   under 0.x now raise <code>IndexError</code>.</li>
-<li><strong><code>np.array(x)</code> copies</strong>, <code>x += 1</code> updates in place, views alias — as in NumPy.</li>
+<li><strong><code>np.array(x)</code> copies</strong>, <code>x += 1</code> updates in place, views alias: as in NumPy.</li>
 <li><strong>Globals are read at call time</strong> rather than captured at first compilation.</li>
 <li><code>parakeet.reduce</code> is parallel only for combiners known to be associative;
   0.x assumed associativity for any function.</li>
