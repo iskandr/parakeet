@@ -20,7 +20,7 @@
         
       
       
-      <link rel="icon" href="assets/logo.png">
+      <link rel="icon" href="assets/favicon.svg">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.2">
     
     
@@ -474,10 +474,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#one-algebra-underneath" class="md-nav__link">
+  <a href="#algebraic-primitives" class="md-nav__link">
     <span class="md-ellipsis">
       
-        One algebra underneath
+        Algebraic primitives
       
     </span>
   </a>
@@ -1289,10 +1289,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#one-algebra-underneath" class="md-nav__link">
+  <a href="#algebraic-primitives" class="md-nav__link">
     <span class="md-ellipsis">
       
-        One algebra underneath
+        Algebraic primitives
       
     </span>
   </a>
@@ -1367,10 +1367,57 @@ distance matrix. Ties preserve NumPy's first-index rule.</p>
 <p>Requires Python 3.11+, NumPy 2, and a system C compiler. For GPU backends,
 install <code>parakeet[metal]</code> on Apple Silicon or <code>parakeet[cuda12]</code> with an NVIDIA
 GPU.</p>
-<h2 id="one-algebra-underneath">One algebra underneath<a class="headerlink" href="#one-algebra-underneath" title="Permanent link">&para;</a></h2>
-<p>Most numerical Python (NumPy expressions, comprehensions, or explicit parallel
-operators) expresses the same handful of array computations: maps, reductions,
-scans, filters, and scatters.</p>
+<h2 id="algebraic-primitives">Algebraic primitives<a class="headerlink" href="#algebraic-primitives" title="Permanent link">&para;</a></h2>
+<p>Rather than building hundreds of one-off C or GPU kernels for individual NumPy
+functions, Parakeet lowers array expressions, comprehensions, matrix products,
+and explicit parallel operators onto a small set of composable array
+primitives:</p>
+<table>
+<thead>
+<tr>
+<th>Primitive</th>
+<th>What it expresses</th>
+<th>Examples in Python / NumPy</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Map (<code>IndexMap</code>)</strong></td>
+<td>Independent per-element computation over an N-D index space</td>
+<td>Element-wise NumPy, broadcasting, comprehensions, <code>par.map</code>, <code>par.allpairs</code></td>
+</tr>
+<tr>
+<td><strong>Reduce / Fold (<code>IndexReduce</code>)</strong></td>
+<td>Associative or ordered reductions, including multi-field carries</td>
+<td><code>np.sum</code>, <code>np.argmin</code>, <code>logsumexp</code>, Welford variance, <code>par.fold</code></td>
+</tr>
+<tr>
+<td><strong>Scan (<code>IndexScan</code>)</strong></td>
+<td>Prefix accumulations and associative recurrences</td>
+<td><code>np.cumsum</code>, <code>par.scan</code>, affine/bilinear <code>for</code> loops (IIR filters, SSMs)</td>
+</tr>
+<tr>
+<td><strong>Filter &amp; Expand (<code>IndexFilter</code>, <code>IndexExpand</code>)</strong></td>
+<td>Stream compaction (1-to-0/1) and ragged expansion (1-to-K)</td>
+<td>Boolean masking <code>x[x &gt; 0]</code>, <code>par.flatmap</code>, <code>par.filter_pairs</code></td>
+</tr>
+<tr>
+<td><strong>Scatter (<code>IndexScatter</code>)</strong></td>
+<td>Associative accumulation into shared bins</td>
+<td><code>np.bincount</code>, <code>np.add.at</code>, indexed <code>+=</code> loops, <code>par.scatter_add</code></td>
+</tr>
+<tr>
+<td><strong>Wavefront (<code>IndexWavefront</code>)</strong></td>
+<td>Anti-diagonal and banded 2D dynamic programming</td>
+<td><code>par.wavefront</code>, <code>par.soft_align</code></td>
+</tr>
+<tr>
+<td><strong>Tile (<code>IndexTile</code>)</strong></td>
+<td>Cache and GPU shared-memory staging emitted by the middle end</td>
+<td>Matrix products, <code>einsum</code>, tiled pairwise folds, online softmax / attention</td>
+</tr>
+</tbody>
+</table>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nd">@par</span><span class="o">.</span><span class="n">jit</span>
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">scaled_tanh_numpy</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">beta</span><span class="o">=</span><span class="mf">0.3</span><span class="p">):</span>
 <a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>  <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">x</span> <span class="o">*</span> <span class="n">alpha</span><span class="p">)</span> <span class="o">+</span> <span class="n">beta</span>
@@ -1380,23 +1427,24 @@ scans, filters, and scatters.</p>
 <a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="k">def</span><span class="w"> </span><span class="nf">scaled_tanh_comp</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">beta</span><span class="o">=</span><span class="mf">0.3</span><span class="p">):</span>
 <a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>  <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">np</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">xi</span> <span class="o">*</span> <span class="n">alpha</span><span class="p">)</span> <span class="o">+</span> <span class="n">beta</span> <span class="k">for</span> <span class="n">xi</span> <span class="ow">in</span> <span class="n">x</span><span class="p">])</span>
 </code></pre></div>
-<p>Both lower to the same single fused parallel loop with no temporary arrays.
-Keeping that operator algebra intact through the middle end lets a small set of
-general passes do the heavy lifting:</p>
+<p>Both versions lower to the same single fused parallel loop with no temporary
+arrays. Because programs stay in this operator representation until code
+generation, a small set of general passes does the optimization work across
+domains:</p>
 <ul>
-<li><strong>Fusion.</strong> Chained array expressions, filtered reductions (<code>np.sum(x[x &gt; 0])</code>),
-  and sibling histograms sharing the same bin IDs merge into one pass.
+<li><strong>Fusion.</strong> Producer-consumer chains, filtered reductions (<code>np.sum(x[x &gt; 0])</code>),
+  and sibling histograms sharing the same bin IDs merge into one traversal.
   <a href="gallery/#histograms-and-tree-splits">See the tree-split example</a>.</li>
 <li><strong>Tiling and single-pass reductions.</strong> Associative reductions and bilinear
-  products tile into cache or GPU shared memory, so Gaussian kernel regression,
-  nearest-neighbor search, and attention stream blocks instead of allocating
-  giant pairwise matrices. <a href="algebra/">Read the algebraic laws</a>.</li>
-<li><strong>Gradients.</strong> <code>parakeet.grad</code> and <code>parakeet.value_and_grad</code> differentiate
-  the array operators directly, compiling a training step into one native
-  function. <a href="autodiff/">Learn about gradients</a>.</li>
+  products tile into CPU cache or GPU shared memory, so Gaussian kernel
+  regression, nearest-neighbor search, and attention stream blocks instead of
+  allocating giant pairwise matrices. <a href="algebra/">Read the algebraic laws</a>.</li>
+<li><strong>Differentiation.</strong> <code>par.grad</code>, <code>par.value_and_grad</code>, and <code>par.jvp</code>
+  differentiate the primitives directly, compiling a full training step into
+  one native function. <a href="autodiff/">Learn about gradients</a>.</li>
 <li><strong>Inspection.</strong> Every stage is visible: inspect the operator IR, see which
-  rewrites fired with <code>parakeet.show_rewrite</code>, or read the generated C,
-  Metal, or CUDA source. <a href="gallery/#inspecting-algebraic-rewrites">Inspect a rewrite</a>.</li>
+  rewrites fired with <code>par.show_rewrite</code>, or read the generated C, Metal, or
+  CUDA source. <a href="gallery/#inspecting-algebraic-rewrites">Inspect a rewrite</a>.</li>
 </ul>
 <h2 id="where-to-go-next">Where to go next<a class="headerlink" href="#where-to-go-next" title="Permanent link">&para;</a></h2>
 <ul>

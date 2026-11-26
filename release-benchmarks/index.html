@@ -22,7 +22,7 @@
         
       
       
-      <link rel="icon" href="../assets/logo.png">
+      <link rel="icon" href="../assets/favicon.svg">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.2">
     
     
@@ -745,6 +745,17 @@
         
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#bioinformatics-and-structural-biology-apple-m1-pro-10-cores" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bioinformatics and structural biology (Apple M1 Pro, 10 cores)
+      
+    </span>
+  </a>
   
 </li>
       
@@ -1482,6 +1493,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#bioinformatics-and-structural-biology-apple-m1-pro-10-cores" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bioinformatics and structural biology (Apple M1 Pro, 10 cores)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#benchmark-implementations-and-reproduction" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1860,6 +1882,89 @@ losses match across all arms (<code>4.200 → 1.426</code> on the smaller config
 </tbody>
 </table>
 <hr />
+<h2 id="bioinformatics-and-structural-biology-apple-m1-pro-10-cores">Bioinformatics and structural biology (Apple M1 Pro, 10 cores)<a class="headerlink" href="#bioinformatics-and-structural-biology-apple-m1-pro-10-cores" title="Permanent link">&para;</a></h2>
+<p>Head-to-head comparison of compiled Parakeet <code>1.8.0</code> kernels against
+specialist C/C++/Cython libraries (<code>edlib 1.3.9</code>, <code>Biopython 1.88</code> C
+<code>PairwiseAligner</code>, <code>Biotite 2.0.0</code>, <code>RDKit 2026.9.2</code>, and <code>NumPy 2.5.5</code>),
+verified for exact output agreement before timing (<code>n = 11</code> warmed replicates).
+<a href="../assets/bio-benchmarks-m1pro.json">Download raw JSON</a>.</p>
+<p><img alt="Bioinformatics head-to-head benchmarks on Apple M1 Pro comparing Parakeet against edlib, Biopython, Biotite, RDKit, and NumPy" src="../assets/bench-bio-m1pro.svg" /></p>
+<table>
+<thead>
+<tr>
+<th>Workload</th>
+<th style="text-align: right;">Parakeet (multicore)</th>
+<th style="text-align: right;">Parakeet (<code>c</code>, 1T)</th>
+<th style="text-align: right;">Specialist / Baseline</th>
+<th style="text-align: right;">Speedup vs. Baseline</th>
+<th>Implementation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Edit distance (<code>1,000 × 256 bp</code>, Myers)</td>
+<td style="text-align: right;"><strong>2.043 ms</strong> (±0.61)</td>
+<td style="text-align: right;">3.778 ms (±0.08)</td>
+<td style="text-align: right;"><code>edlib</code> (C++ Myers): 7.577 ms</td>
+<td style="text-align: right;"><strong>3.7×</strong> (2.0× at 1T)</td>
+<td><a href="https://github.com/iskandr/parakeet/blob/master/examples/bio_algorithms.py"><code>examples/bio_algorithms.py</code></a></td>
+</tr>
+<tr>
+<td>Affine-gap Gotoh + traceback (<code>200 × 128 bp</code>)</td>
+<td style="text-align: right;"><strong>3.816 ms</strong> (±1.39)</td>
+<td style="text-align: right;">19.685 ms (±2.46)</td>
+<td style="text-align: right;"><code>Biopython</code> C (score-only): 8.555 ms; <code>Biotite</code> Cython: 22.723 ms</td>
+<td style="text-align: right;"><strong>2.2×</strong> vs Biopython, <strong>6.0×</strong> vs Biotite</td>
+<td><a href="https://github.com/iskandr/parakeet/blob/master/examples/bio_algorithms.py"><code>examples/bio_algorithms.py</code></a></td>
+</tr>
+<tr>
+<td>2048-bit Tanimoto 1-NN (<code>256 × 8,192</code>)</td>
+<td style="text-align: right;"><strong>16.829 ms</strong> (±5.89)</td>
+<td style="text-align: right;">59.056 ms (±12.62)</td>
+<td style="text-align: right;"><code>RDKit</code> (C++ BulkTanimoto): 461.748 ms</td>
+<td style="text-align: right;"><strong>27.4×</strong> (7.8× at 1T)</td>
+<td><a href="https://github.com/iskandr/parakeet/blob/master/examples/bio_gallery.py"><code>examples/bio_gallery.py</code></a></td>
+</tr>
+<tr>
+<td>Batched Kabsch 3D RMSD (<code>2,000 × 128</code> CA)</td>
+<td style="text-align: right;"><strong>2.915 ms</strong> (±0.73)</td>
+<td style="text-align: right;">12.094 ms (±5.69)</td>
+<td style="text-align: right;"><code>Biotite</code> (batched f32): 21.352 ms; <code>NumPy</code> batched SVD (f64): 25.152 ms</td>
+<td style="text-align: right;"><strong>7.3×</strong> vs Biotite, <strong>8.6×</strong> vs NumPy</td>
+<td><a href="https://github.com/iskandr/parakeet/blob/master/examples/bio_algorithms.py"><code>examples/bio_algorithms.py</code></a></td>
+</tr>
+<tr>
+<td>6-channel BAM pileup (<code>2M</code> alignments)</td>
+<td style="text-align: right;"><strong>17.576 ms</strong> (±1.68)</td>
+<td style="text-align: right;">32.160 ms (±14.79)</td>
+<td style="text-align: right;"><code>NumPy</code> (6× <code>bincount</code>): 40.317 ms</td>
+<td style="text-align: right;"><strong>2.3×</strong> (1.3× at 1T)</td>
+<td><a href="https://github.com/iskandr/parakeet/blob/master/examples/bio_gallery.py"><code>examples/bio_gallery.py</code></a></td>
+</tr>
+<tr>
+<td>SSHash + delta-map long-read RNA (<code>3.01 Mbp</code>, 80 human Ensembl isoforms)</td>
+<td style="text-align: right;"><strong>5.480 ms</strong> (<strong>548.6 Mbp/s</strong>)</td>
+<td style="text-align: right;">21.705 ms (138.5 Mbp/s)</td>
+<td style="text-align: right;">9.70× unitig collapse, 92.2% hash-probe skip, Oarfish EM <code>r = 0.965</code></td>
+<td style="text-align: right;">4.0× multicore scaling</td>
+<td><a href="https://github.com/iskandr/parakeet/blob/master/examples/patro_longread_rna.py"><code>examples/patro_longread_rna.py</code></a></td>
+</tr>
+</tbody>
+</table>
+<p>Notes on fairness:</p>
+<ul>
+<li>On single-threaded Gotoh alignment, Biopython's C <code>PairwiseAligner.score()</code>
+  (<code>8.555 ms</code>) is 2.3× faster than Parakeet 1T (<code>19.685 ms</code>) because Biopython
+  computes scores only whereas Parakeet's <code>gotoh_global_align</code> populates full
+  traceback tables and builds run-length-encoded CIGAR arrays; across cores,
+  Parakeet multicore (<code>3.816 ms</code>) finishes 2.2× ahead.</li>
+<li>On Kabsch 3D RMSD, Biotite internally converts coordinates to <code>float32</code>, while
+  both Parakeet (compiled <code>np.linalg.svd</code> + <code>det</code>) and NumPy compute in <code>float64</code>.</li>
+<li>On <code>edlib</code> and <code>RDKit</code>, part of Parakeet's advantage comes from batching the
+  entire query set inside one GIL-free compiled loop instead of crossing the
+  Python-to-C boundary once per read or fingerprint.</li>
+</ul>
+<hr />
 <h2 id="benchmark-implementations-and-reproduction">Benchmark implementations and reproduction<a class="headerlink" href="#benchmark-implementations-and-reproduction" title="Permanent link">&para;</a></h2>
 <p>Every table and figure on this page is backed by runnable repository code and
 raw JSON samples:</p>
@@ -1876,6 +1981,11 @@ raw JSON samples:</p>
 <td>Release cross-framework suite (CPU &amp; GPU)</td>
 <td><a href="https://github.com/iskandr/parakeet/blob/master/benchmarks/release_comparison.py"><code>benchmarks/release_comparison.py</code></a></td>
 <td><code>python benchmarks/release_comparison.py</code> / <code>modal run tools/modal_release_bench.py</code></td>
+</tr>
+<tr>
+<td>Bioinformatics head-to-head suite</td>
+<td><a href="https://github.com/iskandr/parakeet/blob/master/benchmarks/bio_head_to_head.py"><code>benchmarks/bio_head_to_head.py</code></a></td>
+<td><code>python benchmarks/bio_head_to_head.py</code></td>
 </tr>
 <tr>
 <td>GPU exact 1-NN pairwise fold scaling</td>

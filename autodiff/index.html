@@ -22,7 +22,7 @@
         
       
       
-      <link rel="icon" href="../assets/logo.png">
+      <link rel="icon" href="../assets/favicon.svg">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.2">
     
     
@@ -82,7 +82,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#automatic-differentiation" class="md-skip">
+        <a href="#gradients" class="md-skip">
           Skip to content
         </a>
       
@@ -845,6 +845,28 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#forward-mode-vs-reverse-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Forward mode vs. reverse mode
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#api-overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        API overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#reverse-mode-gradients-grad-and-value_and_grad" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -922,10 +944,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#the-gradient-is-right-or-there-is-none" class="md-nav__link">
+  <a href="#unsupported-operations-fail-at-compile-time" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The gradient is right or there is none
+        Unsupported operations fail at compile time
       
     </span>
   </a>
@@ -1325,6 +1347,28 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#forward-mode-vs-reverse-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Forward mode vs. reverse mode
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#api-overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        API overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#reverse-mode-gradients-grad-and-value_and_grad" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1402,10 +1446,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#the-gradient-is-right-or-there-is-none" class="md-nav__link">
+  <a href="#unsupported-operations-fail-at-compile-time" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The gradient is right or there is none
+        Unsupported operations fail at compile time
       
     </span>
   </a>
@@ -1443,103 +1487,138 @@
   
 
 
-<h1 id="automatic-differentiation">Automatic differentiation<a class="headerlink" href="#automatic-differentiation" title="Permanent link">&para;</a></h1>
-<p>Parakeet provides composable <strong>reverse-mode</strong>, <strong>forward-mode</strong>, and
-<strong>higher-order</strong> automatic differentiation directly over its operator IR. Every
-differentiated function compiles into ordinary fused, tiled, parallel CPU or
-GPU loops alongside the rest of your program:</p>
+<h1 id="gradients">Gradients<a class="headerlink" href="#gradients" title="Permanent link">&para;</a></h1>
+<p>Parakeet differentiates functions directly over its operator IR, so the
+derivative code goes through the same fusion, tiling, and parallel CPU/GPU
+code generation as the forward pass.</p>
+<h2 id="forward-mode-vs-reverse-mode">Forward mode vs. reverse mode<a class="headerlink" href="#forward-mode-vs-reverse-mode" title="Permanent link">&para;</a></h2>
+<p>For a function <code>f: R^n -&gt; R^m</code> with Jacobian matrix <code>J</code> (shape <code>m x n</code>), there
+are two fundamental ways to propagate derivatives through the chain rule:</p>
+<ul>
+<li><strong>Reverse mode (<code>par.grad</code>, <code>par.vjp</code>, <code>par.jacrev</code>):</strong> Computes a
+  <strong>vector-Jacobian product</strong> <code>uᵀ · J</code> (pulling output sensitivities backward
+  to every input). Cost scales with the number of <strong>outputs</strong> <code>m</code>, independent
+  of the number of inputs <code>n</code>. Because reverse mode walks backward, it saves
+  (or recomputes) forward intermediates.</li>
+<li><strong>Use reverse mode when inputs outnumber outputs (<code>n &gt;&gt; m</code>):</strong> training
+    losses (<code>m = 1</code> scalar loss with millions of parameters), inverse problems,
+    and sensitivity of one objective with respect to all weights or coordinates.</li>
+<li><strong>Forward mode (<code>par.jvp</code>, <code>par.jacfwd</code>):</strong> Computes a
+  <strong>Jacobian-vector product</strong> <code>J · v</code> (pushing an input perturbation <code>v</code>
+  forward alongside the computation). Cost scales with the number of <strong>inputs</strong>
+  <code>n</code>, independent of the number of outputs <code>m</code>, and it uses <strong>O(1) extra
+  memory</strong> with no backward tape even through long <code>for</code>/<code>while</code> loops.</li>
+<li><strong>Use forward mode when outputs outnumber inputs (<code>m &gt;&gt; n</code>):</strong>
+    differentiating a simulation, ODE trajectory, or physical field with
+    respect to a handful of scalar parameters, computing directional
+    derivatives, or composing forward-over-reverse (<code>jvp(grad(f))</code>) for
+    Hessian-vector products (<code>par.hvp</code>).</li>
+</ul>
+<p>The two modes are exact linear transposes of each other: for any input <code>x</code>,
+input direction <code>v</code>, and output sensitivity <code>u</code>,</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>dot(jvp(f, x, v), u) == dot(v, vjp(f, x)(u))
+</code></pre></div>
+<h2 id="api-overview">API overview<a class="headerlink" href="#api-overview" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
 <tr>
 <th>API</th>
+<th>Mode</th>
 <th>What it computes</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td><code>par.grad(f, argnum=0)</code></td>
-<td>Reverse-mode gradient of a scalar-valued function</td>
+<td>Reverse</td>
+<td>Gradient of a scalar-valued function</td>
 </tr>
 <tr>
 <td><code>par.value_and_grad(f, argnum=0)</code></td>
-<td>Forward value and reverse-mode gradient in one compiled call</td>
-</tr>
-<tr>
-<td><code>par.jvp(f, primals, tangents)</code></td>
-<td>Forward-mode Jacobian-vector product <code>(f(*primals), J_f(*primals) · tangents)</code></td>
+<td>Reverse</td>
+<td>Forward value and gradient in one compiled call</td>
 </tr>
 <tr>
 <td><code>par.vjp(f, *primals)</code></td>
-<td>General non-scalar reverse-mode <code>(y, pullback)</code> for array, tuple, record, or <code>RaggedArray</code> outputs</td>
+<td>Reverse</td>
+<td><code>(y, pullback)</code> for vector, matrix, tuple, record, or <code>RaggedArray</code> outputs</td>
+</tr>
+<tr>
+<td><code>par.jvp(f, primals, tangents)</code></td>
+<td>Forward</td>
+<td>Directional derivative <code>(f(*primals), J · tangents)</code> in one forward pass</td>
 </tr>
 <tr>
 <td><code>par.linearize(f, *primals)</code></td>
-<td>Forward value <code>y</code> plus reusable linear JVP function <code>t -&gt; J_f(x) · t</code></td>
+<td>Forward</td>
+<td>Forward value <code>y</code> plus reusable linear map <code>v -&gt; J · v</code></td>
 </tr>
 <tr>
-<td><code>par.linear_transpose(f, *primals)</code></td>
-<td>Exact linear transpose <code>u -&gt; Lᵀ(u)</code> of a linear function <code>L</code></td>
+<td><code>par.linear_transpose(L, *example_inputs)</code></td>
+<td>Transpose</td>
+<td>Exact linear adjoint <code>u -&gt; Lᵀ(u)</code> of a linear function <code>L</code></td>
 </tr>
 <tr>
 <td><code>par.hvp(f, primals, tangents)</code></td>
-<td>Forward-over-reverse Hessian-vector product <code>∇²f(x) · v</code></td>
+<td>Fwd-over-rev</td>
+<td>Hessian-vector product <code>H(x) · v</code></td>
 </tr>
 <tr>
-<td><code>par.jacfwd(f, argnum=0)</code> / <code>par.jacrev(f, argnum=0)</code></td>
-<td>Full Jacobian matrix via forward-mode or reverse-mode AD</td>
+<td><code>par.jacfwd(f)</code> / <code>par.jacrev(f)</code></td>
+<td>Fwd / Rev</td>
+<td>Full Jacobian matrix (<code>jacfwd</code> when <code>n &lt;= m</code>, <code>jacrev</code> when <code>m &lt; n</code>)</td>
 </tr>
 <tr>
 <td><code>par.hessian(f, argnum=0)</code></td>
-<td>Full Hessian matrix via forward-over-reverse AD</td>
-</tr>
-<tr>
-<td><code>par.stop_gradient(x)</code></td>
-<td>Zero-copy gradient &amp; tangent barrier</td>
+<td>Fwd-over-rev</td>
+<td>Full Hessian matrix</td>
 </tr>
 <tr>
 <td><code>@par.checkpoint</code></td>
-<td>Rematerialize a block's intermediates during backpropagation</td>
+<td>Memory</td>
+<td>Recompute a block's intermediates during backpropagation instead of saving them</td>
 </tr>
 <tr>
 <td><code>@par.custom_vjp</code> / <code>@par.custom_jvp</code></td>
+<td>Custom</td>
 <td>Attach user-defined reverse-mode or forward-mode derivative rules</td>
 </tr>
 </tbody>
 </table>
 <h2 id="reverse-mode-gradients-grad-and-value_and_grad">Reverse-mode gradients (<code>grad</code> and <code>value_and_grad</code>)<a class="headerlink" href="#reverse-mode-gradients-grad-and-value_and_grad" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">parakeet</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">par</span>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="k">def</span><span class="w"> </span><span class="nf">loss</span><span class="p">(</span><span class="n">w</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
-<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>  <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">((</span><span class="n">np</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">x</span> <span class="o">@</span> <span class="n">w</span><span class="p">)</span> <span class="o">-</span> <span class="n">y</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span>
-<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>
-<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>
-<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="n">g</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">grad</span><span class="p">(</span><span class="n">loss</span><span class="p">)(</span><span class="n">w</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>  <span class="c1"># d loss / d w, shaped like w</span>
-<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="n">value</span><span class="p">,</span> <span class="n">g</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">value_and_grad</span><span class="p">(</span><span class="n">loss</span><span class="p">)(</span><span class="n">w</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
-<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="n">gw</span><span class="p">,</span> <span class="n">gx</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">grad</span><span class="p">(</span><span class="n">loss</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">))(</span><span class="n">w</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>  <span class="c1"># several arguments at once</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">parakeet</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">par</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="k">def</span><span class="w"> </span><span class="nf">loss</span><span class="p">(</span><span class="n">w</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>  <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">((</span><span class="n">np</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">x</span> <span class="o">@</span> <span class="n">w</span><span class="p">)</span> <span class="o">-</span> <span class="n">y</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="n">g</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">grad</span><span class="p">(</span><span class="n">loss</span><span class="p">)(</span><span class="n">w</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>  <span class="c1"># d loss / d w, shaped like w</span>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="n">value</span><span class="p">,</span> <span class="n">g</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">value_and_grad</span><span class="p">(</span><span class="n">loss</span><span class="p">)(</span><span class="n">w</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="n">gw</span><span class="p">,</span> <span class="n">gx</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">grad</span><span class="p">(</span><span class="n">loss</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">))(</span><span class="n">w</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>  <span class="c1"># several arguments at once</span>
 </code></pre></div>
 <p>For <code>par.grad</code> and <code>par.value_and_grad</code>, the function returns a single
 floating-point scalar. Differentiated arguments may be floats, float arrays,
 <code>RaggedArray</code>s, or arbitrarily nested tuples, <code>NamedTuple</code>s, dicts, and frozen
 <code>@dataclass</code> records (discrete metadata fields such as <code>int</code>, <code>bool</code>, or <code>str</code>
 pass through cleanly as zero-tangent static leaves):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">mlp</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>  <span class="p">(</span><span class="n">w1</span><span class="p">,</span> <span class="n">b1</span><span class="p">),</span> <span class="p">(</span><span class="n">w2</span><span class="p">,</span> <span class="n">b2</span><span class="p">)</span> <span class="o">=</span> <span class="n">params</span>
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>  <span class="n">h</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">x</span> <span class="o">@</span> <span class="n">w1</span> <span class="o">+</span> <span class="n">b1</span><span class="p">)</span>
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>  <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">((</span><span class="n">h</span> <span class="o">@</span> <span class="n">w2</span> <span class="o">+</span> <span class="n">b2</span> <span class="o">-</span> <span class="n">y</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span>
-<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>
-<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>
-<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="p">(</span><span class="n">gw1</span><span class="p">,</span> <span class="n">gb1</span><span class="p">),</span> <span class="p">(</span><span class="n">gw2</span><span class="p">,</span> <span class="n">gb2</span><span class="p">)</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">grad</span><span class="p">(</span><span class="n">mlp</span><span class="p">)(</span><span class="n">params</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">mlp</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>  <span class="p">(</span><span class="n">w1</span><span class="p">,</span> <span class="n">b1</span><span class="p">),</span> <span class="p">(</span><span class="n">w2</span><span class="p">,</span> <span class="n">b2</span><span class="p">)</span> <span class="o">=</span> <span class="n">params</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>  <span class="n">h</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">x</span> <span class="o">@</span> <span class="n">w1</span> <span class="o">+</span> <span class="n">b1</span><span class="p">)</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>  <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">((</span><span class="n">h</span> <span class="o">@</span> <span class="n">w2</span> <span class="o">+</span> <span class="n">b2</span> <span class="o">-</span> <span class="n">y</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="p">(</span><span class="n">gw1</span><span class="p">,</span> <span class="n">gb1</span><span class="p">),</span> <span class="p">(</span><span class="n">gw2</span><span class="p">,</span> <span class="n">gb2</span><span class="p">)</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">grad</span><span class="p">(</span><span class="n">mlp</span><span class="p">)(</span><span class="n">params</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
 </code></pre></div>
 <p><code>par.grad(f)</code> can be called from plain Python, where it compiles on first use,
 or inside a <code>@par.jit</code> function, where the entire training step becomes one
 compiled function:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nd">@par</span><span class="o">.</span><span class="n">jit</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">descend</span><span class="p">(</span><span class="n">w</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">rate</span><span class="p">,</span> <span class="n">steps</span><span class="p">):</span>
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>  <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">steps</span><span class="p">):</span>
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    <span class="n">w</span> <span class="o">=</span> <span class="n">w</span> <span class="o">-</span> <span class="n">rate</span> <span class="o">*</span> <span class="n">par</span><span class="o">.</span><span class="n">grad</span><span class="p">(</span><span class="n">loss</span><span class="p">)(</span><span class="n">w</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
-<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>  <span class="k">return</span> <span class="n">w</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nd">@par</span><span class="o">.</span><span class="n">jit</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">descend</span><span class="p">(</span><span class="n">w</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">rate</span><span class="p">,</span> <span class="n">steps</span><span class="p">):</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>  <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">steps</span><span class="p">):</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="n">w</span> <span class="o">=</span> <span class="n">w</span> <span class="o">-</span> <span class="n">rate</span> <span class="o">*</span> <span class="n">par</span><span class="o">.</span><span class="n">grad</span><span class="p">(</span><span class="n">loss</span><span class="p">)(</span><span class="n">w</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>  <span class="k">return</span> <span class="n">w</span>
 </code></pre></div>
 <p><a href="https://github.com/iskandr/parakeet/blob/master/examples/nanogpt.py"><code>examples/nanogpt.py</code></a>
 trains a small transformer this way, and
@@ -1550,17 +1629,17 @@ trains a convolutional network.</p>
 tape, O(1) extra memory even through long <code>for</code>/<code>while</code> loops), and <code>par.vjp</code>
 when differentiating functions with vector, matrix, tuple, record, or
 <code>RaggedArray</code> outputs:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">f</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">w</span><span class="p">):</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>  <span class="n">z</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">x</span> <span class="o">@</span> <span class="n">w</span><span class="p">)</span>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>  <span class="k">return</span> <span class="n">z</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">z</span> <span class="o">*</span> <span class="n">z</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="c1"># Forward-mode directional derivative (JVP)</span>
-<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="p">(</span><span class="n">y1</span><span class="p">,</span> <span class="n">y2</span><span class="p">),</span> <span class="p">(</span><span class="n">dy1</span><span class="p">,</span> <span class="n">dy2</span><span class="p">)</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">jvp</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">w</span><span class="p">),</span> <span class="p">(</span><span class="n">vx</span><span class="p">,</span> <span class="n">vw</span><span class="p">))</span>
-<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>
-<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="c1"># General non-scalar reverse-mode pullback (VJP)</span>
-<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="p">(</span><span class="n">y1</span><span class="p">,</span> <span class="n">y2</span><span class="p">),</span> <span class="n">pullback</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">vjp</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">w</span><span class="p">)</span>
-<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="n">gx</span><span class="p">,</span> <span class="n">gw</span> <span class="o">=</span> <span class="n">pullback</span><span class="p">((</span><span class="n">u1</span><span class="p">,</span> <span class="n">u2</span><span class="p">))</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">f</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">w</span><span class="p">):</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>  <span class="n">z</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">x</span> <span class="o">@</span> <span class="n">w</span><span class="p">)</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>  <span class="k">return</span> <span class="n">z</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">z</span> <span class="o">*</span> <span class="n">z</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="c1"># Forward-mode directional derivative (JVP)</span>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="p">(</span><span class="n">y1</span><span class="p">,</span> <span class="n">y2</span><span class="p">),</span> <span class="p">(</span><span class="n">dy1</span><span class="p">,</span> <span class="n">dy2</span><span class="p">)</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">jvp</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">w</span><span class="p">),</span> <span class="p">(</span><span class="n">vx</span><span class="p">,</span> <span class="n">vw</span><span class="p">))</span>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="c1"># General non-scalar reverse-mode pullback (VJP)</span>
+<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="p">(</span><span class="n">y1</span><span class="p">,</span> <span class="n">y2</span><span class="p">),</span> <span class="n">pullback</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">vjp</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">w</span><span class="p">)</span>
+<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="n">gx</span><span class="p">,</span> <span class="n">gw</span> <span class="o">=</span> <span class="n">pullback</span><span class="p">((</span><span class="n">u1</span><span class="p">,</span> <span class="n">u2</span><span class="p">))</span>
 </code></pre></div>
 <p>For any differentiable function <code>f</code>, the transpose identity
 <code>⟨jvp(f, x, v), u⟩ == ⟨v, vjp(f, x)(u)⟩</code> holds to machine precision.
@@ -1569,28 +1648,29 @@ at a point, and <code>par.linear_transpose(L, *example_inputs)</code> constructs
 adjoint <code>Lᵀ</code> of a linear operator.</p>
 <h2 id="higher-order-derivatives-hvps-and-jacobians">Higher-order derivatives, HVPs, and Jacobians<a class="headerlink" href="#higher-order-derivatives-hvps-and-jacobians" title="Permanent link">&para;</a></h2>
 <p><code>par.hvp</code> computes Hessian-vector products via <strong>forward-over-reverse AD</strong>
-(<code>jvp(grad(f))</code>) in one fused pass; including through checkpointed loops,
-LayerNorm, and <strong>zero-$O(T^2)$ rematerialized attention</strong>:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">objective</span><span class="p">(</span><span class="n">w</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>  <span class="n">h</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">x</span> <span class="o">@</span> <span class="n">w</span><span class="p">)</span>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>  <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">h</span> <span class="o">*</span> <span class="n">h</span> <span class="o">*</span> <span class="n">h</span><span class="p">)</span>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>
-<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>
-<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="n">hv</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">hvp</span><span class="p">(</span><span class="k">lambda</span> <span class="n">w_</span><span class="p">:</span> <span class="n">objective</span><span class="p">(</span><span class="n">w_</span><span class="p">,</span> <span class="n">x</span><span class="p">),</span> <span class="n">w</span><span class="p">,</span> <span class="n">v</span><span class="p">)</span>  <span class="c1"># ∇²f(w) · v (forward-over-reverse)</span>
-<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="n">H</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">hessian</span><span class="p">(</span><span class="k">lambda</span> <span class="n">w_</span><span class="p">:</span> <span class="n">objective</span><span class="p">(</span><span class="n">w_</span><span class="p">,</span> <span class="n">x</span><span class="p">))(</span><span class="n">w</span><span class="p">)</span>  <span class="c1"># full Hessian matrix</span>
-<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="n">J_fwd</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">jacfwd</span><span class="p">(</span><span class="k">lambda</span> <span class="n">w_</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">x</span> <span class="o">@</span> <span class="n">w_</span><span class="p">))(</span><span class="n">w</span><span class="p">)</span>  <span class="c1"># forward-mode Jacobian</span>
-<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="n">J_rev</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">jacrev</span><span class="p">(</span><span class="k">lambda</span> <span class="n">w_</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">x</span> <span class="o">@</span> <span class="n">w_</span><span class="p">))(</span><span class="n">w</span><span class="p">)</span>  <span class="c1"># reverse-mode Jacobian</span>
+(<code>jvp(grad(f))</code>) in one fused pass, including through checkpointed loops,
+LayerNorm, and tiled attention (recomputing score tiles on the fly instead of
+storing the <code>T × T</code> attention matrix):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">objective</span><span class="p">(</span><span class="n">w</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>  <span class="n">h</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">x</span> <span class="o">@</span> <span class="n">w</span><span class="p">)</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>  <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">h</span> <span class="o">*</span> <span class="n">h</span> <span class="o">*</span> <span class="n">h</span><span class="p">)</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="n">hv</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">hvp</span><span class="p">(</span><span class="k">lambda</span> <span class="n">w_</span><span class="p">:</span> <span class="n">objective</span><span class="p">(</span><span class="n">w_</span><span class="p">,</span> <span class="n">x</span><span class="p">),</span> <span class="n">w</span><span class="p">,</span> <span class="n">v</span><span class="p">)</span>  <span class="c1"># ∇²f(w) · v (forward-over-reverse)</span>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="n">H</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">hessian</span><span class="p">(</span><span class="k">lambda</span> <span class="n">w_</span><span class="p">:</span> <span class="n">objective</span><span class="p">(</span><span class="n">w_</span><span class="p">,</span> <span class="n">x</span><span class="p">))(</span><span class="n">w</span><span class="p">)</span>  <span class="c1"># full Hessian matrix</span>
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="n">J_fwd</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">jacfwd</span><span class="p">(</span><span class="k">lambda</span> <span class="n">w_</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">x</span> <span class="o">@</span> <span class="n">w_</span><span class="p">))(</span><span class="n">w</span><span class="p">)</span>  <span class="c1"># forward-mode Jacobian</span>
+<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="n">J_rev</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">jacrev</span><span class="p">(</span><span class="k">lambda</span> <span class="n">w_</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">x</span> <span class="o">@</span> <span class="n">w_</span><span class="p">))(</span><span class="n">w</span><span class="p">)</span>  <span class="c1"># reverse-mode Jacobian</span>
 </code></pre></div>
 <p>Nested reverse-over-reverse <code>par.grad(par.grad(...))</code> also works through
 element-wise operations, reductions, matrix products, views, <code>np.stack</code> /
 <code>np.concatenate</code>, <code>np.cumsum</code>, gather indexing (<code>x[idx]</code>), scatter-add
 (<code>np.add.at</code>, <code>par.scatter_add</code>), and scalar 1-to-1 <code>par.map</code>:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">penalty</span><span class="p">(</span><span class="n">w</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>  <span class="n">g</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">grad</span><span class="p">(</span><span class="n">loss</span><span class="p">)(</span><span class="n">w</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>
-<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>  <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">g</span> <span class="o">*</span> <span class="n">g</span><span class="p">)</span>
-<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>
-<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>
-<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="n">par</span><span class="o">.</span><span class="n">grad</span><span class="p">(</span><span class="n">penalty</span><span class="p">)(</span><span class="n">w</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>  <span class="c1"># 2 H g, reverse over reverse</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">penalty</span><span class="p">(</span><span class="n">w</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>  <span class="n">g</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">grad</span><span class="p">(</span><span class="n">loss</span><span class="p">)(</span><span class="n">w</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>  <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">g</span> <span class="o">*</span> <span class="n">g</span><span class="p">)</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="n">par</span><span class="o">.</span><span class="n">grad</span><span class="p">(</span><span class="n">penalty</span><span class="p">)(</span><span class="n">w</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>  <span class="c1"># 2 H g, reverse over reverse</span>
 </code></pre></div>
 <h2 id="what-can-be-differentiated">What can be differentiated<a class="headerlink" href="#what-can-be-differentiated" title="Permanent link">&para;</a></h2>
 <table>
@@ -1656,17 +1736,17 @@ conventions: ties share the derivative equally.</p>
 <li><strong>Forward-mode <code>par.jvp</code></strong> propagates tangents alongside the loop in a single
   forward pass with O(1) extra memory.</li>
 </ul>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">deep</span><span class="p">(</span><span class="n">weights</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>  <span class="c1"># a tuple of matrices (unrolled)</span>
-<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>  <span class="k">for</span> <span class="n">w</span> <span class="ow">in</span> <span class="n">weights</span><span class="p">:</span>
-<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>    <span class="n">x</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">x</span> <span class="o">@</span> <span class="n">w</span><span class="p">)</span>
-<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>  <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
-<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>
-<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>
-<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="k">def</span><span class="w"> </span><span class="nf">iir_loss</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">s0</span><span class="p">):</span>  <span class="c1"># runtime-length recurrence (O(sqrt(T)) checkpointed reverse loop)</span>
-<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>  <span class="n">s</span> <span class="o">=</span> <span class="n">s0</span>
-<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>  <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
-<a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>    <span class="n">s</span> <span class="o">=</span> <span class="n">a</span><span class="p">[</span><span class="n">t</span><span class="p">]</span> <span class="o">*</span> <span class="n">s</span> <span class="o">+</span> <span class="n">b</span><span class="p">[</span><span class="n">t</span><span class="p">]</span>
-<a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a>  <span class="k">return</span> <span class="n">s</span> <span class="o">*</span> <span class="n">s</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">deep</span><span class="p">(</span><span class="n">weights</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>  <span class="c1"># a tuple of matrices (unrolled)</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>  <span class="k">for</span> <span class="n">w</span> <span class="ow">in</span> <span class="n">weights</span><span class="p">:</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>    <span class="n">x</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">x</span> <span class="o">@</span> <span class="n">w</span><span class="p">)</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>  <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="k">def</span><span class="w"> </span><span class="nf">iir_loss</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">s0</span><span class="p">):</span>  <span class="c1"># runtime-length recurrence (O(sqrt(T)) checkpointed reverse loop)</span>
+<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>  <span class="n">s</span> <span class="o">=</span> <span class="n">s0</span>
+<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>  <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+<a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>    <span class="n">s</span> <span class="o">=</span> <span class="n">a</span><span class="p">[</span><span class="n">t</span><span class="p">]</span> <span class="o">*</span> <span class="n">s</span> <span class="o">+</span> <span class="n">b</span><span class="p">[</span><span class="n">t</span><span class="p">]</span>
+<a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a>  <span class="k">return</span> <span class="n">s</span> <span class="o">*</span> <span class="n">s</span>
 </code></pre></div>
 <p>Loops that do not touch differentiated values are left alone, so a training
 loop around <code>par.grad</code> is an ordinary loop. Loops containing <code>break</code>,
@@ -1682,22 +1762,22 @@ both sides.</p>
 <li><strong><code>par.stop_gradient(x)</code></strong> detaches a scalar, array, tuple, record, or
   <code>RaggedArray</code> from both reverse-mode <code>grad</code>/<code>vjp</code> and forward-mode <code>jvp</code> with
   zero copy:
-  <div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="n">y</span> <span class="o">=</span> <span class="n">x</span> <span class="o">+</span> <span class="n">par</span><span class="o">.</span><span class="n">stop_gradient</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">round</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">-</span> <span class="n">x</span><span class="p">)</span>
+  <div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="n">y</span> <span class="o">=</span> <span class="n">x</span> <span class="o">+</span> <span class="n">par</span><span class="o">.</span><span class="n">stop_gradient</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">round</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">-</span> <span class="n">x</span><span class="p">)</span>
 </code></pre></div></li>
 <li><strong><code>@par.custom_vjp</code></strong> attaches custom <code>(fwd, bwd)</code> rules via <code>.defvjp(fwd, bwd)</code>: supporting <code>NamedTuple</code>, frozen <code>@dataclass</code>, and <code>RaggedArray</code> residuals,
   higher-order AD, and Implicit Function Theorem differentiation through
   <code>while</code>-loop equilibrium solvers without storing iteration history.</li>
 <li><strong><code>@par.custom_jvp</code></strong> attaches custom forward-mode rules via <code>.defjvp(jvp_rule)</code>:
-  <div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nd">@par</span><span class="o">.</span><span class="n">custom_jvp</span>
-<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">smooth_relu</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
-<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>  <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">maximum</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">)</span>
-<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>
-<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>
-<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="nd">@smooth_relu</span><span class="o">.</span><span class="n">defjvp</span>
-<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="k">def</span><span class="w"> </span><span class="nf">_smooth_relu_jvp</span><span class="p">(</span><span class="n">primals</span><span class="p">,</span> <span class="n">tangents</span><span class="p">):</span>
-<a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>  <span class="p">(</span><span class="n">x</span><span class="p">,)</span> <span class="o">=</span> <span class="n">primals</span>
-<a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a>  <span class="p">(</span><span class="n">dx</span><span class="p">,)</span> <span class="o">=</span> <span class="n">tangents</span>
-<a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a>  <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">maximum</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">),</span> <span class="n">dx</span> <span class="o">/</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">+</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="n">x</span><span class="p">))</span>
+  <div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="nd">@par</span><span class="o">.</span><span class="n">custom_jvp</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">smooth_relu</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>  <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">maximum</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">)</span>
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>
+<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>
+<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="nd">@smooth_relu</span><span class="o">.</span><span class="n">defjvp</span>
+<a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="k">def</span><span class="w"> </span><span class="nf">_smooth_relu_jvp</span><span class="p">(</span><span class="n">primals</span><span class="p">,</span> <span class="n">tangents</span><span class="p">):</span>
+<a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a>  <span class="p">(</span><span class="n">x</span><span class="p">,)</span> <span class="o">=</span> <span class="n">primals</span>
+<a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a>  <span class="p">(</span><span class="n">dx</span><span class="p">,)</span> <span class="o">=</span> <span class="n">tangents</span>
+<a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a>  <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">maximum</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">),</span> <span class="n">dx</span> <span class="o">/</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">+</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="n">x</span><span class="p">))</span>
 </code></pre></div></li>
 <li><strong><code>@par.checkpoint</code></strong> (or <code>par.checkpoint(fn)(*args)</code>) drops a block's
   forward intermediates and rematerializes them during backpropagation,
@@ -1708,22 +1788,22 @@ both sides.</p>
 <h2 id="writing-into-arrays">Writing into arrays<a class="headerlink" href="#writing-into-arrays" title="Permanent link">&para;</a></h2>
 <p>Stores are differentiated: assigning a slice, an element, or updating in place
 (<code>out[i] += v</code>, <code>np.add.at(out, idx, vals)</code>) all work cleanly:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="n">out</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">n</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
-<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">out</span><span class="p">[:</span><span class="mi">3</span><span class="p">]</span> <span class="o">=</span> <span class="n">x</span><span class="p">[:</span><span class="mi">3</span><span class="p">]</span> <span class="o">@</span> <span class="n">w</span>
-<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="n">out</span><span class="p">[</span><span class="mi">3</span><span class="p">:]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">3</span><span class="p">:]</span> <span class="o">@</span> <span class="n">w</span><span class="p">)</span>
-<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="n">out</span> <span class="o">+=</span> <span class="n">bias</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="n">out</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">n</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">out</span><span class="p">[:</span><span class="mi">3</span><span class="p">]</span> <span class="o">=</span> <span class="n">x</span><span class="p">[:</span><span class="mi">3</span><span class="p">]</span> <span class="o">@</span> <span class="n">w</span>
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="n">out</span><span class="p">[</span><span class="mi">3</span><span class="p">:]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">3</span><span class="p">:]</span> <span class="o">@</span> <span class="n">w</span><span class="p">)</span>
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="n">out</span> <span class="o">+=</span> <span class="n">bias</span>
 </code></pre></div>
 <p>Going backwards, whatever adjoint arrived for the stored region belongs to the
 value that was stored, and the region starts again from zero. Overwriting a
 value that an earlier operation's derivative still has to read
 (<code>y = np.tanh(h); h[0] = 5.0</code>) is refused loudly, because the derivative of
 <code>tanh</code> needs the original <code>h</code>.</p>
-<h2 id="the-gradient-is-right-or-there-is-none">The gradient is right or there is none<a class="headerlink" href="#the-gradient-is-right-or-there-is-none" title="Permanent link">&para;</a></h2>
+<h2 id="unsupported-operations-fail-at-compile-time">Unsupported operations fail at compile time<a class="headerlink" href="#unsupported-operations-fail-at-compile-time" title="Permanent link">&para;</a></h2>
 <p>Parakeet never returns a derivative that silently drops part of your function.
-If something on the path from inputs to output lacks a derivative rule; such
+If an operation on the path from inputs to output lacks a derivative rule (such
 as <code>np.cumprod</code>, <code>np.convolve</code>, or an arbitrary indexed overwrite
-<code>out[idx] = v</code>; you get an <code>UnsupportedError</code> naming it:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>UnsupportedError: cannot differentiate through cumprod() (line 12): its derivative is not implemented
+<code>out[idx] = v</code>), compilation raises an <code>UnsupportedError</code> naming it:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>UnsupportedError: cannot differentiate through cumprod() (line 12): its derivative is not implemented
 </code></pre></div>
 <h2 id="how-it-works">How it works<a class="headerlink" href="#how-it-works" title="Permanent link">&para;</a></h2>
 <p>While a function is elaborated, reverse-mode AD records each array operator on
@@ -1732,10 +1812,10 @@ primals). Because rules operate at the index-operator level before lowering:</p>
 <ul>
 <li>Element-wise operators differentiate symbolically via partial derivatives.</li>
 <li><code>parakeet/transforms/algebraic_vjp.py</code> runs a composable registry of
-  algebraic rematerialization rules (<code>ALGEBRAIC_AD_RULES</code>) for FlashAttention
-  (VJP, JVP, and HVP with zero $O(T^2)$ allocations), linear cross-entropy,
-  softmax, and LayerNorm / RMSNorm; both at top level and inside checkpointed
-  loops.</li>
+  algebraic rematerialization rules (<code>ALGEBRAIC_AD_RULES</code>) for tiled attention
+  (VJP, JVP, and HVP without allocating <code>T × T</code> score matrices), linear
+  cross-entropy, softmax, and LayerNorm / RMSNorm, both at top level and inside
+  checkpointed loops.</li>
 <li>Scalars and views are not recorded on the tape: scalar adjoints push straight
   down the expression tree, and a view of an array is the same view of its
   adjoint.</li>

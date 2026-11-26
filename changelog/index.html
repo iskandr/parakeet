@@ -20,7 +20,7 @@
         
       
       
-      <link rel="icon" href="../assets/logo.png">
+      <link rel="icon" href="../assets/favicon.svg">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.2">
     
     
@@ -1182,6 +1182,45 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#180-november-26-2026" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.8.0 (November 26, 2026)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1.8.0 (November 26, 2026)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#compiled-nplinalg-decompositions-and-solvers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Compiled np.linalg decompositions and solvers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#bioinformatics-algorithms-long-read-rna-alignment-and-head-to-head-benchmarks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bioinformatics algorithms, long-read RNA alignment, and head-to-head benchmarks
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#170-november-25-2026" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1547,6 +1586,45 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#180-november-26-2026" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.8.0 (November 26, 2026)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1.8.0 (November 26, 2026)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#compiled-nplinalg-decompositions-and-solvers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Compiled np.linalg decompositions and solvers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#bioinformatics-algorithms-long-read-rna-alignment-and-head-to-head-benchmarks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bioinformatics algorithms, long-read RNA alignment, and head-to-head benchmarks
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#170-november-25-2026" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1890,6 +1968,43 @@
 
 
 <h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Permanent link">&para;</a></h1>
+<h2 id="180-november-26-2026">1.8.0 (November 26, 2026)<a class="headerlink" href="#180-november-26-2026" title="Permanent link">&para;</a></h2>
+<p>Compiled <code>np.linalg</code> matrix decompositions and solvers, seven classic
+bioinformatics algorithms, a Rob Patro-style SSHash + Spearfish + Oarfish
+long-read RNA aligner and quantifier, and published head-to-head bioinformatics
+benchmarks (closing <code>#46</code>).</p>
+<h3 id="compiled-nplinalg-decompositions-and-solvers">Compiled <code>np.linalg</code> decompositions and solvers<a class="headerlink" href="#compiled-nplinalg-decompositions-and-solvers" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong><code>parakeet/lib/linalg_lib.py</code>:</strong> Pure compiled implementations (zero
+  external LAPACK dependency, callable inside <code>par.parfor</code>, supporting both
+  <code>float32</code> and <code>float64</code>) for <code>np.linalg.cholesky</code>, <code>np.linalg.det</code>,
+  <code>np.linalg.solve</code> (1D and 2D RHS), <code>np.linalg.inv</code>, <code>np.linalg.qr</code>
+  (Householder <code>reduced</code> and <code>complete</code>), <code>np.linalg.eigh</code> (cyclic Jacobi,
+  <code>UPLO="L"/"U"</code>), and <code>np.linalg.svd</code> (one-sided Hestenes Jacobi,
+  square/tall/wide, <code>full_matrices</code>, <code>compute_uv</code>).</li>
+</ul>
+<h3 id="bioinformatics-algorithms-long-read-rna-alignment-and-head-to-head-benchmarks">Bioinformatics algorithms, long-read RNA alignment, and head-to-head benchmarks<a class="headerlink" href="#bioinformatics-algorithms-long-read-rna-alignment-and-head-to-head-benchmarks" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Classic bioinformatics suite (<code>examples/bio_algorithms.py</code>):</strong> 3-state
+  affine-gap Gotoh alignment + traceback to RLE CIGAR, multi-word <code>uint64</code>
+  Myers bit-vector edit distance, O(N) circular monotone-deque minimizer
+  sketching, FM-index / BWT backward search over <code>RaggedArray[uint8]</code>,
+  <code>par.flatmap</code> CIGAR expansion, profile HMM Viterbi + Forward-Backward
+  posterior decoding, and Kabsch 3D protein superposition &amp; RMSD using compiled
+  <code>np.linalg.svd</code> and <code>np.linalg.det</code>.</li>
+<li><strong>Long-read RNA alignment &amp; quantification (<code>examples/patro_longread_rna.py</code>):</strong>
+  SSHash-style streaming k-mer lookup over collapsed unitigs with
+  <code>FrozenHashTable</code> sparse minimizer buckets, Spearfish shared-anchor
+  projection and delta-mapping, and compiled Oarfish coverage-aware EM. On 80
+  real human Ensembl isoforms (<code>TP53</code>, <code>PKM</code>, <code>MAPT</code>, <code>ACTB</code>), achieves 9.7x
+  unitig collapse, 92.2% hash-lookup skip rate, 548.6 Mbp/s multicore mapping
+  on Apple M1 Pro, and EM Pearson <code>r = 0.965</code>.</li>
+<li><strong>Head-to-head bioinformatics benchmarks (<code>benchmarks/bio_head_to_head.py</code>):</strong>
+  Replicate median + IQR comparison against <code>edlib</code>, <code>Biopython</code>, <code>Biotite</code>,
+  <code>RDKit</code>, and <code>NumPy</code>, published in <code>docs/release-benchmarks.md</code> and
+  <code>docs/bioinformatics.md</code> alongside the overlapped CPU I/O and decompression
+  architecture notes.</li>
+</ul>
 <h2 id="170-november-25-2026">1.7.0 (November 25, 2026)<a class="headerlink" href="#170-november-25-2026" title="Permanent link">&para;</a></h2>
 <p>Adaptive 3-tier ragged parallelism, fused segmented 2D histograms with
 histogram subtraction, parallel ragged sample partitioning, and an end-to-end

@@ -22,7 +22,7 @@
         
       
       
-      <link rel="icon" href="../assets/logo.png">
+      <link rel="icon" href="../assets/favicon.svg">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.2">
     
     
@@ -1659,14 +1659,17 @@ or SciPy. Knowing the boundary up front avoids surprises.</p>
 </tbody>
 </table>
 <h3 id="numpy-and-scipy-coverage">NumPy and SciPy coverage<a class="headerlink" href="#numpy-and-scipy-coverage" title="Permanent link">&para;</a></h3>
-<p>About 200 core NumPy functions and ufuncs are built in (see
+<p>About 210 core NumPy functions and ufuncs are built in (see
 <a href="../supported/">Supported functions</a>), covering arithmetic, reductions, scans,
-sorting, masks and fancy indexing, <code>@</code>/<code>dot</code>/<code>einsum</code>, <code>np.linalg.norm</code>, and
+sorting, masks and fancy indexing, <code>@</code>/<code>dot</code>/<code>einsum</code>, dense 2D linear algebra
+(<code>np.linalg.norm</code>, <code>cholesky</code>, <code>det</code>, <code>solve</code>, <code>inv</code>, <code>qr</code>, <code>eigh</code>, <code>svd</code>), and
 parallel <code>np.random</code>. Not yet built in:</p>
 <ul>
-<li>Matrix decompositions and solvers (<code>np.linalg.svd</code>, <code>solve</code>, <code>inv</code>, <code>eig</code>,
-  <code>cholesky</code>, <code>qr</code>, <code>det</code>, <code>lstsq</code>)</li>
-<li>Spectral transforms (<code>np.fft.*</code>)</li>
+<li>Non-symmetric eigensolvers and least-squares helpers (<code>np.linalg.eig</code>,
+  <code>lstsq</code>, <code>pinv</code>, and batched 3D+ <code>np.linalg.*</code> calls; use <code>par.parfor</code> or
+  <code>par.map</code> to batch 2D <code>np.linalg.*</code> calls in parallel)</li>
+<li>Spectral transforms (<code>np.fft.*</code>; see <code>examples/complex_fft_and_fasta.py</code> for
+  a compiled radix-2 FFT)</li>
 <li>Variable-cardinality set operations (<code>np.unique</code>, <code>np.lexsort</code>, <code>np.isin</code>)</li>
 <li>SciPy modules (<code>scipy.special</code>, <code>scipy.optimize</code>, <code>scipy.ndimage</code>, ...)</li>
 </ul>
@@ -1688,8 +1691,9 @@ Current boundaries:</p>
 <ul>
 <li><strong>Elaboration-time tape &amp; symbolic JVP:</strong> reverse-mode differentiation
   records operators on a tape during elaboration (with an algebraic tape
-  optimizer for zero-$O(T^2)$ attention VJP/HVP, linear cross-entropy, softmax,
-  and norms) rather than running as a separate IR-to-IR pass over lowered loops.</li>
+  optimizer that recomputes attention score tiles, linear cross-entropy,
+  softmax, and norms instead of saving quadratic intermediates) rather than
+  running as a separate IR-to-IR pass over lowered loops.</li>
 <li><strong>Loops over differentiated values:</strong> small static <code>for</code> loops (<code>&lt;= 32</code>)
   unroll for cross-iteration fusion; runtime-bound and long <code>for</code> loops use
   IR-level <code>O(sqrt(T))</code> checkpointed reverse loops; data-dependent <code>while</code>
@@ -1707,7 +1711,7 @@ Current boundaries:</p>
   overwriting an array still needed by an earlier backward rule.</li>
 <li><strong>Higher-order derivatives:</strong> forward-over-reverse <code>par.hvp</code> and
   <code>par.hessian</code> compose through element-wise ops, reductions, <code>@</code>, views,
-  checkpointed loops, LayerNorm, and zero-$O(T^2)$ attention; reverse-over-reverse
+  checkpointed loops, LayerNorm, and rematerialized attention; reverse-over-reverse
   <code>grad(grad(...))</code> also supports <code>np.stack</code>, <code>np.cumsum</code>, gather indexing,
   scatter-add, and scalar 1-to-1 <code>par.map</code>, while refusing non-scalar user
   <code>map</code> bodies loudly.</li>

@@ -22,7 +22,7 @@
         
       
       
-      <link rel="icon" href="../assets/logo.png">
+      <link rel="icon" href="../assets/favicon.svg">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.2">
     
     
@@ -681,6 +681,67 @@
       
     </span>
   </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-classic-sequence-structural-algorithms-examplesbio_algorithmspy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Classic sequence &amp; structural algorithms (examples/bio_algorithms.py)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-long-read-rna-alignment-quantification-examplespatro_longread_rnapy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Long-read RNA alignment &amp; quantification (examples/patro_longread_rna.py)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-overlapped-cpu-io-decompression-and-compiler-scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Overlapped CPU I/O, decompression, and compiler scope
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="8. Overlapped CPU I/O, decompression, and compiler scope">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#double-buffered-cpu-io-kernel-orchestration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Double-buffered CPU I/O + kernel orchestration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-belongs-in-parakeet-vs-outside-its-semantic-hull" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What belongs in Parakeet vs. outside its semantic hull
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -1369,6 +1430,67 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#6-classic-sequence-structural-algorithms-examplesbio_algorithmspy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Classic sequence &amp; structural algorithms (examples/bio_algorithms.py)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-long-read-rna-alignment-quantification-examplespatro_longread_rnapy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Long-read RNA alignment &amp; quantification (examples/patro_longread_rna.py)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-overlapped-cpu-io-decompression-and-compiler-scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Overlapped CPU I/O, decompression, and compiler scope
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="8. Overlapped CPU I/O, decompression, and compiler scope">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#double-buffered-cpu-io-kernel-orchestration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Double-buffered CPU I/O + kernel orchestration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-belongs-in-parakeet-vs-outside-its-semantic-hull" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What belongs in Parakeet vs. outside its semantic hull
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#inspecting-the-rewrites" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1654,6 +1776,101 @@ rewrite into <a href="../algebra/#law-4-chunkwise-state-space-duality">chunkwise
 <a id="__codelineno-5-51" name="__codelineno-5-51" href="#__codelineno-5-51"></a>    <span class="n">out</span><span class="p">[</span><span class="n">t</span><span class="p">]</span> <span class="o">=</span> <span class="n">s</span>
 <a id="__codelineno-5-52" name="__codelineno-5-52" href="#__codelineno-5-52"></a>  <span class="k">return</span> <span class="n">out</span>
 </code></pre></div>
+<h2 id="6-classic-sequence-structural-algorithms-examplesbio_algorithmspy">6. Classic sequence &amp; structural algorithms (<code>examples/bio_algorithms.py</code>)<a class="headerlink" href="#6-classic-sequence-structural-algorithms-examplesbio_algorithmspy" title="Permanent link">&para;</a></h2>
+<p>Beyond fused gallery kernels, <a href="https://github.com/iskandr/parakeet/blob/master/examples/bio_algorithms.py"><code>examples/bio_algorithms.py</code></a>
+implements seven textbook bioinformatics kernels in compiled Python/NumPy:</p>
+<ul>
+<li><strong>3-state affine-gap Gotoh global alignment + traceback (<code>gotoh_global_align</code>):</strong>
+  Maintains <code>M</code>, <code>Ix</code>, and <code>Iy</code> DP matrices plus packed traceback directions and
+  emits run-length-encoded CIGAR <code>(ops, lengths)</code> via local growable lists.</li>
+<li><strong>Multi-word Myers bit-vector edit distance (<code>myers_edit_distance</code>):</strong>
+  Bit-parallel Levenshtein distance over arbitrary pattern lengths using 64-bit
+  <code>uint64</code> word blocks (<code>Pv</code>, <code>Mv</code>, <code>Peq</code>).</li>
+<li><strong>O(N) monotone-deque minimizer sketching (<code>minimizer_sketch</code>):</strong>
+  Canonical 2-bit k-mers hashed with SplitMix64 and sketched in a single linear
+  pass using a circular monotone deque.</li>
+<li><strong>FM-index / BWT backward search (<code>build_fm_index</code>, <code>fm_backward_search_batch</code>):</strong>
+  <code>C</code> array + sampled <code>Occ</code> checkpoints + LF-mapping queried in parallel over a
+  <code>RaggedArray[uint8]</code> batch of reads.</li>
+<li><strong>CIGAR expansion (<code>expand_cigar</code>):</strong>
+  One-line parallel expansion of <code>(ops, lengths)</code> via <code>par.flatmap</code>
+  (<code>IndexExpand</code>).</li>
+<li><strong>Profile HMM Viterbi + Forward-Backward (<code>hmm_viterbi_and_posterior</code>):</strong>
+  Log-space Viterbi decoding plus Forward-Backward posterior state probabilities.</li>
+<li><strong>Kabsch 3D superposition &amp; RMSD (<code>kabsch_rmsd</code>, <code>batched_kabsch_rmsd</code>):</strong>
+  Uses Parakeet's compiled <code>np.linalg.svd</code> and <code>np.linalg.det</code> (with proper
+  rotation reflection correction when <code>det(R) &lt; 0</code>) inside <code>par.parfor</code> to
+  superimpose thousands of protein structures in parallel with zero external
+  LAPACK dependency.</li>
+</ul>
+<h2 id="7-long-read-rna-alignment-quantification-examplespatro_longread_rnapy">7. Long-read RNA alignment &amp; quantification (<code>examples/patro_longread_rna.py</code>)<a class="headerlink" href="#7-long-read-rna-alignment-quantification-examplespatro_longread_rnapy" title="Permanent link">&para;</a></h2>
+<p>Inspired by Rob Patro's COMBINE lab tools (SSHash, Piscem, Spearfish, and
+Oarfish), <a href="https://github.com/iskandr/parakeet/blob/master/examples/patro_longread_rna.py"><code>examples/patro_longread_rna.py</code></a>
+puts a complete long-read RNA aligner and isoform quantifier into ~250 lines of
+compiled Python/NumPy:</p>
+<ol>
+<li><strong>Unitig collapse + SSHash sparse minimizer index (<code>build_unitig_sshash_index</code>):</strong>
+   Collapses redundant gene isoforms into exact maximal shared unitigs stored
+   in CSR arrays with <code>unitig -&gt; (tx_id, tx_pos)</code> postings and a
+   <code>FrozenHashTable</code> mapping sparse <code>m</code>-mer minimizers to small unitig buckets.</li>
+<li><strong>Streaming unitig contiguity + Spearfish delta-mapping (<code>stream_map_long_reads</code>):</strong>
+   Inside <code>par.parfor</code> over a <code>RaggedArray[uint8]</code> of long reads, once a
+   minimizer probe lands on a unitig, the inner loop extends the Maximal Exact
+   Match (MEM) along that unitig in O(1) per base with zero hash lookups,
+   projects the anchor to all sharing isoforms via CSR postings, chains
+   co-linear diagonals, and retains competitive isoforms within <code>delta_frac</code> of
+   the top score.</li>
+<li><strong>Oarfish-style coverage-aware EM (<code>oarfish_em_quantify</code>):</strong>
+   Runs compiled Expectation-Maximization over the delta-mapped compatibility
+   sets, weighting each compatible isoform by alignment score and effective
+   length compatibility.</li>
+</ol>
+<p>On 80 real human Ensembl cDNA isoforms (<code>TP53</code>, <code>PKM</code>, <code>MAPT</code>, <code>ACTB</code>;
+225,539 raw bp), unitig collapsing shrinks the reference by <strong>9.7x</strong>
+(<code>23,247</code> unitig bp across 231 unitigs), the SSHash fast path skips the hash
+table on <strong>92.2%</strong> of base steps, multicore mapping sustains <strong>548.6 Mbp/s</strong> on
+Apple M1 Pro (11-replicate median), and Oarfish EM achieves <strong>Pearson r = 0.965</strong>
+against ground truth.</p>
+<h2 id="8-overlapped-cpu-io-decompression-and-compiler-scope">8. Overlapped CPU I/O, decompression, and compiler scope<a class="headerlink" href="#8-overlapped-cpu-io-decompression-and-compiler-scope" title="Permanent link">&para;</a></h2>
+<p>Parakeet intentionally does not embed POSIX file descriptors, zlib/zstd
+container parsers, or streaming I/O syscalls inside <code>@par.jit</code>. Keeping I/O out
+of whole-program compilation keeps the compiler small, portable, and GPU-safe,
+while still allowing full overlap between disk/codec work and compute:</p>
+<h3 id="double-buffered-cpu-io-kernel-orchestration">Double-buffered CPU I/O + kernel orchestration<a class="headerlink" href="#double-buffered-cpu-io-kernel-orchestration" title="Permanent link">&para;</a></h3>
+<p>Compiled Parakeet functions <strong>release the Python GIL</strong> for their entire C,
+multicore, CUDA, or Metal execution. That makes overlapped streaming
+straightforward with a 2-slot (or N-slot) ring buffer:</p>
+<ol>
+<li><strong>Producer thread (<code>ThreadPoolExecutor</code> / background reader):</strong> Reads raw
+   FASTQ/BAM chunks from disk or <code>mmap</code>, decompresses them with a fast native
+   codec (<code>isal</code>, <code>zlib-ng</code>, <code>libdeflate</code>, or <code>pysam</code>), and packs the next slab
+   into a pre-allocated pinned <code>uint8</code> / <code>RaggedArray</code> host buffer (and on GPU,
+   stages an asynchronous host-to-device copy onto slot <code>k % 2</code>).</li>
+<li><strong>Consumer thread (Parakeet compute):</strong> Launches <code>@par.jit</code> kernels (e.g.,
+   <code>par.split_bytes</code>, <code>encode_canonical_kmers_and_gc</code>, <code>stream_map_long_reads</code>,
+   or <code>single_pass_pileup</code>) on slab <code>(k - 1) % 2</code>. Because the GIL is released,
+   CPU decompression of slab <code>k</code> overlaps directly with multicore/GPU kernels
+   crunching slab <code>k - 1</code>.</li>
+<li><strong>Thread budget coordination:</strong> On CPU-only hosts, reserve 1-2 cores for the
+   decompression producer and cap Parakeet's worker pool (<code>PARAKEET_THREADS</code>)
+   to the remaining cores so reader and compute threads do not oversubscribe.</li>
+</ol>
+<h3 id="what-belongs-in-parakeet-vs-outside-its-semantic-hull">What belongs in Parakeet vs. outside its semantic hull<a class="headerlink" href="#what-belongs-in-parakeet-vs-outside-its-semantic-hull" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Fits inside <code>@par.jit</code>:</strong> <em>Block-parallel BGZF DEFLATE inflate.</em> Because
+  BGZF splits <code>.bam</code> / <code>.fastq.gz</code> files into independent <code>&lt;= 64 KiB</code> compressed
+  blocks whose uncompressed sizes (<code>ISIZE</code>) are known up front from the block
+  headers, a <code>par.parfor</code> over <code>N</code> BGZF blocks can decode each block's bit-stream
+  in parallel (~300 lines of <code>uint64</code> bit-reading, canonical Huffman LUT tables,
+  and LZ77 copy loops into a pre-sized output slab).</li>
+<li><strong>Escapes Parakeet's semantic hull:</strong> Single-stream sequential <code>gzip</code>/<code>zstd</code>
+  decompression, container framing/CRC error recovery, file I/O syscalls, and
+  unbounded dynamic output growth on GPU. Single-stream DEFLATE has a serial
+  32 KiB sliding-window dependency with no data parallelism, and native
+  SIMD/assembly libraries (<code>isa-l</code>, <code>libdeflate</code>, <code>zstd</code>) already saturate NVMe
+  bandwidth on 1-2 CPU cores. Feed decompressed <code>uint8</code> slabs from those
+  libraries into Parakeet instead.</li>
+</ul>
 <h2 id="inspecting-the-rewrites">Inspecting the rewrites<a class="headerlink" href="#inspecting-the-rewrites" title="Permanent link">&para;</a></h2>
 <p>Run <code>par.show_rewrite</code> on any workload above to verify that scatter fusion,
 online monoidal tiling, or chunkwise parallel scans fired:</p>
