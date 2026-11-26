@@ -1182,6 +1182,34 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#170-november-25-2026" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.7.0 (November 25, 2026)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1.7.0 (November 25, 2026)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#irregular-tree-ragged-parallelism-primitives" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Irregular tree &amp; ragged parallelism primitives
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#160-november-25-2026" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1519,6 +1547,34 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#170-november-25-2026" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.7.0 (November 25, 2026)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1.7.0 (November 25, 2026)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#irregular-tree-ragged-parallelism-primitives" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Irregular tree &amp; ragged parallelism primitives
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#160-november-25-2026" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1834,6 +1890,32 @@
 
 
 <h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Permanent link">&para;</a></h1>
+<h2 id="170-november-25-2026">1.7.0 (November 25, 2026)<a class="headerlink" href="#170-november-25-2026" title="Permanent link">&para;</a></h2>
+<p>Adaptive 3-tier ragged parallelism, fused segmented 2D histograms with
+histogram subtraction, parallel ragged sample partitioning, and an end-to-end
+CudaTree-style adaptive BFS -&gt; DFS GBDT tree builder and benchmark (closing
+<code>#82</code> and <code>#83</code>).</p>
+<h3 id="irregular-tree-ragged-parallelism-primitives">Irregular tree &amp; ragged parallelism primitives<a class="headerlink" href="#irregular-tree-ragged-parallelism-primitives" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong><code>par.partition_by_size(offsets, block_thresh=1024, warp_thresh=64)</code> and
+  <code>par.segmented_parfor(body, offsets, ...)</code>:</strong> Classifies CSR segments into
+  heavy, medium, and light work-size tiers so skewed power-law distributions
+  (such as 1 giant node alongside thousands of tiny leaves) dispatch cleanly
+  across CPU, multicore, Apple Metal, and CUDA without warp/SIMD-group
+  starvation.</li>
+<li><strong><code>par.segmented_histogram2d(node_ids, bins, grads, hess, n_nodes, n_bins)</code>:</strong>
+  Single-pass fused 2D <code>(grad, hess, count)</code> scatter-add over <code>(node_id, bin_id)</code>
+  via <code>IndexScatter</code>, pairing directly with histogram subtraction
+  (<code>large_child = parent - small_child</code>) to cut histogram work by up to 2x.</li>
+<li><strong><code>par.ragged_partition(sample_ids, offsets, goes_left)</code>:</strong> Parallel stable
+  partitioning of active CSR sample-index frontiers into left/right child
+  segments on CPU, multicore, Apple Metal, and CUDA.</li>
+<li><strong>CudaTree adaptive BFS -&gt; DFS GBDT example &amp; benchmark:</strong> Added
+  <code>examples/cudatree_gbdt.py</code> (level-wise BFS with histogram subtraction
+  handing off small subtrees to a single fused thread-per-subtree DFS kernel
+  using <code>par.fixed_list</code> scratch) and <code>benchmarks/tree_models.py</code> (median + IQR
+  benchmark on balanced and skewed datasets).</li>
+</ul>
 <h2 id="160-november-25-2026">1.6.0 (November 25, 2026)<a class="headerlink" href="#160-november-25-2026" title="Permanent link">&para;</a></h2>
 <p>Unboxed <code>complex64</code>/<code>complex128</code> arithmetic and Wirtinger AD, plus compiled
 byte/ASCII parsing helpers (<code>split_bytes</code>, <code>parse_int64</code>, <code>parse_float32</code>,

@@ -1432,6 +1432,10 @@ fuses into surrounding NumPy code) <strong>and</strong> directly from ordinary P
 <td>two-pass 1-to-K ragged compaction (<code>IndexExpand</code>)</td>
 </tr>
 <tr>
+<td><code>par.partition_by_size(offsets, ...)</code> / <code>par.segmented_parfor(body, offsets, ...)</code> / <code>par.segmented_histogram2d(...)</code> / <code>par.ragged_partition(...)</code></td>
+<td>adaptive 3-tier ragged dispatch (heavy/medium/light tiers for skewed workloads), single-pass fused 2D <code>(grad, hess, count)</code> histograms, and parallel CSR sample-index partitioning</td>
+</tr>
+<tr>
 <td><code>par.split_bytes(buf, sep=10, skip_empty=False)</code> / <code>par.parse_int64</code> / <code>par.parse_float32</code> / <code>par.parse_float64</code></td>
 <td>zero-<code>PyObject</code> delimiter splitting into <code>RaggedArray[uint8]</code> and compiled ASCII integer/float parsing over <code>uint8</code> slices or <code>RaggedArray[uint8]</code></td>
 </tr>

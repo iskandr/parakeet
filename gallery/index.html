@@ -792,6 +792,28 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#unboxed-complex-fft-wirtinger-ad-and-fastacsv-byte-parsing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Unboxed complex FFT, Wirtinger AD, and FASTA/CSV byte parsing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#adaptive-cudatree-bfs-dfs-gbdt" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adaptive CudaTree BFS -&gt; DFS GBDT
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#nanogpt-end-to-end-training" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1711,6 +1733,28 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#unboxed-complex-fft-wirtinger-ad-and-fastacsv-byte-parsing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Unboxed complex FFT, Wirtinger AD, and FASTA/CSV byte parsing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#adaptive-cudatree-bfs-dfs-gbdt" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adaptive CudaTree BFS -&gt; DFS GBDT
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#nanogpt-end-to-end-training" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2132,8 +2176,8 @@ so all <code>G</code> query heads reuse one shared-memory load of <code>k</code>
 <h3 id="dataclasses-methods-and-polymorphic-dispatch">Dataclasses, methods, and polymorphic dispatch<a class="headerlink" href="#dataclasses-methods-and-polymorphic-dispatch" title="Permanent link">&para;</a></h3>
 <p>Parakeet lowers <code>@dataclass</code> records (frozen or non-frozen), pure methods,
 <code>@property</code>, <code>__call__</code>, structural <code>match</code>/<code>case</code>, compile-time <code>isinstance</code>,
-<code>functools.partial</code>, and <code>*args</code>/<code>**kwargs</code> away completely during elaboration
-- letting you write idiomatic scientific Python types that still compile to
+<code>functools.partial</code>, and <code>*args</code>/<code>**kwargs</code> away completely during elaboration,
+letting you write idiomatic scientific Python types that still compile to
 fused, tiled, differentiable native code (<code>examples/protein_and_layers.py</code>):</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="nd">@dataclass</span>
 <a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="k">class</span><span class="w"> </span><span class="nc">ProteinBackbone</span><span class="p">:</span>
@@ -2202,6 +2246,18 @@ fused, tiled, differentiable native code (<code>examples/protein_and_layers.py</
 <a id="__codelineno-18-65" name="__codelineno-18-65" href="#__codelineno-18-65"></a>    <span class="k">case</span><span class="w"> </span><span class="k">_</span><span class="p">:</span>
 <a id="__codelineno-18-66" name="__codelineno-18-66" href="#__codelineno-18-66"></a>      <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">out</span> <span class="o">*</span> <span class="n">out</span><span class="p">)</span>
 </code></pre></div>
+<h3 id="unboxed-complex-fft-wirtinger-ad-and-fastacsv-byte-parsing">Unboxed complex FFT, Wirtinger AD, and FASTA/CSV byte parsing<a class="headerlink" href="#unboxed-complex-fft-wirtinger-ad-and-fastacsv-byte-parsing" title="Permanent link">&para;</a></h3>
+<p><code>examples/complex_fft_and_fasta.py</code> shows an iterative Cooley-Tukey radix-2 FFT
+and Wirtinger gradient (<code>par.value_and_grad</code>) in unboxed <code>complex64</code> alongside
+zero-<code>PyObject</code> FASTA/CSV byte ingestion via <code>par.split_bytes</code>, byte LUT
+remapping, and <code>par.parse_float32</code>.</p>
+<h3 id="adaptive-cudatree-bfs-dfs-gbdt">Adaptive CudaTree BFS -&gt; DFS GBDT<a class="headerlink" href="#adaptive-cudatree-bfs-dfs-gbdt" title="Permanent link">&para;</a></h3>
+<p><code>examples/cudatree_gbdt.py</code> combines level-wise BFS histogram construction with
+histogram subtraction (<code>large_child = parent - small_child</code>),
+<code>par.partition_by_size</code>, <code>par.ragged_partition</code>, and a single fused
+thread-per-subtree DFS completion pass using thread-local <code>par.fixed_list</code>
+scratch stacks (<code>benchmarks/tree_models.py</code> benchmarks balanced and skewed
+workloads).</p>
 <h3 id="nanogpt-end-to-end-training">nanoGPT end-to-end training<a class="headerlink" href="#nanogpt-end-to-end-training" title="Permanent link">&para;</a></h3>
 <p>Train a two-layer character-level transformer from scratch in pure NumPy +
 Parakeet. The <a href="nanogpt/">complete nanoGPT walkthrough</a> follows the
