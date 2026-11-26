@@ -1182,6 +1182,45 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#160-november-25-2026" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.6.0 (November 25, 2026)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1.6.0 (November 25, 2026)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#unboxed-complex64-and-complex128" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Unboxed complex64 and complex128
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#byte-and-ascii-parsing-helpers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Byte and ASCII parsing helpers
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#150-november-25-2026" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1480,6 +1519,45 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#160-november-25-2026" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.6.0 (November 25, 2026)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1.6.0 (November 25, 2026)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#unboxed-complex64-and-complex128" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Unboxed complex64 and complex128
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#byte-and-ascii-parsing-helpers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Byte and ASCII parsing helpers
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#150-november-25-2026" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1756,6 +1834,39 @@
 
 
 <h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Permanent link">&para;</a></h1>
+<h2 id="160-november-25-2026">1.6.0 (November 25, 2026)<a class="headerlink" href="#160-november-25-2026" title="Permanent link">&para;</a></h2>
+<p>Unboxed <code>complex64</code>/<code>complex128</code> arithmetic and Wirtinger AD, plus compiled
+byte/ASCII parsing helpers (<code>split_bytes</code>, <code>parse_int64</code>, <code>parse_float32</code>,
+<code>parse_float64</code>) for FASTA/CSV ingestion (Python Semantics Wave 3, closing
+<code>#81</code>).</p>
+<h3 id="unboxed-complex64-and-complex128">Unboxed <code>complex64</code> and <code>complex128</code><a class="headerlink" href="#unboxed-complex64-and-complex128" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Zero-copy <code>(re, im)</code> lowering:</strong> <code>np.complex64</code>, <code>np.complex128</code>, and
+  Python <code>complex</code> values lower cleanly onto pairs of real <code>float32</code>/<code>float64</code>
+  views and scalar expressions, working out of the box across CPU, multicore,
+  Apple Metal (<code>complex64</code>), and CUDA without IR or backend changes.</li>
+<li><strong>Complex math and linear algebra:</strong> Supports <code>+</code>, <code>-</code>, <code>*</code>, <code>/</code>, <code>**</code>,
+  <code>==</code>, <code>!=</code>, <code>abs</code>, <code>conj</code>/<code>conjugate</code>, <code>.real</code>, <code>.imag</code>, <code>np.angle</code>,
+  <code>np.exp</code>, <code>np.log</code>, <code>np.sqrt</code>, <code>np.sin</code>, <code>np.cos</code>, <code>np.matmul</code>/<code>@</code>, <code>np.dot</code>,
+  <code>np.vdot</code>, <code>np.sum</code>, <code>np.mean</code>, <code>np.cumsum</code>, <code>np.where</code>, <code>np.concatenate</code>,
+  <code>np.stack</code>, indexing/slicing, and in-place updates with NEP 50 promotion.</li>
+<li><strong>Wirtinger automatic differentiation:</strong> <code>par.grad</code>, <code>par.value_and_grad</code>,
+  and <code>par.jvp</code> differentiate real-valued losses over <code>complex64</code>/<code>complex128</code>
+  arrays automatically.</li>
+</ul>
+<h3 id="byte-and-ascii-parsing-helpers">Byte and ASCII parsing helpers<a class="headerlink" href="#byte-and-ascii-parsing-helpers" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong><code>par.split_bytes(buf, sep, skip_empty=False)</code>:</strong> Data-parallel delimiter
+  splitting of <code>uint8</code> / <code>bytes</code> buffers into <code>RaggedArray[uint8]</code> with zero
+  <code>PyObject</code> allocation.</li>
+<li><strong><code>par.parse_int64</code>, <code>par.parse_float32</code>, <code>par.parse_float64</code>:</strong> Compiled
+  ASCII integer and floating-point parsers (with optional signs, decimals, and
+  exponents) operating on single <code>uint8</code> slices or in parallel over
+  <code>RaggedArray[uint8]</code>.</li>
+<li><strong>New runnable example:</strong> Added <code>examples/complex_fft_and_fasta.py</code>
+  (Cooley-Tukey radix-2 FFT, spectral filter Wirtinger gradient, and compiled
+  FASTA/CSV byte ingestion).</li>
+</ul>
 <h2 id="150-november-25-2026">1.5.0 (November 25, 2026)<a class="headerlink" href="#150-november-25-2026" title="Permanent link">&para;</a></h2>
 <p>Local Python lists, GPU-safe fixed-capacity scratch buffers, dynamic-shape
 array/ragged loop rebinding, and zero-allocation <code>itertools</code> combinators

@@ -1395,12 +1395,12 @@ code deliberately differs from running the same function in CPython.</p>
 <td>64-bit integer / double / bool, <em>weakly typed</em> like NumPy treats Python scalars</td>
 </tr>
 <tr>
-<td>NumPy scalars (<code>np.float32(1)</code>, ...)</td>
-<td>scalars of exactly that dtype</td>
+<td>NumPy scalars (<code>np.float32(1)</code>, <code>np.complex64(1+2j)</code>, ...)</td>
+<td>scalars of exactly that dtype (<code>complex</code> lowers to unboxed <code>(re, im)</code> float pairs)</td>
 </tr>
 <tr>
 <td>NumPy arrays</td>
-<td>bool, int8–int64, uint8–uint64, float32, float64; any number of dimensions, any strides</td>
+<td>bool, int8–int64, uint8–uint64, float32, float64, complex64, complex128; any number of dimensions, any strides</td>
 </tr>
 <tr>
 <td>tuples (also nested)</td>
@@ -1428,9 +1428,11 @@ code deliberately differs from running the same function in CPython.</p>
 </tr>
 </tbody>
 </table>
-<p><code>float16</code> data is widened to <code>float32</code>. Complex numbers, object arrays, structured
-dtypes, general-purpose mutable containers, sets and arbitrary class instances are not supported; passing
-one raises a <code>TypeError</code> naming the type.</p>
+<p><code>float16</code> data is widened to <code>float32</code>. <code>complex64</code> and <code>complex128</code> lower to
+unboxed <code>(re, im)</code> float views across CPU, multicore, Apple Metal (<code>complex64</code>),
+and CUDA, and compose with Wirtinger <code>par.grad</code> and <code>par.jvp</code>. Object arrays,
+general-purpose mutable containers, sets and arbitrary non-dataclass class
+instances are not supported; passing one raises a <code>TypeError</code> naming the type.</p>
 <p>Type promotion follows NumPy 2 (NEP 50) exactly: <code>float32_array * 2.0</code> stays
 <code>float32</code>, <code>int8_array + 1</code> stays <code>int8</code>, <code>int32_array / 2</code> is <code>float64</code>.</p>
 <h2 id="statements">Statements<a class="headerlink" href="#statements" title="Permanent link">&para;</a></h2>

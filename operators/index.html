@@ -1432,6 +1432,10 @@ fuses into surrounding NumPy code) <strong>and</strong> directly from ordinary P
 <td>two-pass 1-to-K ragged compaction (<code>IndexExpand</code>)</td>
 </tr>
 <tr>
+<td><code>par.split_bytes(buf, sep=10, skip_empty=False)</code> / <code>par.parse_int64</code> / <code>par.parse_float32</code> / <code>par.parse_float64</code></td>
+<td>zero-<code>PyObject</code> delimiter splitting into <code>RaggedArray[uint8]</code> and compiled ASCII integer/float parsing over <code>uint8</code> slices or <code>RaggedArray[uint8]</code></td>
+</tr>
+<tr>
 <td><code>par.fixed_list(capacity, dtype=np.float32)</code></td>
 <td>fixed-capacity, zero-<code>malloc</code> thread-local scratch list (<code>.append</code>, <code>.pop</code>, <code>.clear</code>, indexing, <code>len</code>) for stacks and per-thread buffers inside <code>par.parfor</code> / <code>par.map</code> on CPU, CUDA, and Metal</td>
 </tr>

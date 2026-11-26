@@ -1637,8 +1637,8 @@ or SciPy. Knowing the boundary up front avoids surprises.</p>
 </thead>
 <tbody>
 <tr>
-<td><code>bool</code>, <code>int8</code>–<code>int64</code>, <code>uint8</code>–<code>uint64</code>, <code>float32</code>, <code>float64</code> scalars and arrays (any rank or strides)</td>
-<td>Complex numbers (<code>complex64</code>/<code>complex128</code>), native <code>float16</code> compute (<code>float16</code> is widened to <code>float32</code>), structured/record dtypes, object or string arrays</td>
+<td><code>bool</code>, <code>int8</code>–<code>int64</code>, <code>uint8</code>–<code>uint64</code>, <code>float32</code>, <code>float64</code>, <code>complex64</code>, <code>complex128</code> scalars and arrays (any rank or strides)</td>
+<td>Native <code>float16</code> compute (<code>float16</code> is widened to <code>float32</code>), object or string arrays</td>
 </tr>
 <tr>
 <td>Nested tuples, <code>NamedTuple</code>s, fixed string-key dicts, <code>@dataclass</code>es (frozen or non-frozen) with pure methods / <code>@property</code> / <code>__call__</code>, <code>slice</code>, <code>range</code>, <code>zip</code>, <code>enumerate</code>, <code>itertools</code> (<code>pairwise</code>, <code>islice</code>, <code>chain</code>, <code>product</code>, <code>batched</code>)</td>
