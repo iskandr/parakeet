@@ -44,37 +44,29 @@ replicates / `n = 11` CPU replicates).
 
 **Key takeaways:**
 
-* **Exact 1-NN (`1,024 × 4,096 × 32`):** On the L4 GPU, Parakeet's ordinary
-  broadcasting NumPy (**0.223 ms**) and nested [`par.map`](operators.md#map)
-  form (**0.225 ms**) both beat `torch.compile(cdist)` (**0.257 ms**),
-  PyTorch `cdist` (**0.251 ms**), JAX `jit` (**0.500 ms**), Parakeet `1.0.0`
-  (**0.787 ms**), PyKeOps (**0.953 ms**), and CuPy (**16.93 ms**), trailing only
-  [Faiss `GpuIndexFlatL2`](https://github.com/facebookresearch/faiss)
-  (**0.150 ms**). On 4 CPU threads, Parakeet (**7.91 ms**) beats Faiss Flat
-  (**8.42 ms**), PyKeOps (**29.03 ms**),
-  [SciPy `cKDTree`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.cKDTree.html)
-  (**54.27 ms**), and NumPy (**472.3 ms**), just behind
-  [scikit-learn brute](https://scikit-learn.org/stable/modules/generated/sklearn.neighbors.NearestNeighbors.html)
-  (**6.49 ms**).
-* **Scaling to 16,384 references:** Tiled GPU pairwise folds cut latency by
-  **4.8×** (`2.597 ms → 0.542 ms` on L4) and cut global scratch memory by
-  **21×** (`64 MiB → 3 MiB`, plus a `16 KiB` shared-memory tile per block).
-* **Gaussian kernel regression:** On 4 CPU threads, Parakeet (**42.99 ms**)
-  beats [PyKeOps](https://www.kernel-operations.io/keops/) (**66.77 ms**) and
-  NumPy (**505.8 ms**, **11.8× faster**). On GPU, Parakeet (**1.053 ms**) beats
-  PyKeOps (**1.254 ms**) and CuPy (**17.18 ms**), while `torch.compile(cdist)`
-  (**0.308 ms**) and JAX `jit` (**0.602 ms**) lead.
-* **End-to-end nanoGPT training (NVIDIA L4, zero cuBLAS in Parakeet):**
-  Shape-adaptive double-buffered `cp.async` WMMA tiles, multi-stage warp-per-row
-  LayerNorm pipelines, single-pass atomic reductions, disjoint-union horizontal
-  map batching, and alpha-canonical kernel deduplication cut launches/step by
-  **63%–66%** (`214 → 80` on `L=2`, `437 → 147` on `L=4`) and cut step time from
-  **6.83 ms to 4.57 ms** on the small 2-layer model (**1.95× faster** than
-  PyTorch eager at **8.88 ms**) and from **32.32 ms to 17.81 ms** (**1.81×
-  faster**) on the medium 4-layer model, beating PyTorch eager (**18.93 ms**,
-  backed by cuBLAS and cuDNN) and within **1.21×** of `torch.compile`
-  (**14.76 ms**) while compiling faster than both `torch.compile` (29.3 s) and
-  JAX `jit` (23.8 s) (`9.35 s` on `L=2`, `18.15 s` on `L=4`).
+* **Exact 1-NN (`1,024 × 4,096 × 32`):**
+  - **L4 GPU:** Parakeet broadcasting NumPy (**0.223 ms**) and nested
+    [`par.map`](operators.md#map) (**0.225 ms**) beat `torch.compile(cdist)`
+    (0.257 ms), PyTorch `cdist` (0.251 ms), JAX `jit` (0.500 ms), PyKeOps
+    (0.953 ms), and CuPy (16.93 ms), trailing only
+    [Faiss `GpuIndexFlatL2`](https://github.com/facebookresearch/faiss) (0.150 ms).
+  - **4-thread CPU:** Parakeet (**7.91 ms**) beats Faiss Flat (8.42 ms),
+    PyKeOps (29.03 ms), SciPy `cKDTree` (54.27 ms), and NumPy (472.3 ms), just
+    behind scikit-learn brute (6.49 ms).
+* **Scaling to 16,384 references (L4 GPU):** Tiled pairwise folds cut latency
+  **4.8×** (`2.597 → 0.542 ms`) and global scratch memory **21×**
+  (`64 → 3 MiB`, plus a `16 KiB` shared-memory tile per block).
+* **Gaussian kernel regression (`1,024 × 4,096 × 32`):**
+  - **4-thread CPU:** Parakeet (**42.99 ms**) beats PyKeOps (66.77 ms) and
+    NumPy (505.8 ms, **11.8× faster**).
+  - **L4 GPU:** Parakeet (**1.053 ms**) beats PyKeOps (1.254 ms) and CuPy
+    (17.18 ms), while `torch.compile(cdist)` (0.308 ms) and JAX `jit` (0.602 ms) lead.
+* **End-to-end nanoGPT training (L4 GPU, zero cuBLAS in Parakeet):**
+  - Launches/step dropped **63%–66%** (`214 → 80` on `L=2`, `437 → 147` on `L=4`).
+  - **Small (`L=2`):** **4.57 ms** (**1.95× faster** than PyTorch eager at 8.88 ms).
+  - **Medium (`L=4`):** **17.81 ms** TF32 (beating PyTorch eager at 18.93 ms,
+    within **1.21×** of `torch.compile` at 14.76 ms), with faster compile times
+    (`9.35 s` / `18.15 s` vs. `torch.compile` `29.3 s` and JAX `23.8 s`).
 
 ---
 

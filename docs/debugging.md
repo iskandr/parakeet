@@ -2,17 +2,17 @@
 
 ## Compile-time errors
 
-Everything Parakeet cannot compile is reported when the function is first called
-with a given set of argument types, as a subclass of `parakeet.CompileError`:
+Anything outside Parakeet's supported subset fails at specialization time as a
+subclass of `parakeet.CompileError`:
 
 | Exception | Meaning |
 |---|---|
-| `UnsupportedError` | a Python or NumPy feature outside the supported subset |
-| `TypeInferenceError` (also a `TypeError`) | types that cannot be reconciled, wrong arguments |
-| `StaticValueError` (also a `ValueError`) | something that must be a compile-time constant is not, or is invalid |
+| `UnsupportedError` | Python or NumPy feature outside the compiled subset |
+| `TypeInferenceError` (also `TypeError`) | Incompatible types or invalid argument signature |
+| `StaticValueError` (also `ValueError`) | A compile-time constant (`axis`, `dtype`, `shape` length) is dynamic or invalid |
 
-The message carries the source line, a caret under the offending expression,
-and (because calls are inlined) the chain of calls that led there:
+Errors report the exact source line, caret, and inlined call chain
+(programmatically accessible via `err.location` and `err.call_chain`):
 
 ```text
 parakeet.errors.TypeInferenceError: indices must be a scalar, got str 'a'
@@ -25,16 +25,14 @@ called from
              ^^^^^^^^^^^^^^
 ```
 
-`err.location` and `err.call_chain` give the same information programmatically,
-and a note records the argument types being compiled.
-
 ## Run-time errors
 
-Generated code raises ordinary exceptions, with a note pointing at the source
-line that failed:
+Compiled code raises standard Python exceptions with the failing source line,
+even from inside parallel CPU loops and GPU kernels (freeing any temporary
+allocations first):
 
 ```python
-@jit
+@par.jit
 def third(x):
   return x[2]
 
@@ -44,54 +42,30 @@ third(np.zeros(2))
 #   raised by compiled code at demo.py:5 (in third)
 ```
 
-| Situation | Exception |
+| Condition | Exception |
 |---|---|
-| index out of range | `IndexError` |
-| shapes that do not broadcast, bad `reshape`, ragged `map` results, empty reduction without identity | `ValueError` |
-| `//`, `%` or `/` by zero on Python numbers | `ZeroDivisionError` |
-| `assert` | `AssertionError` |
-| allocation failure | `MemoryError` |
-| writing to a read-only array | `ValueError` |
+| Out-of-bounds index | `IndexError` |
+| Broadcast mismatch, bad `reshape`, ragged `map` output, empty unseeded reduction, writing to a read-only array | `ValueError` |
+| Scalar `//`, `%`, or `/` by zero on Python numbers | `ZeroDivisionError` |
+| Failed `assert` | `AssertionError` |
+| Out of memory | `MemoryError` |
 
-Checks are also performed inside parallel loops and GPU kernels. When an error
-occurs, temporaries allocated so far are released.
+NumPy *array* division matches NumPy: integer division by zero yields `0`, and
+float division by zero yields `inf` / `nan`.
 
-NumPy *array* arithmetic follows NumPy: integer division by zero yields 0 and
-floating-point operations yield `inf`/`nan` rather than raising.
+## Debugging toolkit
 
-## Tools
+| Tool | What it does |
+|---|---|
+| `f(x, _backend="python")` | Run the original Python function uncompiled to separate an algorithm bug from a compiler issue |
+| `par.show_rewrite(f, *args)` | Report which algebraic laws fired and operator counts before/after optimization |
+| `f.specialize(*args)` | Compile without running; returns a [`Specialization`](api.md) with `.operators`, `.ir`, `.source`, `.kernels`, `.signature` |
+| `f.inspect(*args)` | Print the lowered loop IR |
+| `@par.jit(fusion=False)` | Disable fusion to isolate whether an issue is fusion-related |
+| `par.config.print_ir = True` / `print_code = True` | Print lowered IR or generated C for every specialization (also `PARAKEET_PRINT_IR=1`) |
+| `par.find_broken_transform(fn, inputs)` | Enable fusion, each middle-end pass, C optimization, threads, and GPU one at a time and report the first pass that diverges from Python (or `expected`) |
+| `par.clear_cache()` | Delete disk-cached compiled modules (keyed by generated source + compiler, so never required for correctness) |
 
-`backend="python"`
-:   Run the original function. If the answer is still wrong the bug is in your
-    code, not in the compiler: `f(x, _backend="python")`.
-
-`f.specialize(*args)`
-:   Compile for example arguments without running and return a
-    [`Specialization`](api.md): `.operators` (maps and reductions over index
-    spaces, as elaborated), `.ir` (typed loop IR after the passes), `.source` (C),
-    `.kernels` (GPU kernel sources), `.signature`.
-
-`f.inspect(*args)`
-:   Print the IR.
-
-`parakeet.config.print_ir`, `parakeet.config.print_code`
-:   Print the IR / C of everything as it is compiled (also `PARAKEET_PRINT_IR=1`).
-
-`@jit(fusion=False)`
-:   Evaluate every array expression into its own temporary. Useful to check
-    whether a problem is related to loop fusion.
-
-`parakeet.find_broken_transform(fn, inputs)`
-:   Switch the optimizations on one at a time; fusion, each pass of the
-    middle end (dead code, vertical fusion, filter fusion, sibling fusion,
-    reduction interchange, tiling), the C optimizer, parallel loops, the
-    GPU; and name the first one that makes the
-    result differ from plain Python (or from `expected`, if given).
-
-`parakeet.clear_cache()`
-:   Delete cached compiled modules (they are keyed by the generated source and
-    compiler, so this is never *needed* for correctness).
-
-If you hit a `parakeet.errors.InternalError` or a `CCompilerError`, that is a bug
-in Parakeet: the message includes where the generated source was kept. Please
-open an issue with it.
+If you ever hit an `InternalError` or `CCompilerError`, the exception message
+includes the saved path to the generated source—please attach it to a GitHub
+issue.
