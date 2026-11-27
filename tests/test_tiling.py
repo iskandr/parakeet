@@ -1069,7 +1069,8 @@ def test_queried_target_profile_matrix_unit_and_device_array():
             fused_mlp_f32(a_tc, b_tc, bias_tc), np.tanh(np.sin(a_tc) @ np.cos(b_tc) + bias_tc), rtol=2e-3, atol=2e-3
           )
           spec_tc = matmul_f32.specialize(a_tc, b_tc)
-          assert any("mma_sync" in k for k in spec_tc.kernels)
+          assert any("pk_mma_m16n8k8_tf32(" in k.split("pk_kernel(", 1)[-1] for k in spec_tc.kernels)
+          assert not any("#include <mma.h>" in k for k in spec_tc.kernels)
 
       # Persistent DeviceArray residency across a multi-step training loop:
       # ZERO host->device uploads and ZERO device->host downloads during steady-state steps!
