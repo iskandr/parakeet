@@ -600,7 +600,7 @@ def _generate_matrix_unit_kernel(
     scalars = sorted(scalars, key=lambda v: -v.type.itemsize)
 
   if is_cuda:
-    hdr = "#ifndef PK_CUDA_SIMULATE\n#include <mma.h>\n#endif\n" + prelude
+    hdr = prelude
   else:
     hdr = prelude.replace("#include <metal_stdlib>", "#include <metal_stdlib>\n#include <metal_simdgroup_matrix>", 1)
 
@@ -704,14 +704,19 @@ def _generate_matrix_unit_kernel(
     lines.append(f"  {sh_qual} float pk_sh_b[{b_size}];")
 
   init_lit = repr(float(init_val)) + ("f" if is_cuda else "")
+  n_tiles_8 = r_n * 2  # each 16x16 logical tile = two 16x8 mma.sync.aligned.m16n8k8 tiles
   if is_cuda:
-    lines.append("  using namespace nvcuda::wmma;")
-    lines.append(f"  fragment<accumulator, 16, 16, 8, float> pk_c[{r_m}][{r_n}];")
+    lines.append("  const int pk_grp = (int)(pk_lane >> 2);")
+    lines.append("  const int pk_tid4 = (int)(pk_lane & 3);")
+    lines.append(f"  float pk_c[{r_m}][{n_tiles_8}][4];")
     lines.append("  #pragma unroll")
     lines.append(f"  for (int pk_rm = 0; pk_rm < {r_m}; ++pk_rm) {{")
     lines.append("    #pragma unroll")
-    lines.append(f"    for (int pk_rn = 0; pk_rn < {r_n}; ++pk_rn) {{")
-    lines.append(f"      fill_fragment(pk_c[pk_rm][pk_rn], {init_lit});")
+    lines.append(f"    for (int pk_rn = 0; pk_rn < {n_tiles_8}; ++pk_rn) {{")
+    lines.append(f"      pk_c[pk_rm][pk_rn][0] = {init_lit};")
+    lines.append(f"      pk_c[pk_rm][pk_rn][1] = {init_lit};")
+    lines.append(f"      pk_c[pk_rm][pk_rn][2] = {init_lit};")
+    lines.append(f"      pk_c[pk_rm][pk_rn][3] = {init_lit};")
     lines.append("    }")
     lines.append("  }")
   else:
@@ -735,8 +740,6 @@ def _generate_matrix_unit_kernel(
       lines.append(f"  const {idx_t} pk_k_start = 0;")
       lines.append(f"  const {idx_t} pk_k_end = pk_K;")
 
-    a_layout = "col_major" if a_col_major else "row_major"
-    b_layout = "col_major" if b_col_major else "row_major"
     a_slow_v, a_fast_v = (st_row.index[1], st_row.index[0]) if a_col_major else (st_row.index[0], st_row.index[1])
     b_slow_v, b_fast_v = (st_col.index[0], st_col.index[1]) if b_col_major else (st_col.index[1], st_col.index[0])
     a_slow_lim, a_fast_lim = ("pk_K", "pk_M") if a_col_major else ("pk_M", "pk_K")
@@ -865,23 +868,61 @@ def _generate_matrix_unit_kernel(
 
     lines.append("      #pragma unroll")
     lines.append(f"      for ({idx_t} pk_tk = 0; pk_tk < {bk}; pk_tk += 8) {{")
-    lines.append(f"        fragment<matrix_a, 16, 16, 8, precision::tf32, {a_layout}> pk_fa[{r_m}];")
-    lines.append(f"        fragment<matrix_b, 16, 16, 8, precision::tf32, {b_layout}> pk_fb[{r_n}];")
+    lines.append(f"        unsigned int pk_fa[{r_m}][4];")
+    lines.append(f"        unsigned int pk_fb[{n_tiles_8}][2];")
     for rm in range(r_m):
+      am = f"pk_sg_m * {warp_m} + {rm * 16}"
       if a_col_major:
-        a_off = f"pk_tk * {a_stride} + pk_sg_m * {warp_m} + {rm * 16}"
+        lines.append(
+          f"        pk_fa[{rm}][0] = pk_f32_to_tf32(pk_sh_a[pk_stage][(pk_tk + pk_tid4) * {a_stride} + {am} + pk_grp]);"
+        )
+        lines.append(
+          f"        pk_fa[{rm}][1] = pk_f32_to_tf32(pk_sh_a[pk_stage][(pk_tk + pk_tid4) * {a_stride} + {am} + pk_grp + 8]);"
+        )
+        lines.append(
+          f"        pk_fa[{rm}][2] = pk_f32_to_tf32(pk_sh_a[pk_stage][(pk_tk + pk_tid4 + 4) * {a_stride} + {am} + pk_grp]);"
+        )
+        lines.append(
+          f"        pk_fa[{rm}][3] = pk_f32_to_tf32(pk_sh_a[pk_stage][(pk_tk + pk_tid4 + 4) * {a_stride} + {am} + pk_grp + 8]);"
+        )
       else:
-        a_off = f"(pk_sg_m * {warp_m} + {rm * 16}) * {a_stride} + pk_tk"
-      lines.append(f"        load_matrix_sync(pk_fa[{rm}], &pk_sh_a[pk_stage][{a_off}], {a_stride});")
-    for rn in range(r_n):
+        lines.append(
+          f"        pk_fa[{rm}][0] = pk_f32_to_tf32(pk_sh_a[pk_stage][({am} + pk_grp) * {a_stride} + pk_tk + pk_tid4]);"
+        )
+        lines.append(
+          f"        pk_fa[{rm}][1] = pk_f32_to_tf32(pk_sh_a[pk_stage][({am} + pk_grp + 8) * {a_stride} + pk_tk + pk_tid4]);"
+        )
+        lines.append(
+          f"        pk_fa[{rm}][2] = pk_f32_to_tf32(pk_sh_a[pk_stage][({am} + pk_grp) * {a_stride} + pk_tk + pk_tid4 + 4]);"
+        )
+        lines.append(
+          f"        pk_fa[{rm}][3] = pk_f32_to_tf32(pk_sh_a[pk_stage][({am} + pk_grp + 8) * {a_stride} + pk_tk + pk_tid4 + 4]);"
+        )
+    for rn in range(n_tiles_8):
+      bn_off = f"pk_sg_n * {warp_n} + {rn * 8}"
       if b_col_major:
-        b_off = f"(pk_sg_n * {warp_n} + {rn * 16}) * {b_stride} + pk_tk"
+        lines.append(
+          f"        pk_fb[{rn}][0] = pk_f32_to_tf32(pk_sh_b[pk_stage][({bn_off} + pk_grp) * {b_stride} + pk_tk + pk_tid4]);"
+        )
+        lines.append(
+          f"        pk_fb[{rn}][1] = pk_f32_to_tf32(pk_sh_b[pk_stage][({bn_off} + pk_grp) * {b_stride} + pk_tk + pk_tid4 + 4]);"
+        )
       else:
-        b_off = f"pk_tk * {b_stride} + pk_sg_n * {warp_n} + {rn * 16}"
-      lines.append(f"        load_matrix_sync(pk_fb[{rn}], &pk_sh_b[pk_stage][{b_off}], {b_stride});")
+        lines.append(
+          f"        pk_fb[{rn}][0] = pk_f32_to_tf32(pk_sh_b[pk_stage][(pk_tk + pk_tid4) * {b_stride} + {bn_off} + pk_grp]);"
+        )
+        lines.append(
+          f"        pk_fb[{rn}][1] = pk_f32_to_tf32(pk_sh_b[pk_stage][(pk_tk + pk_tid4 + 4) * {b_stride} + {bn_off} + pk_grp]);"
+        )
     for rm in range(r_m):
-      for rn in range(r_n):
-        lines.append(f"        mma_sync(pk_c[{rm}][{rn}], pk_fa[{rm}], pk_fb[{rn}], pk_c[{rm}][{rn}]);")
+      for rn in range(n_tiles_8):
+        lines.append(
+          f"        pk_mma_m16n8k8_tf32("
+          f"pk_c[{rm}][{rn}][0], pk_c[{rm}][{rn}][1], pk_c[{rm}][{rn}][2], pk_c[{rm}][{rn}][3], "
+          f"pk_fa[{rm}][0], pk_fa[{rm}][1], pk_fa[{rm}][2], pk_fa[{rm}][3], "
+          f"pk_fb[{rn}][0], pk_fb[{rn}][1], "
+          f"pk_c[{rm}][{rn}][0], pk_c[{rm}][{rn}][1], pk_c[{rm}][{rn}][2], pk_c[{rm}][{rn}][3]);"
+        )
     lines.append("      }")
     lines.append("      if (pk_k_next < pk_k_end) {")
     lines.append("        pk_cp_async_wait();")
@@ -889,7 +930,6 @@ def _generate_matrix_unit_kernel(
     lines.append("      }")
     lines.append("      pk_stage = pk_next;")
     lines.append("    }")
-    lines.append(f"    {barrier}")
     lines.append("  }")
   else:
     bm_shift = bm.bit_length() - 1
@@ -960,20 +1000,28 @@ def _generate_matrix_unit_kernel(
   skip_ep = {fold.result.uid, i_var.uid, j_var.uid}
 
   if is_cuda:
-    lines.append("  float* pk_ep = &pk_sh_a[0][pk_sgid * 256];")
-    lines.append(f"  for (int pk_rm = 0; pk_rm < {r_m}; ++pk_rm) {{")
-    lines.append(f"    for (int pk_rn = 0; pk_rn < {r_n}; ++pk_rn) {{")
-    lines.append("      store_matrix_sync(pk_ep, pk_c[pk_rm][pk_rn], 16, mem_row_major);")
-    lines.append("      __syncwarp();")
-    lines.append("      for (long long pk_e = pk_lane; pk_e < 256; pk_e += 32) {")
-    lines.append(f"        const {idx_t} {i_var.name} = pk_i0 + pk_sg_m * {warp_m} + pk_rm * 16 + (pk_e >> 4);")
-    lines.append(f"        const {idx_t} {j_var.name} = pk_j0 + pk_sg_n * {warp_n} + pk_rn * 16 + (pk_e & 15);")
+    # Register-direct epilogue: zero shared-memory bounce and zero __syncwarp()!
+    # Each lane directly owns 4 elements of every 16x8 mma.sync tile:
+    #   e=0: (grp,   tid4*2),   e=1: (grp,   tid4*2+1)
+    #   e=2: (grp+8, tid4*2),   e=3: (grp+8, tid4*2+1)
     ep_full = m_div_bm and n_div_bn
     ep_pad = "        " if ep_full else "          "
     ep_ind = 4 if ep_full else 5
+    lines.append("  #pragma unroll")
+    lines.append(f"  for (int pk_rm = 0; pk_rm < {r_m}; ++pk_rm) {{")
+    lines.append("    #pragma unroll")
+    lines.append(f"    for (int pk_rn = 0; pk_rn < {n_tiles_8}; ++pk_rn) {{")
+    lines.append("      #pragma unroll")
+    lines.append("      for (int pk_e = 0; pk_e < 4; ++pk_e) {")
+    lines.append(
+      f"        const {idx_t} {i_var.name} = pk_i0 + pk_sg_m * {warp_m} + pk_rm * 16 + pk_grp + ((pk_e >> 1) << 3);"
+    )
+    lines.append(
+      f"        const {idx_t} {j_var.name} = pk_j0 + pk_sg_n * {warp_n} + pk_rn * 8 + (pk_tid4 << 1) + (pk_e & 1);"
+    )
     if not ep_full:
       lines.append(f"        if ({i_var.name} < pk_M && {j_var.name} < pk_N) {{")
-    lines.append(f"{ep_pad}const float {fold.result.name} = pk_ep[pk_e];")
+    lines.append(f"{ep_pad}const float {fold.result.name} = pk_c[pk_rm][pk_rn][pk_e];")
     if split_k_enabled and pure_ep is not None:
       prefix_ep, store_ep = pure_ep
       _emit_decl_locals(em, epilogue_stmts, skip_ep, lines, ep_pad)
@@ -991,7 +1039,6 @@ def _generate_matrix_unit_kernel(
     if not ep_full:
       lines.append("        }")
     lines.append("      }")
-    lines.append("      __syncwarp();")
     lines.append("    }")
     lines.append("  }")
   else:

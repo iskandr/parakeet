@@ -1988,7 +1988,7 @@ def _emit_mm_header(
   barrier = "__syncthreads();" if is_cuda else "threadgroup_barrier(mem_flags::mem_threadgroup);"
   warp_barrier = "__syncwarp();" if is_cuda else "simdgroup_barrier(mem_flags::mem_threadgroup);"
   if is_cuda:
-    hdr = "#ifndef PK_CUDA_SIMULATE\n#include <mma.h>\n#endif\n" + prelude
+    hdr = prelude
   else:
     hdr = prelude.replace("#include <metal_stdlib>", "#include <metal_stdlib>\n#include <metal_simdgroup_matrix>", 1)
   lines: list[str] = [hdr]
@@ -2075,8 +2075,6 @@ def _generate_flash_monoid_matrix_unit(
     scalars = sorted(scalars, key=lambda v: -v.type.itemsize)
 
   lines, idx_t, sh_qual, barrier, warp_barrier = _emit_mm_header(em, target, prelude, scalars, bufs)
-  if is_cuda:
-    lines.append("  using namespace nvcuda::wmma;")
   lines.append(f"  const {idx_t} pk_M = ({idx_t})({em.expr(plan.m_dim)});")
   lines.append(f"  const {idx_t} pk_N = ({idx_t})({em.expr(plan.n_dim)});")
   lines.append(f"  const {idx_t} pk_K = ({idx_t})({em.expr(plan.k_dim)});")
@@ -2222,9 +2220,7 @@ def _generate_flash_monoid_matrix_unit(
     lines.append("    }")
 
   if is_cuda:
-    lines.append("    fragment<accumulator, 16, 16, 8, float> pk_s_frag[2];")
-    lines.append("    fill_fragment(pk_s_frag[0], 0.0f);")
-    lines.append("    fill_fragment(pk_s_frag[1], 0.0f);")
+    lines.append("    float pk_s_frag[2][8] = {{0.0f}, {0.0f}};")
   else:
     lines.append("    simdgroup_float8x8 pk_s_frag[4];")
     for rn in range(4):
@@ -2251,15 +2247,12 @@ def _generate_flash_monoid_matrix_unit(
   lines.append(f"      {barrier}")
   lines.append(f"      for ({idx_t} pk_tk = 0; pk_tk < pk_K; pk_tk += 8) {{")
   if is_cuda:
-    lines.append("        fragment<matrix_a, 16, 16, 8, precision::tf32, row_major> pk_fa;")
-    lines.append("        fragment<matrix_b, 16, 16, 8, precision::tf32, row_major> pk_fb0, pk_fb1;")
     lines.append(
-      f"        load_matrix_sync(pk_fa, &pk_sh_a[(pk_sgid * 16) * {q_hoist_stride} + pk_tk], {q_hoist_stride});"
+      f"        pk_mma_16x16x8_row_row(pk_s_frag[0], &pk_sh_a[(pk_sgid * 16) * {q_hoist_stride} + pk_tk], {q_hoist_stride}, &pk_sh_b[pk_tk * {b_kt_stride}], {b_kt_stride});"
     )
-    lines.append(f"        load_matrix_sync(pk_fb0, &pk_sh_b[pk_tk * {b_kt_stride}], {b_kt_stride});")
-    lines.append(f"        load_matrix_sync(pk_fb1, &pk_sh_b[pk_tk * {b_kt_stride} + 16], {b_kt_stride});")
-    lines.append("        mma_sync(pk_s_frag[0], pk_fa, pk_fb0, pk_s_frag[0]);")
-    lines.append("        mma_sync(pk_s_frag[1], pk_fa, pk_fb1, pk_s_frag[1]);")
+    lines.append(
+      f"        pk_mma_16x16x8_row_row(pk_s_frag[1], &pk_sh_a[(pk_sgid * 16) * {q_hoist_stride} + pk_tk], {q_hoist_stride}, &pk_sh_b[pk_tk * {b_kt_stride} + 16], {b_kt_stride});"
+    )
   else:
     lines.append("        simdgroup_float8x8 pk_fa;")
     lines.append(
@@ -2311,13 +2304,12 @@ def _generate_flash_monoid_matrix_unit(
   lines.append(f"        const {idx_t} pk_klen = pk_K - pk_k0 < {bk} ? pk_K - pk_k0 : {bk};")
   lines.append(f"        for ({idx_t} pk_tk = 0; pk_tk < pk_klen; pk_tk += 8) {{")
   if is_cuda:
-    lines.append("          fragment<matrix_a, 16, 16, 8, precision::tf32, row_major> pk_fa;")
-    lines.append("          fragment<matrix_b, 16, 16, 8, precision::tf32, row_major> pk_fb0, pk_fb1;")
-    lines.append(f"          load_matrix_sync(pk_fa, &pk_sh_a[(pk_sgid * 16) * {k_stride} + pk_tk], {k_stride});")
-    lines.append(f"          load_matrix_sync(pk_fb0, &pk_sh_b[pk_tk * {b_kt_stride}], {b_kt_stride});")
-    lines.append(f"          load_matrix_sync(pk_fb1, &pk_sh_b[pk_tk * {b_kt_stride} + 16], {b_kt_stride});")
-    lines.append("          mma_sync(pk_s_frag[0], pk_fa, pk_fb0, pk_s_frag[0]);")
-    lines.append("          mma_sync(pk_s_frag[1], pk_fa, pk_fb1, pk_s_frag[1]);")
+    lines.append(
+      f"          pk_mma_16x16x8_row_row(pk_s_frag[0], &pk_sh_a[(pk_sgid * 16) * {k_stride} + pk_tk], {k_stride}, &pk_sh_b[pk_tk * {b_kt_stride}], {b_kt_stride});"
+    )
+    lines.append(
+      f"          pk_mma_16x16x8_row_row(pk_s_frag[1], &pk_sh_a[(pk_sgid * 16) * {k_stride} + pk_tk], {k_stride}, &pk_sh_b[pk_tk * {b_kt_stride} + 16], {b_kt_stride});"
+    )
   else:
     lines.append("          simdgroup_float8x8 pk_fa;")
     lines.append(f"          simdgroup_load(pk_fa, &pk_sh_a[(pk_sgid * 8) * {k_stride} + pk_tk], {k_stride});")
@@ -2333,12 +2325,8 @@ def _generate_flash_monoid_matrix_unit(
   lines.append("    }")
 
   if is_cuda:
-    lines.append(
-      f"    store_matrix_sync(&pk_sh_s[(pk_sgid * 16) * {s_stride}], pk_s_frag[0], {s_stride}, mem_row_major);"
-    )
-    lines.append(
-      f"    store_matrix_sync(&pk_sh_s[(pk_sgid * 16) * {s_stride} + 16], pk_s_frag[1], {s_stride}, mem_row_major);"
-    )
+    lines.append(f"    pk_mma_16x16x8_store(&pk_sh_s[(pk_sgid * 16) * {s_stride}], pk_s_frag[0], {s_stride});")
+    lines.append(f"    pk_mma_16x16x8_store(&pk_sh_s[(pk_sgid * 16) * {s_stride} + 16], pk_s_frag[1], {s_stride});")
   else:
     for rn in range(4):
       lines.append(
@@ -2448,19 +2436,14 @@ def _generate_flash_monoid_matrix_unit(
   if is_cuda:
     lines.append("      for (int pk_rn = 0; pk_rn < 4; ++pk_rn) {")
     lines.append("        if (pk_d0 + pk_rn * 16 >= pk_D) break;")
-    lines.append("        fragment<accumulator, 16, 16, 8, float> pk_pv;")
-    lines.append("        fill_fragment(pk_pv, 0.0f);")
+    lines.append("        float pk_pv[8] = {0.0f};")
     lines.append("        #pragma unroll")
     lines.append(f"        for (int pk_tk = 0; pk_tk < {bn}; pk_tk += 8) {{")
-    lines.append("          fragment<matrix_a, 16, 16, 8, precision::tf32, row_major> pk_fp;")
-    lines.append("          fragment<matrix_b, 16, 16, 8, precision::tf32, row_major> pk_fv;")
-    lines.append(f"          load_matrix_sync(pk_fp, &pk_sh_s[(pk_sgid * 16) * {s_stride} + pk_tk], {s_stride});")
     lines.append(
-      f"          load_matrix_sync(pk_fv, &pk_sh_b[pk_tk * {q_hoist_stride} + pk_rn * 16], {q_hoist_stride});"
+      f"          pk_mma_16x16x8_row_row(pk_pv, &pk_sh_s[(pk_sgid * 16) * {s_stride} + pk_tk], {s_stride}, &pk_sh_b[pk_tk * {q_hoist_stride} + pk_rn * 16], {q_hoist_stride});"
     )
-    lines.append("          mma_sync(pk_pv, pk_fp, pk_fv, pk_pv);")
     lines.append("        }")
-    lines.append("        store_matrix_sync(pk_ep, pk_pv, 16, mem_row_major);")
+    lines.append("        pk_mma_16x16x8_store(pk_ep, pk_pv, 16);")
     lines.append(f"        {warp_barrier}")
     lines.append("        for (int pk_u = 0; pk_u < 8; ++pk_u) {")
     lines.append(f"          const {idx_t} pk_col16 = pk_u * 2 + pk_lt;")
@@ -2601,8 +2584,6 @@ def _generate_monoid_lse_matrix_unit(
     scalars = sorted(scalars, key=lambda v: -v.type.itemsize)
 
   lines, idx_t, sh_qual, barrier, warp_barrier = _emit_mm_header(em, target, prelude, scalars, bufs)
-  if is_cuda:
-    lines.append("  using namespace nvcuda::wmma;")
   lines.append(f"  const {idx_t} pk_M = ({idx_t})({em.expr(plan.m_dim)});")
   lines.append(f"  const {idx_t} pk_N = ({idx_t})({em.expr(plan.n_dim)});")
   lines.append(f"  const {idx_t} pk_K = ({idx_t})({em.expr(plan.k_dim)});")
@@ -2649,9 +2630,7 @@ def _generate_monoid_lse_matrix_unit(
 
   lines.append(f"  for ({idx_t} pk_j0 = 0; pk_j0 < pk_N; pk_j0 += {bn}) {{")
   if is_cuda:
-    lines.append("    fragment<accumulator, 16, 16, 8, float> pk_s_frag[2];")
-    lines.append("    fill_fragment(pk_s_frag[0], 0.0f);")
-    lines.append("    fill_fragment(pk_s_frag[1], 0.0f);")
+    lines.append("    float pk_s_frag[2][8] = {{0.0f}, {0.0f}};")
   else:
     lines.append("    simdgroup_float8x8 pk_s_frag[4];")
     for rn in range(4):
@@ -2695,13 +2674,12 @@ def _generate_monoid_lse_matrix_unit(
   lines.append(f"      const {idx_t} pk_klen = pk_K - pk_k0 < {bk} ? pk_K - pk_k0 : {bk};")
   lines.append(f"      for ({idx_t} pk_tk = 0; pk_tk < pk_klen; pk_tk += 8) {{")
   if is_cuda:
-    lines.append("        fragment<matrix_a, 16, 16, 8, precision::tf32, row_major> pk_fa;")
-    lines.append("        fragment<matrix_b, 16, 16, 8, precision::tf32, row_major> pk_fb0, pk_fb1;")
-    lines.append(f"        load_matrix_sync(pk_fa, &pk_sh_a[(pk_sgid * 16) * {k_stride} + pk_tk], {k_stride});")
-    lines.append(f"        load_matrix_sync(pk_fb0, &pk_sh_b[pk_tk * {b_kt_stride}], {b_kt_stride});")
-    lines.append(f"        load_matrix_sync(pk_fb1, &pk_sh_b[pk_tk * {b_kt_stride} + 16], {b_kt_stride});")
-    lines.append("        mma_sync(pk_s_frag[0], pk_fa, pk_fb0, pk_s_frag[0]);")
-    lines.append("        mma_sync(pk_s_frag[1], pk_fa, pk_fb1, pk_s_frag[1]);")
+    lines.append(
+      f"        pk_mma_16x16x8_row_row(pk_s_frag[0], &pk_sh_a[(pk_sgid * 16) * {k_stride} + pk_tk], {k_stride}, &pk_sh_b[pk_tk * {b_kt_stride}], {b_kt_stride});"
+    )
+    lines.append(
+      f"        pk_mma_16x16x8_row_row(pk_s_frag[1], &pk_sh_a[(pk_sgid * 16) * {k_stride} + pk_tk], {k_stride}, &pk_sh_b[pk_tk * {b_kt_stride} + 16], {b_kt_stride});"
+    )
   else:
     lines.append("        simdgroup_float8x8 pk_fa;")
     lines.append(f"        simdgroup_load(pk_fa, &pk_sh_a[(pk_sgid * 8) * {k_stride} + pk_tk], {k_stride});")
@@ -2716,12 +2694,8 @@ def _generate_monoid_lse_matrix_unit(
   lines.append("    }")
 
   if is_cuda:
-    lines.append(
-      f"    store_matrix_sync(&pk_sh_s[(pk_sgid * 16) * {s_stride}], pk_s_frag[0], {s_stride}, mem_row_major);"
-    )
-    lines.append(
-      f"    store_matrix_sync(&pk_sh_s[(pk_sgid * 16) * {s_stride} + 16], pk_s_frag[1], {s_stride}, mem_row_major);"
-    )
+    lines.append(f"    pk_mma_16x16x8_store(&pk_sh_s[(pk_sgid * 16) * {s_stride}], pk_s_frag[0], {s_stride});")
+    lines.append(f"    pk_mma_16x16x8_store(&pk_sh_s[(pk_sgid * 16) * {s_stride} + 16], pk_s_frag[1], {s_stride});")
   else:
     for rn in range(4):
       lines.append(
