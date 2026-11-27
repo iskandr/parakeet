@@ -1939,12 +1939,14 @@ a map of reductions over two different operands, so they are never tiled here.</
   checked again; an index known to be within its loop's bound gets no bounds
   check.</li>
 </ul>
-<p><strong>Specialization on values</strong> ([R] ch. 6.6 partially evaluates on inputs equal
-to 0 or 1). Here: a dimension of length 1 is always a constant (which is what
-makes broadcasting static; [R] lists <code>200x1 + 1x300</code> as giving a wrong
-answer); a scalar argument or an array dimension becomes a constant when the
-code needs one (<code>axis=</code>, the length of a tuple, a loop that has to be
-unrolled).</p>
+<p><strong>Specialization on values and shape buckets</strong> ([R] §6.4 partially evaluates on
+inputs equal to 0 or 1). Here: a dimension of length 1 is always a constant
+(making broadcasting static; [R] lists <code>200×1 + 1×300</code> as giving a wrong
+answer); a scalar argument or array dimension becomes a constant when the code
+needs one (<code>axis=</code>, tuple length, unrolled loops); and tiled/GPU passes
+additionally propagate finite power-of-2 shape buckets and divisibility
+(<code>DimInfo(lo, hi, align)</code>), guarding only the dimensions actually queried so
+aligned sizes like <code>128, 256, 512, 1024, 4096</code> share one specialization.</p>
 <p>Left to the C compiler, which does them well on the loops it is given: common
 subexpressions, dead code, loop-invariant code motion, scalar replacement,
 unrolling, vectorization. [R]'s pipeline did these itself, on its own IR.</p>
