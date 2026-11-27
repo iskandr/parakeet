@@ -3,90 +3,90 @@
   "python": "3.13.16",
   "benchmark_script": "tools/colab_nanogpt_bench.py",
   "previous_revision": "0dcb7d5",
-  "current_revision": "7bb1dcc",
+  "current_revision": "high-level-fusion-dedup",
   "configs": {
     "small_B16_T64_C128_L2": {
       "parakeet_fp32": {
-        "compile_s": 12.575,
-        "median_ms": 4.685,
+        "compile_s": 12.142,
+        "median_ms": 4.565,
         "loss0": 4.20043,
-        "loss_end": 1.42627,
+        "loss_end": 1.42628,
         "uploads_per_step": 0.0,
         "downloads_per_step": 1.0,
-        "launches_per_step": 148.0
+        "launches_per_step": 80.0
       },
       "parakeet_tf32_wmma": {
-        "compile_s": 7.681,
-        "median_ms": 4.749,
+        "compile_s": 9.348,
+        "median_ms": 4.67,
         "loss0": 4.20039,
-        "loss_end": 1.43355,
+        "loss_end": 1.4288,
         "uploads_per_step": 0.0,
         "downloads_per_step": 1.0,
-        "launches_per_step": 148.0
+        "launches_per_step": 80.0
       },
       "parakeet_prev_tf32": {
         "median_ms": 6.833,
         "revision": "0dcb7d5"
       },
       "torch_eager": {
-        "compile_s": 0.74,
-        "median_ms": 9.667,
+        "compile_s": 0.731,
+        "median_ms": 8.881,
         "loss0": 4.20043,
         "loss_end": 1.42628
       },
       "torch_compile": {
-        "compile_s": 19.897,
-        "median_ms": 3.688,
+        "compile_s": 20.198,
+        "median_ms": 3.634,
         "loss0": 4.20043,
-        "loss_end": 1.42627
+        "loss_end": 1.42628
       },
       "jax_jit": {
-        "compile_s": 18.971,
-        "median_ms": 1.562,
+        "compile_s": 19.193,
+        "median_ms": 1.594,
         "loss0": 4.20043,
-        "loss_end": 1.4366
+        "loss_end": 1.43508
       }
     },
     "med_B32_T128_C256_L4": {
       "parakeet_fp32": {
-        "compile_s": 28.095,
-        "median_ms": 37.388,
+        "compile_s": 22.509,
+        "median_ms": 35.238,
         "loss0": 4.21668,
-        "loss_end": 3.38968,
+        "loss_end": 3.38995,
         "uploads_per_step": 0.0,
         "downloads_per_step": 1.0,
-        "launches_per_step": 271.0
+        "launches_per_step": 147.0
       },
       "parakeet_tf32_wmma": {
-        "compile_s": 20.827,
-        "median_ms": 19.542,
+        "compile_s": 18.154,
+        "median_ms": 17.808,
         "loss0": 4.21661,
-        "loss_end": 3.48364,
+        "loss_end": 3.50226,
         "uploads_per_step": 0.0,
         "downloads_per_step": 1.0,
-        "launches_per_step": 271.0
+        "launches_per_step": 147.0
       },
       "parakeet_prev_tf32": {
         "median_ms": 32.317,
         "revision": "0dcb7d5"
       },
       "torch_eager": {
-        "compile_s": 0.028,
-        "median_ms": 18.956,
+        "compile_s": 0.029,
+        "median_ms": 18.925,
         "loss0": 4.21668,
         "loss_end": 3.38972
       },
       "torch_compile": {
-        "compile_s": 29.843,
-        "median_ms": 14.913,
+        "compile_s": 29.341,
+        "median_ms": 14.759,
         "loss0": 4.21668,
-        "loss_end": 3.39009
+        "loss_end": 3.39015
       },
       "jax_jit": {
-        "compile_s": 23.524,
-        "median_ms": 9.167,
+        "compile_s": 23.754,
+        "median_ms": 9.184,
         "loss0": 4.21668,
-        "loss_end": 3.47658
+        "loss_end": 3.44324
       }
     }
   }

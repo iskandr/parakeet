@@ -1776,13 +1776,16 @@ plotted together.</p>
   PyKeOps (<strong>1.254 ms</strong>) and CuPy (<strong>17.18 ms</strong>), while <code>torch.compile(cdist)</code>
   (<strong>0.308 ms</strong>) and JAX <code>jit</code> (<strong>0.602 ms</strong>) lead.</li>
 <li><strong>End-to-end nanoGPT training (NVIDIA L4, zero cuBLAS in Parakeet):</strong>
-  Shape-adaptive double-buffered <code>cp.async</code> WMMA tiles, reshape-transparent
-  epilogue fusion, and 1-warp-per-row reductions cut step time from <strong>6.83 ms to
-  4.69 ms</strong> on the small 2-layer model (<strong>2.06× faster</strong> than PyTorch eager at
-  <strong>9.67 ms</strong>) and from <strong>32.32 ms to 19.54 ms</strong> (<strong>1.65× faster</strong>) on the
-  medium 4-layer model, matching PyTorch eager (<strong>18.96 ms</strong>, backed by cuBLAS
-  and cuDNN) and within <strong>1.31×</strong> of <code>torch.compile</code> (<strong>14.91 ms</strong>) while
-  compiling faster than both <code>torch.compile</code> (29.8 s) and JAX <code>jit</code> (23.5 s).</li>
+  Shape-adaptive double-buffered <code>cp.async</code> WMMA tiles, multi-stage warp-per-row
+  LayerNorm pipelines, single-pass atomic reductions, disjoint-union horizontal
+  map batching, and alpha-canonical kernel deduplication cut launches/step by
+  <strong>63%–66%</strong> (<code>214 → 80</code> on <code>L=2</code>, <code>437 → 147</code> on <code>L=4</code>) and cut step time from
+  <strong>6.83 ms to 4.57 ms</strong> on the small 2-layer model (<strong>1.95× faster</strong> than
+  PyTorch eager at <strong>8.88 ms</strong>) and from <strong>32.32 ms to 17.81 ms</strong> (<strong>1.81×
+  faster</strong>) on the medium 4-layer model, beating PyTorch eager (<strong>18.93 ms</strong>,
+  backed by cuBLAS and cuDNN) and within <strong>1.21×</strong> of <code>torch.compile</code>
+  (<strong>14.76 ms</strong>) while compiling faster than both <code>torch.compile</code> (29.3 s) and
+  JAX <code>jit</code> (23.8 s) (<code>9.35 s</code> on <code>L=2</code>, <code>18.15 s</code> on <code>L=4</code>).</li>
 </ul>
 <hr />
 <h2 id="pairwise-search-and-kernel-regression">Pairwise search and kernel regression<a class="headerlink" href="#pairwise-search-and-kernel-regression" title="Permanent link">&para;</a></h2>
@@ -2025,10 +2028,11 @@ optimizer directly into the training step;
 <a href="https://pytorch.org/docs/stable/generated/torch.compile.html"><code>torch.compile</code></a>
 wraps the forward/loss and runs the optimizer separately. Parakeet compiles all
 GEMM, attention, LayerNorm, and Adam kernels natively via NVRTC with <strong>zero
-cuBLAS calls</strong> (cutting launches/step from <code>437</code> to <code>271</code> on <code>L=4</code>). FP32 loss
-curves match PyTorch to <code>4e-5</code> (<code>4.21668 → 3.38968</code> vs. <code>3.38972</code> on <code>L=4</code>), and
-TF32 loss curves match JAX's TF32 (<code>3.48364</code> vs. <code>3.47658</code>).
-<a href="../gallery/nanogpt/">Follow the complete nanoGPT walkthrough</a>.</p>
+cuBLAS calls</strong> (cutting launches/step from <code>437</code> to <code>147</code> on <code>L=4</code> and from
+<code>214</code> to <code>80</code> on <code>L=2</code>, with <code>429 → 44</code> alpha-unique NVRTC kernels on <code>L=4</code>).
+FP32 loss curves match PyTorch (<code>4.20043 → 1.42628</code> vs. <code>1.42628</code> on <code>L=2</code>;
+<code>4.21668 → 3.38995</code> vs. <code>3.38972</code> on <code>L=4</code>), and TF32 loss curves track JAX's
+TF32. <a href="../gallery/nanogpt/">Follow the complete nanoGPT walkthrough</a>.</p>
 <table>
 <thead>
 <tr>
@@ -2044,21 +2048,21 @@ TF32 loss curves match JAX's TF32 (<code>3.48364</code> vs. <code>3.47658</code>
 <tbody>
 <tr>
 <td><code>16 × 64 × 128 × 2</code></td>
-<td style="text-align: right;"><strong>4.685 ms</strong></td>
-<td style="text-align: right;"><strong>4.749 ms</strong></td>
+<td style="text-align: right;"><strong>4.565 ms</strong></td>
+<td style="text-align: right;"><strong>4.670 ms</strong></td>
 <td style="text-align: right;">6.833 ms</td>
-<td style="text-align: right;">9.667 ms</td>
-<td style="text-align: right;">3.688 ms</td>
-<td style="text-align: right;">1.562 ms</td>
+<td style="text-align: right;">8.881 ms</td>
+<td style="text-align: right;">3.634 ms</td>
+<td style="text-align: right;">1.594 ms</td>
 </tr>
 <tr>
 <td><code>32 × 128 × 256 × 4</code></td>
-<td style="text-align: right;"><strong>37.388 ms</strong></td>
-<td style="text-align: right;"><strong>19.542 ms</strong></td>
+<td style="text-align: right;"><strong>35.238 ms</strong></td>
+<td style="text-align: right;"><strong>17.808 ms</strong></td>
 <td style="text-align: right;">32.317 ms</td>
-<td style="text-align: right;">18.956 ms</td>
-<td style="text-align: right;">14.913 ms</td>
-<td style="text-align: right;">9.167 ms</td>
+<td style="text-align: right;">18.925 ms</td>
+<td style="text-align: right;">14.759 ms</td>
+<td style="text-align: right;">9.184 ms</td>
 </tr>
 </tbody>
 </table>
