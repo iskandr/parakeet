@@ -50,7 +50,7 @@ nav:
       - Rewrite rules and optimizations: rewrites.md
       - Errors and debugging: debugging.md
       - Performance: performance.md
-      - How it works: internals.md
+      - Compiler architecture: internals.md
   - Reference:
       - Supported functions: supported.md
       - API: api.md

@@ -7,8 +7,8 @@ chemical fingerprint screening, 3D protein coordinate message passing, and
 banded dynamic programming alignments.
 
 Parakeet compiles these workloads directly from concise NumPy and data-parallel
-operators into fused, multi-core CPU and GPU code; without hand-writing C,
-CUDA, or Metal.
+operators into fused, multi-core CPU and GPU code without hand-writing C, CUDA,
+or Metal.
 
 Every snippet below is included from [`examples/bio_gallery.py`](https://github.com/iskandr/parakeet/blob/master/examples/bio_gallery.py).
 Run the gallery checks or reproducible benchmarks from a source checkout:
@@ -22,9 +22,9 @@ python benchmarks/bio_workloads.py
 
 | Domain task | Operator / optimization in Parakeet | What the compiler eliminates |
 |---|---|---|
-| FASTQ k-mers & read QC | `par.map` (multi-output) + `IntEnum` + ASCII-dict LUT | Explicit `parfor`, manual `np.empty` buffers, and ASCII bit-twiddling |
-| Multi-channel BAM pileup | Keyed `IndexScatter` fusion | Redundant passes over alignment positions (`6 -> 1`) |
-| Chemical fingerprint screening | `par.popcount` + `par.allpairs` + ordered `par.fold` (`pairwise_fold`) | O(N · M) similarity matrix allocation |
+| FASTQ k-mers & read QC | [`par.map`](operators.md#map) (multi-output) + `IntEnum` + ASCII-dict LUT | Explicit `parfor`, manual `np.empty` buffers, and ASCII bit-twiddling |
+| Multi-channel BAM pileup | Keyed [`IndexScatter`](primitives.md#scatter) fusion | Redundant passes over alignment positions (`6 -> 1`) |
+| Chemical fingerprint screening | `par.popcount` + [`par.allpairs`](operators.md#allpairs) + ordered [`par.fold`](operators.md#fold) (`pairwise_fold`) | O(N · M) similarity matrix allocation |
 | 3D protein RBF / equivariant attention | [Online rescaled-monoid tiling](algebra.md#law-1-rescaled-semiring-monoids) + `par.grad` | O(N²) pairwise distance & weight matrices |
 | Banded Smith-Waterman & genome SSMs | Two-row banded DP + [chunkwise affine prefix scan](algebra.md#law-4-chunkwise-state-space-duality) (`TileScan`) | Python DP interpreter overhead & sequential scan bottlenecks |
 
@@ -68,7 +68,7 @@ Pairwise radial-basis-function smoothing over 3D residue coordinates `(N, 3)`
 uses the same [rescaled-monoid](algebra.md#law-1-rescaled-semiring-monoids)
 structure as softmax attention. Online monoidal tiling fuses the
 squared-distance computation, softmax normalization, and feature aggregation
-into a single tiled pass with zero O(N²) score allocation; and `par.grad`
+into a single tiled pass with zero O(N²) score allocation, and `par.grad`
 differentiates through the 3D coordinates directly:
 
 ```python
@@ -115,8 +115,9 @@ implements seven textbook bioinformatics kernels in compiled Python/NumPy:
 
 ## 7. Long-read RNA alignment & quantification (`examples/patro_longread_rna.py`)
 
-Inspired by Rob Patro's COMBINE lab tools (SSHash, Piscem, Spearfish, and
-Oarfish), [`examples/patro_longread_rna.py`](https://github.com/iskandr/parakeet/blob/master/examples/patro_longread_rna.py)
+Inspired by [Rob Patro](https://www.cs.umd.edu/~rob/)'s
+[COMBINE lab](https://combine-lab.github.io/) tools (SSHash, Piscem, Spearfish,
+and Oarfish), [`examples/patro_longread_rna.py`](https://github.com/iskandr/parakeet/blob/master/examples/patro_longread_rna.py)
 puts a complete long-read RNA aligner and isoform quantifier into ~250 lines of
 compiled Python/NumPy:
 

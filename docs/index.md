@@ -143,25 +143,19 @@ def scaled_tanh_comp(x, alpha=0.5, beta=0.3):
   return np.array([np.tanh(xi * alpha) + beta for xi in x])
 ```
 
-Both versions lower to the same single fused parallel loop with no temporary
-arrays. Because programs stay in this operator representation until code
-generation, a small set of general passes does the optimization work across
-domains:
+Both versions compile to one fused parallel loop with no temporary arrays.
+Keeping programs in operator form until codegen lets a few general passes cover
+all domains:
 
-- **Fusion.** Producer-consumer chains, filtered reductions (`np.sum(x[x > 0])`),
-  and sibling histograms sharing the same bin IDs merge into one traversal.
-  [See the tree-split example](gallery.md#histograms-and-tree-splits).
-- **Tiling and single-pass reductions.** Associative reductions and bilinear
-  products tile into CPU cache or GPU shared memory, so Gaussian kernel
-  regression, nearest-neighbor search, and attention stream blocks instead of
-  allocating giant pairwise matrices. [Read the algebraic laws](algebra.md) or
-  [follow the worked compilation walkthrough](primitives.md#worked-end-to-end-compilation-walkthroughs).
-- **Differentiation.** `par.grad`, `par.value_and_grad`, and `par.jvp`
-  differentiate the primitives directly, compiling a full training step into
-  one native function. [Learn about gradients](autodiff.md).
-- **Inspection.** Every stage is visible: inspect the operator IR, see which
-  rewrites fired with `par.show_rewrite`, or read the generated C, Metal, or
-  CUDA source. [Inspect a rewrite](gallery.md#inspecting-algebraic-rewrites).
+- **Fusion:** producer-consumer chains, filtered reductions (`np.sum(x[x > 0])`),
+  and same-key histograms merge into one pass ([tree-split example](gallery.md#histograms-and-tree-splits)).
+- **Tiling:** associative reductions and bilinear products stream through CPU
+  cache or GPU shared memory without allocating `N × M` score matrices
+  ([algebraic laws](algebra.md), [compilation walkthrough](primitives.md#worked-end-to-end-compilation-walkthroughs)).
+- **Gradients:** `par.grad`, `par.value_and_grad`, and `par.jvp` differentiate
+  the primitives directly into one compiled training step ([gradients](autodiff.md)).
+- **Inspection:** check which rewrites fired with `par.show_rewrite`, or print
+  the generated C, Metal, or CUDA source ([compiler architecture](internals.md)).
 
 ## Where to go next
 
