@@ -545,28 +545,7 @@ def _generate_matrix_unit_kernel(
     scalars = sorted(scalars, key=lambda v: -v.type.itemsize)
 
   if is_cuda:
-    hdr = (
-      "#ifndef PK_CUDA_SIMULATE\n"
-      "#include <mma.h>\n"
-      "__device__ __forceinline__ void pk_cp_async_16(void* smem_ptr, const void* gmem_ptr) {\n"
-      "  unsigned int s;\n"
-      '  asm("{\\n .reg .u64 smem64;\\n cvta.to.shared.u64 smem64, %1;\\n cvt.u32.u64 %0, smem64;\\n}\\n" : "=r"(s) : "l"(smem_ptr));\n'
-      '  asm volatile("cp.async.ca.shared.global [%0], [%1], 16;\\n" :: "r"(s), "l"(gmem_ptr));\n'
-      "}\n"
-      "__device__ __forceinline__ void pk_cp_async_commit() {\n"
-      '  asm volatile("cp.async.commit_group;\\n" ::);\n'
-      "}\n"
-      "__device__ __forceinline__ void pk_cp_async_wait() {\n"
-      '  asm volatile("cp.async.wait_group 0;\\n" ::);\n'
-      "}\n"
-      "#else\n"
-      "static inline void pk_cp_async_16(void* smem_ptr, const void* gmem_ptr) {\n"
-      "  std::memcpy(smem_ptr, gmem_ptr, 16);\n"
-      "}\n"
-      "static inline void pk_cp_async_commit() {}\n"
-      "static inline void pk_cp_async_wait() {}\n"
-      "#endif\n" + prelude
-    )
+    hdr = "#ifndef PK_CUDA_SIMULATE\n#include <mma.h>\n#endif\n" + prelude
   else:
     hdr = prelude.replace("#include <metal_stdlib>", "#include <metal_stdlib>\n#include <metal_simdgroup_matrix>", 1)
 
@@ -1005,27 +984,7 @@ def generate_warp_reduce_cuda_kernel(
   for f in folds:
     em.ctype(f.a.type)
 
-  shfl_hdr = (
-    "#ifndef PK_CUDA_SIMULATE\n"
-    "template <typename T>\n"
-    "__device__ __forceinline__ T pk_shfl_down(T v, int delta) {\n"
-    "  return __shfl_down_sync(0xffffffffu, v, delta);\n"
-    "}\n"
-    "#else\n"
-    "template <typename T>\n"
-    "static inline T pk_shfl_down(T v, int delta) {\n"
-    "  static T pk_shfl_buf[8][32];\n"
-    "  int w = (int)((threadIdx.x >> 5) & 7u);\n"
-    "  int l = (int)(threadIdx.x & 31u);\n"
-    "  pk_shfl_buf[w][l] = v;\n"
-    "  __syncwarp();\n"
-    "  T res = (l + delta < 32) ? pk_shfl_buf[w][l + delta] : v;\n"
-    "  __syncwarp();\n"
-    "  return res;\n"
-    "}\n"
-    "#endif\n"
-  )
-  lines: list[str] = [shfl_hdr + prelude]
+  lines: list[str] = [prelude]
   params = ["long long pk_total", "long long pk_csize"]
   params += [f"{em.ctype(v.type)} {v.name}" for v in scalars]
   params += ["int* pk_flag", "long long* pk_info"]

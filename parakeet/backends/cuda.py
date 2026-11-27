@@ -86,6 +86,31 @@ __device__ void pk_fail(int* flag, long long* info, int id, long long a0, long l
     info[0] = a0; info[1] = a1; info[2] = a2; info[3] = a3;
   }
 }
+#ifndef PK_CUDA_SIMULATE
+template <typename T>
+__device__ __forceinline__ T pk_shfl_down(T v, int delta) {
+  return __shfl_down_sync(0xffffffffu, v, delta);
+}
+#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 800
+__device__ __forceinline__ void pk_cp_async_16(void* smem_ptr, const void* gmem_ptr) {
+  unsigned int s;
+  asm("{\n .reg .u64 smem64;\n cvta.to.shared.u64 smem64, %1;\n cvt.u32.u64 %0, smem64;\n}\n" : "=r"(s) : "l"(smem_ptr));
+  asm volatile("cp.async.ca.shared.global [%0], [%1], 16;\n" :: "r"(s), "l"(gmem_ptr) : "memory");
+}
+__device__ __forceinline__ void pk_cp_async_commit() {
+  asm volatile("cp.async.commit_group;\n" ::: "memory");
+}
+__device__ __forceinline__ void pk_cp_async_wait() {
+  asm volatile("cp.async.wait_group 0;\n" ::: "memory");
+}
+#else
+__device__ __forceinline__ void pk_cp_async_16(void* smem_ptr, const void* gmem_ptr) {
+  *(float4*)smem_ptr = *(const float4*)gmem_ptr;
+}
+__device__ __forceinline__ void pk_cp_async_commit() {}
+__device__ __forceinline__ void pk_cp_async_wait() {}
+#endif
+#endif
 """
 )
 
@@ -93,6 +118,7 @@ __device__ void pk_fail(int* flag, long long* info, int id, long long a0, long l
 _SIM_LOCK = threading.Lock()
 
 SIM_SHIM = r"""
+#define PK_CUDA_SIMULATE 1
 #include <cmath>
 #include <cstring>
 using std::isnan; using std::isinf; using std::isfinite; using std::signbit;
@@ -173,6 +199,22 @@ static inline void __syncwarp(unsigned int mask = 0xffffffffu) {
   (void)mask;
   pk_sim_warp_barriers[(threadIdx.x >> 5) & 7].wait();
 }
+template <typename T>
+static inline T pk_shfl_down(T v, int delta) {
+  static T pk_shfl_buf[8][32];
+  int w = (int)((threadIdx.x >> 5) & 7u);
+  int l = (int)(threadIdx.x & 31u);
+  pk_shfl_buf[w][l] = v;
+  __syncwarp();
+  T res = (l + delta < 32) ? pk_shfl_buf[w][l + delta] : v;
+  __syncwarp();
+  return res;
+}
+static inline void pk_cp_async_16(void* smem_ptr, const void* gmem_ptr) {
+  std::memcpy(smem_ptr, gmem_ptr, 16);
+}
+static inline void pk_cp_async_commit() {}
+static inline void pk_cp_async_wait() {}
 static inline long long min(long long a, long long b) { return a < b ? a : b; }
 namespace nvcuda { namespace wmma {
   struct matrix_a {};
