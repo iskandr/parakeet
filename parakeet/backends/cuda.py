@@ -15,6 +15,7 @@ from __future__ import annotations
 import ctypes
 import math
 import os
+import re
 import shutil
 import struct
 import threading
@@ -90,6 +91,10 @@ __device__ void pk_fail(int* flag, long long* info, int id, long long a0, long l
 template <typename T>
 __device__ __forceinline__ T pk_shfl_down(T v, int delta) {
   return __shfl_down_sync(0xffffffffu, v, delta);
+}
+template <typename T>
+__device__ __forceinline__ T pk_shfl_bcast(T v, int src_lane) {
+  return __shfl_sync(0xffffffffu, v, src_lane);
 }
 #if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 800
 __device__ __forceinline__ void pk_cp_async_16(void* smem_ptr, const void* gmem_ptr) {
@@ -210,6 +215,17 @@ static inline T pk_shfl_down(T v, int delta) {
   __syncwarp();
   return res;
 }
+template <typename T>
+static inline T pk_shfl_bcast(T v, int src_lane) {
+  static T pk_bcast_buf[8][32];
+  int w = (int)((threadIdx.x >> 5) & 7u);
+  int l = (int)(threadIdx.x & 31u);
+  pk_bcast_buf[w][l] = v;
+  __syncwarp();
+  T res = pk_bcast_buf[w][src_lane & 31];
+  __syncwarp();
+  return res;
+}
 static inline void pk_cp_async_16(void* smem_ptr, const void* gmem_ptr) {
   std::memcpy(smem_ptr, gmem_ptr, 16);
 }
@@ -265,6 +281,34 @@ namespace nvcuda { namespace wmma {
   }
 } }
 """
+
+
+_KERNEL_MARKER = 'extern "C" __global__ void pk_kernel('
+_PRELUDE_IDENTIFIERS = frozenset(re.findall(r"\b[a-zA-Z_][a-zA-Z0-9_]*\b", PRELUDE))
+_UID_TOKEN_RE = re.compile(r"\b[a-zA-Z_][a-zA-Z0-9_]*_\d+(?:_d)?\b")
+
+
+def _canonicalize_cuda_kernel(source: str) -> str:
+  """Alpha-canonicalize IR variable UIDs inside a CUDA kernel body so structurally
+  identical kernels across layers or tensors share one compiled NVRTC binary."""
+  pos = source.find(_KERNEL_MARKER)
+  if pos < 0:
+    return source
+  head = source[:pos]
+  body = source[pos:]
+  mapping: dict[str, str] = {}
+
+  def _repl(m: re.Match[str]) -> str:
+    tok = m.group(0)
+    if tok in _PRELUDE_IDENTIFIERS:
+      return tok
+    out = mapping.get(tok)
+    if out is None:
+      out = f"pk_u{len(mapping)}"
+      mapping[tok] = out
+    return out
+
+  return head + _UID_TOKEN_RE.sub(_repl, body)
 
 
 class CudaEmitter(CFamilyEmitter):
@@ -458,52 +502,62 @@ class CuPyDriver:
     )
 
   def compile(self, plan: KernelPlan):
-    cached = self._compiled_cache.get(plan.source)
+    canon = _canonicalize_cuda_kernel(plan.source)
+    cached = self._compiled_cache.get(canon)
     if cached is not None:
       return cached
-    kernel = self.cp.RawKernel(plan.source, "pk_kernel")
+    kernel = self.cp.RawKernel(canon, "pk_kernel")
     kernel.compile()  # surface compilation problems here, not at first launch
-    self._compiled_cache[plan.source] = kernel
+    self._compiled_cache[canon] = kernel
     return kernel
 
   def compile_module(self, plans: list[KernelPlan]) -> None:
-    """Compile all unique uncompiled CUDA kernels of a module via batched
+    """Compile all alpha-unique uncompiled CUDA kernels of a module via batched
     (and multi-threaded across CPU cores for large modules) NVRTC ``RawModule``s."""
-    todo: list[KernelPlan] = []
-    seen_src: set[str] = set()
+    todo: list[tuple[KernelPlan, str]] = []
+    seen_canon: set[str] = set()
+    plan_canons: list[tuple[KernelPlan, str]] = []
     for p in plans:
       if p.compiled is not None:
         continue
-      cached = self._compiled_cache.get(p.source)
+      canon = _canonicalize_cuda_kernel(p.source)
+      plan_canons.append((p, canon))
+      cached = self._compiled_cache.get(canon)
       if cached is not None:
         p.compiled = cached
         continue
-      if p.source not in seen_src:
-        seen_src.add(p.source)
-        todo.append(p)
+      if canon not in seen_canon:
+        seen_canon.add(canon)
+        todo.append((p, canon))
     if len(todo) <= 1:
-      for p in todo:
+      for p, _canon in todo:
         p.compiled = self.compile(p)
+      for p, canon in plan_canons:
+        if p.compiled is None:
+          p.compiled = self._compiled_cache.get(canon)
       return
-    marker = 'extern "C" __global__ void pk_kernel('
-    for p in todo:
-      if p.source.find(marker) < 0:
-        for q in todo:
+    marker = _KERNEL_MARKER
+    for _, canon in todo:
+      if canon.find(marker) < 0:
+        for q, _ in todo:
           q.compiled = self.compile(q)
+        for p, c in plan_canons:
+          if p.compiled is None:
+            p.compiled = self._compiled_cache.get(c)
         return
 
-    def _build_chunk(chunk: list[KernelPlan]) -> list[tuple[KernelPlan, object]]:
-      needs_mma = any("#include <mma.h>" in p.source for p in chunk)
+    def _build_chunk(chunk: list[tuple[KernelPlan, str]]) -> list[tuple[str, object]]:
+      needs_mma = any("#include <mma.h>" in canon for _, canon in chunk)
       parts: list[str] = []
       if needs_mma:
         parts.append("#include <mma.h>")
       parts.append(PRELUDE)
-      for idx, p in enumerate(chunk):
-        pos = p.source.find(marker)
-        parts.append(p.source[pos:].replace(marker, f'extern "C" __global__ void pk_k{idx}(', 1))
+      for idx, (_, canon) in enumerate(chunk):
+        pos = canon.find(marker)
+        parts.append(canon[pos:].replace(marker, f'extern "C" __global__ void pk_k{idx}(', 1))
       mod = self.cp.RawModule(code="\n".join(parts))
       mod.compile()
-      return [(p, mod.get_function(f"pk_k{idx}")) for idx, p in enumerate(chunk)]
+      return [(canon, mod.get_function(f"pk_k{idx}")) for idx, (_, canon) in enumerate(chunk)]
 
     n_workers = min(len(todo) // 4, os.cpu_count() or 1, 8) if len(todo) >= 8 else 1
     if n_workers <= 1:
@@ -521,7 +575,7 @@ class CuPyDriver:
       dev_id = int(self.cp.cuda.runtime.getDevice())
       chunks = [todo[i::n_workers] for i in range(n_workers)]
 
-      def _worker(chunk: list[KernelPlan]):
+      def _worker(chunk: list[tuple[KernelPlan, str]]):
         with self.cp.cuda.Device(dev_id):
           return _build_chunk(chunk)
 
@@ -530,13 +584,12 @@ class CuPyDriver:
         for res in pool.map(_worker, chunks):
           results.extend(res)
 
-    for p, fn in results:
-      self._compiled_cache[p.source] = fn
-      p.compiled = fn
-    # Also attach compiled functions to any duplicate plans sharing the same source
-    for p in plans:
+    for canon, fn in results:
+      self._compiled_cache[canon] = fn
+    # Attach compiled functions to all plans (including alpha-equivalent duplicates)
+    for p, canon in plan_canons:
       if p.compiled is None:
-        p.compiled = self._compiled_cache.get(p.source)
+        p.compiled = self._compiled_cache.get(canon)
 
   def to_device(self, host: np.ndarray):
     return self.cp.asarray(host)

@@ -451,14 +451,19 @@ def _bwd_flash_attn(tape, el, node, g: ArrayVal) -> None:
   n_dim = k_view.shape[-2]
   d_dim = v_view.shape[-1]
 
-  # 1. O(B*H*T) pre-pass: lse = m + log(l), D = sum(dO * O, axis=-1)
-  # Note: lse is only needed as a primal sufficient statistic (HVP computes dlse directly
-  # in O(T) memory without keeping dm/dl alive from forward!).
-  if el.jvp is not None and not el.jvp.muted:
-    with el.jvp.computing(el):
+  # 1. O(B*H*T) pre-pass: D = sum(dO * O, axis=-1).
+  # Only materialize lse = m + log(l) when HVP (JVP-over-VJP) needs it; otherwise
+  # flash_monoid_bwd reads m and l directly and computes m + log(l) inline per row.
+  has_jvp = el.jvp is not None and not el.jvp.muted
+  lse_arr: ArrayVal | None = None
+  if has_jvp:
+    with el.jvp.computing(el):  # type: ignore[union-attr]
       lse_arr = el.as_concrete(el.apply_ufunc(UF["add"], [m_out, el.apply_ufunc(UF["log"], [l_out])]))
   else:
-    lse_arr = el.as_concrete(el.apply_ufunc(UF["add"], [m_out, el.apply_ufunc(UF["log"], [l_out])]))
+    if m_out.buf is None or not m_out.contig:
+      m_out = el.as_concrete(m_out)
+    if l_out.buf is None or not l_out.contig:
+      l_out = el.as_concrete(l_out)
   d_arr = el.as_concrete(
     reduce_plain(
       el, "add", el.apply_ufunc(UF["mul"], [g, o_out]), Const(o_out.rank - 1, I), Const(0, elt), "sum", False
@@ -488,18 +493,27 @@ def _bwd_flash_attn(tape, el, node, g: ArrayVal) -> None:
   do_st = _stage_from_array(el, g, b_vars, "bdo")
   bias_st = _stage_from_broadcast_array(el, bias_arr, b_vars, batch_shape, "bbias") if bias_arr is not None else None
 
-  # Extract mask buffer/index (or symbolic predicate if mask_arr is delayed!)
+  # Extract mask buffer/index (or symbolic predicate if mask_arr is delayed!),
+  # clamping any size-1 broadcast dimensions (e.g. causal mask of shape (1, 1, T, T)) to 0.
   i_m, j_m = Var("bmi", I), Var("bmj", I)
   mask_buf: Var | None = None
   mask_index: Expr | None = None
   mask_cond: Expr | None = None
   if mask_arr is not None:
+    raw_mask_coords = (*b_vars, i_m, j_m)[-mask_arr.rank :]
+    bcast_mask_coords: list[Expr] = []
+    for dim, coord in zip(mask_arr.shape, raw_mask_coords):
+      if isinstance(dim, Const) and int(dim.value) == 1:
+        bcast_mask_coords.append(ZERO)
+      elif isinstance(dim, Const) and int(dim.value) > 1:
+        bcast_mask_coords.append(coord)
+      else:
+        bcast_mask_coords.append(ops.select(cmp("eq", dim, ONE), ZERO, coord))
+    mask_coords = tuple(bcast_mask_coords)
     if mask_arr.buf is not None:
       mask_buf = mask_arr.buf
-      mask_coords = (*b_vars, i_m, j_m)[-mask_arr.rank :]
       mask_index = el.index_expr(mask_arr, mask_coords)
     else:
-      mask_coords = (*b_vars, i_m, j_m)[-mask_arr.rank :]
       with el.trial():
         mc = el.elem(mask_arr, mask_coords)
       if not any(isinstance(x, Load) for x in ir.walk_expr(mc)):
@@ -566,7 +580,17 @@ def _bwd_flash_attn(tape, el, node, g: ArrayVal) -> None:
 
   row_i = row_major_index((*b_vars, i_lp), (*batch_shape, m_dim))
   row_j = row_major_index((*b_vars, j_lp), (*batch_shape, n_dim))
-  lse_i = Load(lse_arr.buf, iadd(lse_arr.offset, row_i))
+  if lse_arr is not None:
+    lse_i: Expr = Load(lse_arr.buf, iadd(lse_arr.offset, row_i))
+  else:
+    lse_i = ops.prim(
+      "add",
+      (
+        Load(m_out.buf, iadd(m_out.offset, row_i)),
+        ops.prim("log", (Load(l_out.buf, iadd(l_out.offset, row_i)),), elt),
+      ),
+      elt,
+    )
   d_i = Load(d_arr.buf, iadd(d_arr.offset, row_i))
   p_ij = Var("fbp", elt)
   i_blk.append(Assign(p_ij, ops.prim("exp", (ops.prim("sub", (s_eff, lse_i), elt),), elt)))
@@ -640,8 +664,6 @@ def _bwd_flash_attn(tape, el, node, g: ArrayVal) -> None:
   if bias_st is not None:
     stages["bias"] = bias_st
   aux_exprs: dict[str, Expr] = {
-    "lse_buf": lse_arr.buf,
-    "lse_offset": lse_arr.offset,
     "d_buf": d_arr.buf,
     "d_offset": d_arr.offset,
     "active_q": Const(1 if active_q else 0, I),
@@ -650,6 +672,14 @@ def _bwd_flash_attn(tape, el, node, g: ArrayVal) -> None:
     "active_b": Const(1 if active_b else 0, I),
     "bias_sign": bias_sign_c,
   }
+  if lse_arr is not None:
+    aux_exprs["lse_buf"] = lse_arr.buf
+    aux_exprs["lse_offset"] = lse_arr.offset
+  else:
+    aux_exprs["m_buf"] = m_out.buf
+    aux_exprs["m_offset"] = m_out.offset
+    aux_exprs["l_buf"] = l_out.buf
+    aux_exprs["l_offset"] = l_out.offset
   plan = MonoidalTilePlan(
     kind="flash_monoid_bwd",
     elt=elt,
@@ -1532,8 +1562,6 @@ def _bwd_ipa_attn(tape, el, node, g: ArrayVal) -> None:
 def _bwd_cce(tape, el, node, g: ArrayVal) -> None:
   """Law 2 Cut Cross-Entropy rematerialized backward:
   reads only (H, W, targets, m, s, g_diff) with zero M x V logits saved."""
-  from .autodiff import UF
-
   h_arr, w_arr = node.inputs
   m_out, s_out, target_arr, active_h, active_w = node.info[1]
   tape.stale(el, node, h_arr)
@@ -1553,9 +1581,12 @@ def _bwd_cce(tape, el, node, g: ArrayVal) -> None:
   if target_arr.buf is None or not target_arr.contig:
     target_arr = el.as_concrete(target_arr)
 
-  # lse = m.reshape((M,)) + log(s)
+  # Read m and s directly inside cce_bwd (m + log(s)) without a standalone lse kernel
   m_1d = el.reshape(m_out, (m_dim,), checked=False)
-  lse_arr = el.as_concrete(el.apply_ufunc(UF["add"], [m_1d, el.apply_ufunc(UF["log"], [s_out])]))
+  if m_1d.buf is None or not m_1d.contig:
+    m_1d = el.as_concrete(m_1d)
+  if s_out.buf is None or not s_out.contig:
+    s_out = el.as_concrete(s_out)
 
   dh_arr = el.alloc_array(elt, (m_dim, k_dim), zero=True, label="dh")
   dw_arr = el.alloc_array(elt, (k_dim, n_dim), zero=True, label="dw")
@@ -1587,7 +1618,11 @@ def _bwd_cce(tape, el, node, g: ArrayVal) -> None:
   k_blk.append(Assign(dot_acc, ops.prim("add", (dot_acc, ops.prim("mul", (hv, wv), elt)), elt)))
   i_blk.append(ForRange(k_lp, ZERO, k_dim, ONE, k_blk, Scope("loop"), simd=True, reduction=("add", [dot_acc])))
 
-  lse_i = Load(lse_arr.buf, iadd(lse_arr.offset, i_lp))
+  lse_i = ops.prim(
+    "add",
+    (Load(m_1d.buf, iadd(m_1d.offset, i_lp)), ops.prim("log", (Load(s_out.buf, iadd(s_out.offset, i_lp)),), elt)),
+    elt,
+  )
   p_iv = Var("cbp", elt)
   i_blk.append(Assign(p_iv, ops.prim("exp", (ops.prim("sub", (dot_acc, lse_i), elt),), elt)))
 
@@ -1635,8 +1670,10 @@ def _bwd_cce(tape, el, node, g: ArrayVal) -> None:
     stages={"h": h_st, "w": w_st},
     out_bufs={"dh": dh_arr.buf, "dw": dw_arr.buf},
     aux_exprs={
-      "lse_buf": lse_arr.buf,
-      "lse_offset": lse_arr.offset,
+      "m_buf": m_1d.buf,
+      "m_offset": m_1d.offset,
+      "l_buf": s_out.buf,
+      "l_offset": s_out.offset,
       "g_buf": g.buf,
       "g_offset": g.offset,
       "target_buf": target_arr.buf,

@@ -161,6 +161,7 @@ def test_passes_can_be_skipped_by_name():
     "sibling fusion",
     "contraction reassociation",
     "monoidal tiling",
+    "row pipeline fusion",
     "chunkwise scan",
     "pairwise fold tiling",
     "reduction interchange",
@@ -1195,3 +1196,89 @@ def test_reshape_epilogue_and_layernorm_reduce_sibling_fusion():
       m = float(run_ln_vg(*xs)[0])
       fd = (p - m) / float(2 * eps)
       np.testing.assert_allclose(float(grad_arr[idx_t]), fd, rtol=2e-2, atol=2e-2)
+
+
+def test_row_pipeline_fusion_and_broadcast_mask_sdpa_bwd():
+  """Verify:
+  1. Multi-stage row-pipeline fusion collapses LayerNorm fwd (mu -> var -> apply)
+     and LayerNorm bwd (inv_std -> (g_sum, gx_sum) -> d_x) into single IndexMaps.
+  2. IndexFacts.same_iteration_shape handles transitive checked product equalities.
+  3. Batched multi-head SDPA backward with a broadcast (1, 1, T, T) causal mask
+     matches exact NumPy gradients across all batch/head indices.
+  """
+  from parakeet import value_and_grad
+  from parakeet.ndtypes import Int64
+  from parakeet.syntax import ir, ops
+  from parakeet.transforms.analysis import IndexFacts
+
+  # 1. IndexFacts transitive product cancellation
+  bt, hd, n1, n2 = (ir.Var(nm, Int64) for nm in ("bt", "hd", "n1", "n2"))
+  facts = IndexFacts()
+  for v in (bt, hd, n1, n2):
+    facts.note_var(v)
+  facts.record_equality(ops.imul(bt, n1), ops.imul(bt, hd))
+  facts.record_equality(ops.imul(bt, n2), ops.imul(bt, hd))
+  assert facts.same_expr(ops.imul(bt, n1), ops.imul(bt, n2))
+  assert facts.same_iteration_shape((bt, n1), (bt, n2))
+
+  # 2. LayerNorm fwd collapses 3 maps -> 1 multi-stage row-pipeline IndexMap
+  @jit
+  def ln_fwd(x, g, b):
+    mu = np.mean(x, axis=2, keepdims=True)
+    var = np.mean((x - mu) ** np.float32(2.0), axis=2, keepdims=True)
+    return (x - mu) / np.sqrt(var + np.float32(1e-5)) * g + b
+
+  rng = np.random.default_rng(41)
+  x = rng.standard_normal((4, 8, 32)).astype(np.float32)
+  g = rng.standard_normal((32,)).astype(np.float32)
+  b = rng.standard_normal((32,)).astype(np.float32)
+  top_maps = [0]
+
+  def _count_after_rp(name, fn):
+    if name == "row pipeline fusion":
+      top_maps[0] = sum(1 for s in fn.body if isinstance(s, ir.IndexMap))
+
+  with parakeet.options(verify=True):
+    ln_fwd.trace_passes(x, g, b, _trace=_count_after_rp)
+    assert top_maps[0] == 1, f"expected 1 fused LayerNorm IndexMap, got {top_maps[0]}"
+    mu_r = np.mean(x, axis=2, keepdims=True)
+    var_r = np.mean((x - mu_r) ** np.float32(2.0), axis=2, keepdims=True)
+    y_ref = (x - mu_r) / np.sqrt(var_r + np.float32(1e-5)) * g + b
+    np.testing.assert_allclose(ln_fwd(x, g, b), y_ref, rtol=1e-5, atol=1e-5)
+
+  # 3. Broadcast (1, 1, T, T) causal mask in batched multi-head SDPA backward
+  def sdpa_loss(q, k, v, causal):
+    scores = (q @ k.transpose((0, 1, 3, 2))) * np.float32(1.0 / np.sqrt(q.shape[3]))
+    s = np.where(causal, scores, np.float32(-1e9))
+    m = np.max(s, axis=3, keepdims=True)
+    e = np.exp(s - m)
+    w = e / np.sum(e, axis=3, keepdims=True)
+    return np.sum((w @ v) ** np.float32(2.0))
+
+  vg_sdpa = value_and_grad(sdpa_loss, wrt=(0, 1, 2))
+
+  @jit
+  def run_sdpa_vg(q, k, v, causal):
+    return vg_sdpa(q, k, v, causal)
+
+  q = rng.standard_normal((2, 2, 16, 16)).astype(np.float32)
+  k = rng.standard_normal((2, 2, 16, 16)).astype(np.float32)
+  v = rng.standard_normal((2, 2, 16, 16)).astype(np.float32)
+  causal = np.tril(np.ones((16, 16), dtype=bool))[None, None, :, :]
+  sc = (q @ k.transpose(0, 1, 3, 2)) * np.float32(1.0 / np.sqrt(16))
+  sm = np.where(causal, sc, np.float32(-1e9))
+  em = np.exp(sm - np.max(sm, axis=3, keepdims=True))
+  w_ref = em / np.sum(em, axis=3, keepdims=True)
+  o_ref = w_ref @ v
+  do_ref = np.float32(2.0) * o_ref
+  dv_ref = w_ref.transpose(0, 1, 3, 2) @ do_ref
+  dp_ref = do_ref @ v.transpose(0, 1, 3, 2)
+  d_ref = np.sum(do_ref * o_ref, axis=3, keepdims=True)
+  ds_ref = np.where(causal, w_ref * (dp_ref - d_ref) * np.float32(1.0 / np.sqrt(16)), np.float32(0.0))
+  dq_ref = ds_ref @ k
+  dk_ref = ds_ref.transpose(0, 1, 3, 2) @ q
+  with parakeet.options(verify=True):
+    _, (dq, dk, dv) = run_sdpa_vg(q, k, v, causal)
+    np.testing.assert_allclose(dq, dq_ref, rtol=1e-4, atol=1e-4)
+    np.testing.assert_allclose(dk, dk_ref, rtol=1e-4, atol=1e-4)
+    np.testing.assert_allclose(dv, dv_ref, rtol=1e-4, atol=1e-4)

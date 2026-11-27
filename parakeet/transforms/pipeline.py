@@ -24,6 +24,7 @@ PASSES: list[tuple[str, object]] = [
   ("sibling fusion", fusion.fuse_siblings),
   ("contraction reassociation", reassociate.reassociate_contractions),
   ("monoidal tiling", monoid_tile.fuse_monoidal_tiles),
+  ("row pipeline fusion", fusion.fuse_row_pipelines),
   ("chunkwise scan", tile_scan.tile_scans),
   ("pairwise fold tiling", pairwise_fold.tile_pairwise_folds),
   ("reduction interchange", tiling.interchange),
