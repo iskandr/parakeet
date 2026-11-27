@@ -100,6 +100,10 @@ class Config:
   #: Use TF32 Tensor Cores (nvcuda::wmma) for float32 matmul on CUDA sm_80+ GPUs.
   #: (Apple Metal float32 simdgroup_matrix is full IEEE FP32 and enabled automatically.)
   tensor_cores: bool = field(default_factory=lambda: _env_bool("PARAKEET_TENSOR_CORES", False))
+  #: Specialize tiled/GPU schedules on finite shape buckets & power-of-2
+  #: divisibility (on demand, guarded at call time without recompiling
+  #: unrelated dimensions or large aligned shapes).
+  shape_specialization: bool = field(default_factory=lambda: _env_bool("PARAKEET_SHAPE_SPECIALIZATION", True))
   #: Where compiled modules are cached (default: per-user cache directory).
   cache_dir: str | None = field(default_factory=lambda: os.environ.get("PARAKEET_CACHE_DIR"))
   #: Print the operator IR / typed loop IR / generated source of everything that gets compiled.

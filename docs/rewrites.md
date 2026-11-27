@@ -206,12 +206,14 @@ Done while expressions are built; there is no simplification pass:
   checked again; an index known to be within its loop's bound gets no bounds
   check.
 
-**Specialization on values** ([R] ch. 6.6 partially evaluates on inputs equal
-to 0 or 1). Here: a dimension of length 1 is always a constant (which is what
-makes broadcasting static; [R] lists `200x1 + 1x300` as giving a wrong
-answer); a scalar argument or an array dimension becomes a constant when the
-code needs one (`axis=`, the length of a tuple, a loop that has to be
-unrolled).
+**Specialization on values and shape buckets** ([R] §6.4 partially evaluates on
+inputs equal to 0 or 1). Here: a dimension of length 1 is always a constant
+(making broadcasting static; [R] lists `200×1 + 1×300` as giving a wrong
+answer); a scalar argument or array dimension becomes a constant when the code
+needs one (`axis=`, tuple length, unrolled loops); and tiled/GPU passes
+additionally propagate finite power-of-2 shape buckets and divisibility
+(`DimInfo(lo, hi, align)`), guarding only the dimensions actually queried so
+aligned sizes like `128, 256, 512, 1024, 4096` share one specialization.
 
 Left to the C compiler, which does them well on the loops it is given: common
 subexpressions, dead code, loop-invariant code motion, scalar replacement,

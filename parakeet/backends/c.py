@@ -329,6 +329,8 @@ class HostEmitter(CFamilyEmitter):
           (chk.err.exc, chk.err.fmt, chk.err.loc, expr_key(chk.cond), tuple(expr_key(a) for a in chk.args[:4]))
           for chk in s.shared_tile.pre_checks
         ),
+        s.shared_tile.dim_hints,
+        s.shared_tile.stage_align4,
       )
     monoid_key = None
     if s.monoidal_tile is not None:
@@ -388,6 +390,7 @@ class HostEmitter(CFamilyEmitter):
         expr_key(s.warp_reduce.k_dim),
         len(s.warp_reduce.stages),
         s.warp_reduce.epilogue is not None,
+        s.warp_reduce.dim_hints,
       )
     free_types = tuple(v.type for v in free)
     return (s.kind, free_types, body_key, owned_key, shared_key, monoid_key, warp_key), free
