@@ -114,7 +114,9 @@ def test_cuda_sim_shape_specialized_wmma_and_cache_reuse(monkeypatch):
     spec1 = mm.specialize(a1, b1)
     assert spec1.dim_guards  # recorded on-demand guards for M, K, N
     ksrc1 = "\n".join(spec1.kernels)
-    assert "nvcuda::wmma" in ksrc1
+    assert "pk_mma_m16n8k8_tf32(" in ksrc1
+    assert "#include <mma.h>" not in ksrc1
+    assert "store_matrix_sync" not in ksrc1
     assert "pk_cp_async_16(pk_sp, pk_gp);" in ksrc1
     # Interior f^k fast path elides slow/fast bounds checks and 15ULL alignment check
     assert "15ULL" not in ksrc1

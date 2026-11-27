@@ -632,7 +632,8 @@ dy = rng.standard_normal((512, 64)).astype(np.float32)
 with parakeet.options(device_threshold=1, blas=False, tensor_cores=True):
     spec = dw_gemm.specialize(x, dy)
     src = "\\n".join(spec.kernels)
-    assert "nvcuda::wmma" in src, src
+    assert "pk_mma_m16n8k8_tf32(" in src, src
+    assert "#include <mma.h>" not in src, src
     assert "pk_split_k" in src and "atomicAdd" in src, src
     got = dw_gemm(x, dy)
 want = x.T @ dy
@@ -851,7 +852,8 @@ with parakeet.options(device_threshold=1, blas=False, tensor_cores=True, verify=
     at = rng.standard_normal((35, 130)).astype(np.float32) * 0.2
     spec_mm = mm_all.specialize(a, b, bt, at)
     src_mm = "\\n".join(spec_mm.kernels)
-    assert "pk_cp_async_16" in src_mm and "col_major" in src_mm, src_mm
+    assert "pk_cp_async_16" in src_mm and "pk_mma_m16n8k8_tf32(" in src_mm, src_mm
+    assert "#include <mma.h>" not in src_mm, src_mm
     nn, nt, tn, tt = mm_all(a, b, bt, at)
     np.testing.assert_allclose(nn, a @ b, rtol=1e-3, atol=1e-3)
     np.testing.assert_allclose(nt, a @ bt.T, rtol=1e-3, atol=1e-3)
@@ -862,7 +864,7 @@ with parakeet.options(device_threshold=1, blas=False, tensor_cores=True, verify=
     w3 = rng.standard_normal((35, 67)).astype(np.float32) * 0.2
     bias3 = rng.standard_normal((67,)).astype(np.float32) * 0.1
     spec_mlp = mlp_3d.specialize(x3, w3, bias3)
-    assert len(spec_mlp.kernels) == 1 and "mma_sync" in spec_mlp.kernels[0], spec_mlp.kernels
+    assert len(spec_mlp.kernels) == 1 and "pk_mma_m16n8k8_tf32(" in spec_mlp.kernels[0], spec_mlp.kernels
     np.testing.assert_allclose(mlp_3d(x3, w3, bias3), np.tanh(x3 @ w3 + bias3), rtol=1e-3, atol=1e-3)
 
     x_ln = rng.standard_normal((4, 13, 65)).astype(np.float32) * 2.0 - 1.5

@@ -108,12 +108,69 @@ __device__ __forceinline__ void pk_cp_async_commit() {
 __device__ __forceinline__ void pk_cp_async_wait() {
   asm volatile("cp.async.wait_group 0;\n" ::: "memory");
 }
+__device__ __forceinline__ unsigned int pk_f32_to_tf32(float v) {
+  unsigned int r;
+  asm("cvt.rna.tf32.f32 %0, %1;" : "=r"(r) : "f"(v));
+  return r;
+}
+__device__ __forceinline__ void pk_mma_m16n8k8_tf32(
+    float& d0, float& d1, float& d2, float& d3,
+    unsigned int a0, unsigned int a1, unsigned int a2, unsigned int a3,
+    unsigned int b0, unsigned int b1,
+    float c0, float c1, float c2, float c3) {
+  asm volatile(
+    "mma.sync.aligned.m16n8k8.row.col.f32.tf32.tf32.f32 "
+    "{%0, %1, %2, %3}, {%4, %5, %6, %7}, {%8, %9}, {%10, %11, %12, %13};\n"
+    : "=f"(d0), "=f"(d1), "=f"(d2), "=f"(d3)
+    : "r"(a0), "r"(a1), "r"(a2), "r"(a3),
+      "r"(b0), "r"(b1),
+      "f"(c0), "f"(c1), "f"(c2), "f"(c3));
+}
+__device__ __forceinline__ void pk_mma_16x16x8_row_row(
+    float c[8], const float* a_ptr, int a_ldm, const float* b_ptr, int b_ldm) {
+  const int lane = (int)(threadIdx.x & 31u);
+  const int grp = lane >> 2;
+  const int tid = lane & 3;
+  const unsigned int a0 = pk_f32_to_tf32(a_ptr[grp * a_ldm + tid]);
+  const unsigned int a1 = pk_f32_to_tf32(a_ptr[(grp + 8) * a_ldm + tid]);
+  const unsigned int a2 = pk_f32_to_tf32(a_ptr[grp * a_ldm + (tid + 4)]);
+  const unsigned int a3 = pk_f32_to_tf32(a_ptr[(grp + 8) * a_ldm + (tid + 4)]);
+  const unsigned int b00 = pk_f32_to_tf32(b_ptr[tid * b_ldm + grp]);
+  const unsigned int b01 = pk_f32_to_tf32(b_ptr[(tid + 4) * b_ldm + grp]);
+  const unsigned int b10 = pk_f32_to_tf32(b_ptr[tid * b_ldm + (grp + 8)]);
+  const unsigned int b11 = pk_f32_to_tf32(b_ptr[(tid + 4) * b_ldm + (grp + 8)]);
+  pk_mma_m16n8k8_tf32(c[0], c[1], c[2], c[3], a0, a1, a2, a3, b00, b01, c[0], c[1], c[2], c[3]);
+  pk_mma_m16n8k8_tf32(c[4], c[5], c[6], c[7], a0, a1, a2, a3, b10, b11, c[4], c[5], c[6], c[7]);
+}
+__device__ __forceinline__ void pk_mma_16x16x8_store(float* dst, const float c[8], int ldm) {
+  const int lane = (int)(threadIdx.x & 31u);
+  const int grp = lane >> 2;
+  const int col = (lane & 3) * 2;
+  dst[grp * ldm + col] = c[0];
+  dst[grp * ldm + col + 1] = c[1];
+  dst[(grp + 8) * ldm + col] = c[2];
+  dst[(grp + 8) * ldm + col + 1] = c[3];
+  dst[grp * ldm + col + 8] = c[4];
+  dst[grp * ldm + col + 9] = c[5];
+  dst[(grp + 8) * ldm + col + 8] = c[6];
+  dst[(grp + 8) * ldm + col + 9] = c[7];
+}
 #else
 __device__ __forceinline__ void pk_cp_async_16(void* smem_ptr, const void* gmem_ptr) {
   *(float4*)smem_ptr = *(const float4*)gmem_ptr;
 }
 __device__ __forceinline__ void pk_cp_async_commit() {}
 __device__ __forceinline__ void pk_cp_async_wait() {}
+__device__ __forceinline__ unsigned int pk_f32_to_tf32(float v) { return __float_as_uint(v); }
+__device__ __forceinline__ void pk_mma_m16n8k8_tf32(
+    float& d0, float& d1, float& d2, float& d3,
+    unsigned int, unsigned int, unsigned int, unsigned int,
+    unsigned int, unsigned int,
+    float c0, float c1, float c2, float c3) {
+  d0 = c0; d1 = c1; d2 = c2; d3 = c3;
+}
+__device__ __forceinline__ void pk_mma_16x16x8_row_row(float[8], const float*, int, const float*, int) {}
+__device__ __forceinline__ void pk_mma_16x16x8_store(float*, const float[8], int) {}
 #endif
 #endif
 """
@@ -232,54 +289,72 @@ static inline void pk_cp_async_16(void* smem_ptr, const void* gmem_ptr) {
 static inline void pk_cp_async_commit() {}
 static inline void pk_cp_async_wait() {}
 static inline long long min(long long a, long long b) { return a < b ? a : b; }
-namespace nvcuda { namespace wmma {
-  struct matrix_a {};
-  struct matrix_b {};
-  struct accumulator {};
-  struct row_major {};
-  struct col_major {};
-  namespace precision { struct tf32 {}; }
-  enum layout_t { mem_row_major, mem_col_major };
-  template <typename Use, int M, int N, int K, typename T, typename Layout = void>
-  struct fragment {
-    static constexpr int R = (std::is_same<Use, matrix_b>::value) ? K : M;
-    static constexpr int C = (std::is_same<Use, matrix_a>::value) ? K : N;
-    static constexpr bool is_col = std::is_same<Layout, col_major>::value;
-    float x[R * C];
-  };
-  template <typename Frag>
-  static inline void fill_fragment(Frag& f, float v) {
-    for (int i = 0; i < Frag::R * Frag::C; ++i) f.x[i] = v;
+static inline unsigned int pk_f32_to_tf32(float v) {
+  unsigned int u;
+  std::memcpy(&u, &v, 4);
+  return u;
+}
+static inline void pk_mma_m16n8k8_tf32(
+    float& d0, float& d1, float& d2, float& d3,
+    unsigned int a0, unsigned int a1, unsigned int a2, unsigned int a3,
+    unsigned int b0, unsigned int b1,
+    float c0, float c1, float c2, float c3) {
+  static float sm_a[8][16][8];
+  static float sm_b[8][8][8];
+  int w = (int)((threadIdx.x >> 5) & 7u);
+  int lane = (int)(threadIdx.x & 31u);
+  int grp = lane >> 2;
+  int tid = lane & 3;
+  float fa0, fa1, fa2, fa3, fb0, fb1;
+  std::memcpy(&fa0, &a0, 4); std::memcpy(&fa1, &a1, 4);
+  std::memcpy(&fa2, &a2, 4); std::memcpy(&fa3, &a3, 4);
+  std::memcpy(&fb0, &b0, 4); std::memcpy(&fb1, &b1, 4);
+  sm_a[w][grp][tid] = fa0;
+  sm_a[w][grp + 8][tid] = fa1;
+  sm_a[w][grp][tid + 4] = fa2;
+  sm_a[w][grp + 8][tid + 4] = fa3;
+  sm_b[w][tid][grp] = fb0;
+  sm_b[w][tid + 4][grp] = fb1;
+  __syncwarp();
+  float r0 = c0, r1 = c1, r2 = c2, r3 = c3;
+  for (int k = 0; k < 8; ++k) {
+    r0 += sm_a[w][grp][k]     * sm_b[w][k][tid * 2];
+    r1 += sm_a[w][grp][k]     * sm_b[w][k][tid * 2 + 1];
+    r2 += sm_a[w][grp + 8][k] * sm_b[w][k][tid * 2];
+    r3 += sm_a[w][grp + 8][k] * sm_b[w][k][tid * 2 + 1];
   }
-  template <typename Frag>
-  static inline void load_matrix_sync(Frag& f, const float* p, unsigned int ldm) {
-    for (int r = 0; r < Frag::R; ++r)
-      for (int c = 0; c < Frag::C; ++c)
-        f.x[r * Frag::C + c] = Frag::is_col ? p[c * ldm + r] : p[r * ldm + c];
-  }
-  template <int M, int N, int K, typename T, typename LA, typename LB>
-  static inline void mma_sync(
-      fragment<accumulator, M, N, K, float>& d,
-      const fragment<matrix_a, M, N, K, T, LA>& a,
-      const fragment<matrix_b, M, N, K, T, LB>& b,
-      const fragment<accumulator, M, N, K, float>& c) {
-    for (int i = 0; i < M; ++i)
-      for (int j = 0; j < N; ++j) {
-        float acc = c.x[i * N + j];
-        for (int k = 0; k < K; ++k) acc += a.x[i * K + k] * b.x[k * N + j];
-        d.x[i * N + j] = acc;
-      }
-  }
-  template <int M, int N, int K>
-  static inline void store_matrix_sync(float* p, const fragment<accumulator, M, N, K, float>& f, unsigned int ldm, layout_t) {
-    if ((threadIdx.x & 31u) == 0u) {
-      for (int r = 0; r < M; ++r)
-        for (int c = 0; c < N; ++c)
-          p[r * ldm + c] = f.x[r * N + c];
-    }
-    __syncwarp();
-  }
-} }
+  __syncwarp();
+  d0 = r0; d1 = r1; d2 = r2; d3 = r3;
+}
+static inline void pk_mma_16x16x8_row_row(
+    float c[8], const float* a_ptr, int a_ldm, const float* b_ptr, int b_ldm) {
+  const int lane = (int)(threadIdx.x & 31u);
+  const int grp = lane >> 2;
+  const int tid = lane & 3;
+  const unsigned int a0 = pk_f32_to_tf32(a_ptr[grp * a_ldm + tid]);
+  const unsigned int a1 = pk_f32_to_tf32(a_ptr[(grp + 8) * a_ldm + tid]);
+  const unsigned int a2 = pk_f32_to_tf32(a_ptr[grp * a_ldm + (tid + 4)]);
+  const unsigned int a3 = pk_f32_to_tf32(a_ptr[(grp + 8) * a_ldm + (tid + 4)]);
+  const unsigned int b00 = pk_f32_to_tf32(b_ptr[tid * b_ldm + grp]);
+  const unsigned int b01 = pk_f32_to_tf32(b_ptr[(tid + 4) * b_ldm + grp]);
+  const unsigned int b10 = pk_f32_to_tf32(b_ptr[tid * b_ldm + (grp + 8)]);
+  const unsigned int b11 = pk_f32_to_tf32(b_ptr[(tid + 4) * b_ldm + (grp + 8)]);
+  pk_mma_m16n8k8_tf32(c[0], c[1], c[2], c[3], a0, a1, a2, a3, b00, b01, c[0], c[1], c[2], c[3]);
+  pk_mma_m16n8k8_tf32(c[4], c[5], c[6], c[7], a0, a1, a2, a3, b10, b11, c[4], c[5], c[6], c[7]);
+}
+static inline void pk_mma_16x16x8_store(float* dst, const float c[8], int ldm) {
+  const int lane = (int)(threadIdx.x & 31u);
+  const int grp = lane >> 2;
+  const int col = (lane & 3) * 2;
+  dst[grp * ldm + col] = c[0];
+  dst[grp * ldm + col + 1] = c[1];
+  dst[(grp + 8) * ldm + col] = c[2];
+  dst[(grp + 8) * ldm + col + 1] = c[3];
+  dst[grp * ldm + col + 8] = c[4];
+  dst[grp * ldm + col + 9] = c[5];
+  dst[(grp + 8) * ldm + col + 8] = c[6];
+  dst[(grp + 8) * ldm + col + 9] = c[7];
+}
 """
 
 
@@ -419,6 +494,63 @@ class CudaPlanner(DevicePlanner):
 # ---------------------------------------------------------------------------
 
 
+class _CudaBinaryCache:
+  """Persistent on-disk CUBIN/PTX cache stored inside ``toolchain.cache_dir()``.
+
+  Keyed by ``(arch_tag, compiler_tag, sha256(source))`` with atomic
+  ``tmp -> os.replace`` writes so repeated runs across processes skip NVRTC.
+  """
+
+  def __init__(self, arch_tag: str, compiler_tag: str, cache_root=None) -> None:
+    self.arch_tag = arch_tag
+    self.compiler_tag = compiler_tag
+    self._cache_root = cache_root
+    self.hits = 0
+    self.misses = 0
+    self.last_error: str | None = None
+
+  def _dir(self):
+    root = self._cache_root if self._cache_root is not None else toolchain.cache_dir()
+    d = root / "cuda_cubin"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+  def key_for(self, code: str) -> str:
+    import hashlib
+
+    h = hashlib.sha256(f"{self.arch_tag}|{self.compiler_tag}|v1|{code}".encode()).hexdigest()[:24]
+    return f"{self.arch_tag}_{h}"
+
+  def get(self, key: str) -> bytes | None:
+    path = self._dir() / f"{key}.cubin"
+    try:
+      data = path.read_bytes()
+      if data:
+        self.hits += 1
+        return data
+    except OSError:
+      pass
+    self.misses += 1
+    return None
+
+  def put(self, key: str, data: bytes) -> None:
+    if not data:
+      return
+    d = self._dir()
+    dst = d / f"{key}.cubin"
+    if dst.exists():
+      return
+    tmp = d / f".{key}.{os.getpid()}.{threading.get_ident()}.tmp"
+    try:
+      tmp.write_bytes(data)
+      os.replace(tmp, dst)
+    except OSError:
+      try:
+        tmp.unlink(missing_ok=True)
+      except OSError:
+        pass
+
+
 class CuPyDriver:
   """Runs kernels on a real GPU through CuPy."""
 
@@ -443,8 +575,71 @@ class CuPyDriver:
       raise BackendUnavailable("CuPy is installed but no CUDA device was found on this machine")
     self.cp = cupy
     self._compiled_cache: dict[str, object] = {}
+    self._loaded_modules: list[object] = []
+    self._cache_lock = threading.Lock()
     self.profile = self._query_profile(cupy, count)
     self.device_name = self.profile.name
+    maj, minor = self.profile.compute_capability
+    arch_tag = f"sm_{maj}{minor}" if maj > 0 else "sm_70"
+    nvrtc_tag = self._nvrtc_version_tag(cupy)
+    self._binary_cache = _CudaBinaryCache(arch_tag, nvrtc_tag)
+
+  @staticmethod
+  def _nvrtc_version_tag(cupy) -> str:
+    try:
+      ver = cupy.cuda.nvrtc.getVersion()
+      return f"nvrtc_{ver[0]}_{ver[1]}"
+    except Exception:  # noqa: BLE001
+      return f"cupy_{getattr(cupy, '__version__', 'unknown')}"
+
+  def _compile_nvrtc_binary(self, code: str) -> bytes | None:
+    """Compile zero-header CUDA C++ directly through ``cupy.cuda.nvrtc`` to
+    CUBIN (or PTX fallback), caching the compiled binary persistently on disk."""
+    key = self._binary_cache.key_for(code)
+    cached = self._binary_cache.get(key)
+    if cached is not None:
+      return cached
+    try:
+      nvrtc = self.cp.cuda.nvrtc
+      maj, minor = self.profile.compute_capability
+      arch_sm = f"sm_{maj}{minor}" if maj > 0 else None
+      arch_compute = f"compute_{maj}{minor}" if maj > 0 else None
+      prog = nvrtc.createProgram(code, "pk_kernel.cu", [], [])
+      try:
+        use_cubin = arch_sm is not None and hasattr(nvrtc, "getCUBIN")
+        opts = (
+          [f"--gpu-architecture={arch_sm}"]
+          if use_cubin
+          else ([f"--gpu-architecture={arch_compute}"] if arch_compute else [])
+        )
+        try:
+          nvrtc.compileProgram(prog, opts)
+        except Exception:
+          if use_cubin and arch_compute is not None:
+            # Older NVRTC that only accepts compute_XX -> compile to PTX instead
+            nvrtc.destroyProgram(prog)
+            prog = nvrtc.createProgram(code, "pk_kernel.cu", [], [])
+            use_cubin = False
+            nvrtc.compileProgram(prog, [f"--gpu-architecture={arch_compute}"])
+          else:
+            raise
+        binary = nvrtc.getCUBIN(prog) if use_cubin else nvrtc.getPTX(prog)
+        if isinstance(binary, str):
+          binary = binary.encode("utf-8")
+      finally:
+        nvrtc.destroyProgram(prog)
+      self._binary_cache.put(key, binary)
+      return binary
+    except Exception as e:  # noqa: BLE001
+      self._binary_cache.last_error = f"{type(e).__name__}: {e}"
+      return None
+
+  def _load_binary_module(self, binary: bytes):
+    mod = self.cp.cuda.Module()
+    mod.load(binary)
+    with self._cache_lock:
+      self._loaded_modules.append(mod)
+    return mod
 
   @staticmethod
   def _query_profile(cupy, count: int) -> TargetProfile:
@@ -506,14 +701,21 @@ class CuPyDriver:
     cached = self._compiled_cache.get(canon)
     if cached is not None:
       return cached
-    kernel = self.cp.RawKernel(canon, "pk_kernel")
-    kernel.compile()  # surface compilation problems here, not at first launch
+    binary = self._compile_nvrtc_binary(canon)
+    if binary is not None:
+      mod = self._load_binary_module(binary)
+      kernel = mod.get_function("pk_kernel")
+    else:
+      kernel = self.cp.RawKernel(canon, "pk_kernel")
+      kernel.compile()  # surface compilation problems here, not at first launch
     self._compiled_cache[canon] = kernel
     return kernel
 
   def compile_module(self, plans: list[KernelPlan]) -> None:
-    """Compile all alpha-unique uncompiled CUDA kernels of a module via batched
-    (and multi-threaded across CPU cores for large modules) NVRTC ``RawModule``s."""
+    """Compile all alpha-unique uncompiled CUDA kernels of a module via batched,
+    multi-threaded zero-header NVRTC modules with persistent CUBIN disk caching."""
+    import hashlib
+
     todo: list[tuple[KernelPlan, str]] = []
     seen_canon: set[str] = set()
     plan_canons: list[tuple[KernelPlan, str]] = []
@@ -547,53 +749,32 @@ class CuPyDriver:
         return
 
     def _build_chunk(chunk: list[tuple[KernelPlan, str]]) -> list[tuple[str, object]]:
-      needs_mma = any("#include <mma.h>" in canon for _, canon in chunk)
-      parts: list[str] = []
-      if needs_mma:
-        parts.append("#include <mma.h>")
-      parts.append(PRELUDE)
+      parts: list[str] = [PRELUDE]
       for idx, (_, canon) in enumerate(chunk):
         pos = canon.find(marker)
         parts.append(canon[pos:].replace(marker, f'extern "C" __global__ void pk_k{idx}(', 1))
-      mod = self.cp.RawModule(code="\n".join(parts))
-      mod.compile()
+      code = "\n".join(parts)
+      binary = self._compile_nvrtc_binary(code)
+      if binary is not None:
+        mod = self._load_binary_module(binary)
+      else:
+        mod = self.cp.RawModule(code=code)
+        mod.compile()
       return [(canon, mod.get_function(f"pk_k{idx}")) for idx, (_, canon) in enumerate(chunk)]
 
-    # Partition WMMA kernels (which pull in NVIDIA's large <mma.h> header) from
-    # lightweight plain/warp/atomic kernels so non-WMMA chunks compile without
-    # parsing <mma.h>, and sort canonically for deterministic CuPy disk caching.
-    import hashlib
-
-    wmma_todo = sorted(
-      [item for item in todo if "#include <mma.h>" in item[1]],
-      key=lambda item: hashlib.sha256(item[1].encode()).hexdigest(),
-    )
-    plain_todo = sorted(
-      [item for item in todo if "#include <mma.h>" not in item[1]],
-      key=lambda item: hashlib.sha256(item[1].encode()).hexdigest(),
-    )
-
+    # Sort canonically for deterministic chunk CUBIN disk caching across runs.
+    # Because Tensor Core kernels emit inline PTX mma.sync with zero #include <mma.h>,
+    # all kernels compile uniformly in lightweight headerless chunks.
+    sorted_todo = sorted(todo, key=lambda item: hashlib.sha256(item[1].encode()).hexdigest())
     max_workers = min(os.cpu_count() or 1, 8)
-    chunks: list[list[tuple[KernelPlan, str]]] = []
-    if wmma_todo:
-      w_workers = min(len(wmma_todo), max(1, max_workers // 2)) if len(wmma_todo) >= 2 else 1
-      chunks.extend([wmma_todo[i::w_workers] for i in range(w_workers)])
-    if plain_todo:
-      p_workers = min(max(1, len(plain_todo) // 4), max_workers) if len(plain_todo) >= 8 else 1
-      chunks.extend([plain_todo[i::p_workers] for i in range(p_workers)])
+    n_workers = min(max(1, len(sorted_todo) // 4), max_workers) if len(sorted_todo) >= 8 else 1
+    chunks = [sorted_todo[i::n_workers] for i in range(n_workers)]
     chunks = [c for c in chunks if c]
 
     if len(chunks) <= 1:
       results = _build_chunk(chunks[0]) if chunks else []
     else:
       from concurrent.futures import ThreadPoolExecutor
-
-      # Prime CuPy's lazily-cached CUDA path / NVRTC options on the main thread
-      # before fanning out across worker threads (assemble_cupy_compiler_options
-      # is not thread-safe on first call).
-      if not getattr(self, "_nvrtc_primed", False):
-        self.cp.RawKernel('extern "C" __global__ void pk_nvrtc_prime() {}', "pk_nvrtc_prime").compile()
-        self._nvrtc_primed = True
 
       dev_id = int(self.cp.cuda.runtime.getDevice())
 

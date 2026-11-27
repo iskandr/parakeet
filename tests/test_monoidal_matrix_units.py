@@ -132,13 +132,13 @@ def _run_matrix_unit_checks(backend: str, *, tensor_cores: bool, marker: str | N
 def test_monoidal_wmma_cuda():
   if not _cuda_available():
     pytest.skip("CUDA backend/simulator unavailable")
-  _run_matrix_unit_checks("cuda", tensor_cores=True, marker="wmma")
+  _run_matrix_unit_checks("cuda", tensor_cores=True, marker="pk_mma_16x16x8")
 
-  # Confirm tensor_cores=False keeps exact FP32 SIMT path (no wmma)
+  # Confirm tensor_cores=False keeps exact FP32 SIMT path (no mma.sync)
   q = np.zeros((64, 64), dtype=np.float32)
   with pk.options(backend="cuda", blas=False, device_fallback="error", device_threshold=1, tensor_cores=False):
     spec = _plain_attention.specialize(q, q, q)
-    assert not any("wmma" in src for src in spec.kernels)
+    assert not any("pk_mma_16x16x8_row_row(" in src.split("pk_kernel(", 1)[-1] for src in spec.kernels)
 
 
 def test_monoidal_simdgroup_metal():
