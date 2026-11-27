@@ -76,7 +76,7 @@ def encode_canonical_kmers_and_gc(reads, quals, k):
 def single_pass_pileup(ref_pos, base_code, phred_q, is_rev, contig_len):
   """Accumulate A/C/G/T counts, quality sums, and reverse-strand counts across
   aligned base observations in one keyed IndexScatter traversal."""
-  # All six histograms share `ref_pos` -> Parakeet fuses them into ONE traversal.
+  # All six histograms share ref_pos, so Parakeet fuses them into one pass.
   cnt_a = par.scatter_add(contig_len, ref_pos, (base_code == Base.A).astype(np.int64))
   cnt_c = par.scatter_add(contig_len, ref_pos, (base_code == Base.C).astype(np.int64))
   cnt_g = par.scatter_add(contig_len, ref_pos, (base_code == Base.G).astype(np.int64))
@@ -200,7 +200,7 @@ def main():
   rng = np.random.default_rng(0)
   print("Parakeet Bioinformatics & Structural Biology Gallery\n" + "=" * 60)
 
-  # 1. FASTQ canonical k-mers & QC (accepts list[str] directly!)
+  # 1. FASTQ canonical k-mers & QC (accepts list[str] directly)
   alphabet = np.array(list("ACGT"))
   reads = ["".join(row) for row in alphabet[rng.integers(0, 4, size=(64, 100))]]
   quals = ["".join(chr(q) for q in row) for row in rng.integers(33 + 20, 33 + 41, size=(64, 100))]

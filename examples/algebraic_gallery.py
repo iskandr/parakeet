@@ -55,7 +55,7 @@ def causal_flash_loss(q, k, v):
 
 
 # ---------------------------------------------------------------------------
-# 2. Linear Cross-Entropy (zero M x V logit materialization)
+# 2. Linear Cross-Entropy
 # ---------------------------------------------------------------------------
 
 
@@ -110,7 +110,7 @@ def gqa_attention(q, k, v):
 
 
 # ---------------------------------------------------------------------------
-# 5. Mamba-2 State-Space Recurrence (6-line loop -> chunkwise batched GEMMs)
+# 5. Mamba-2 State-Space Recurrence
 # ---------------------------------------------------------------------------
 
 
@@ -150,7 +150,7 @@ def iir_exponential_filter(a, b):
 
 
 # ---------------------------------------------------------------------------
-# 7. Fused RBF / Gaussian Kernel Regression (Nadaraya-Watson, zero N x M!)
+# 7. RBF / Gaussian Kernel Regression (Nadaraya-Watson)
 # ---------------------------------------------------------------------------
 
 
@@ -496,7 +496,7 @@ def main():
     f"6. One Min-Plus Matrix Product (256x256)      : PK={t_pk:6.2f}ms vs NumPy={t_np:6.2f}ms ({t_np / t_pk:4.1f}x) | Tiled Semiring"
   )
 
-  # 7. Exact 1-NN (zero N x M matrix!)
+  # 7. Exact 1-NN search
   with par.options(blas=False):
     t_pk, nn_pk = _bench(exact_1nn, (xq, xt), iters=5)
   t_np, nn_np = _bench(
