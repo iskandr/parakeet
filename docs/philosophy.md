@@ -1,6 +1,23 @@
 # Design, boundaries, and history
 
-## Five design principles
+## Why Parakeet is built this way
+
+Numerical Python sits between two worlds. **NumPy** gives concise, readable
+code and fast C/Fortran kernels for individual operations, but composing
+expressions allocates temporary arrays and sweeps DRAM on every step—and any
+algorithm that does not fit a built-in ufunc falls back to slow CPython loops.
+**C/CUDA compilers** generate fast scalar loops, but once array code is
+flattened into imperative `for`-loops, high-level structure (independence,
+associativity, data reuse) is lost and must be painfully recovered by
+dependence analysis.
+
+Parakeet—originating in the NYU theses of
+[Eric Hielscher (2013)](https://cs.nyu.edu/media/publications/eric_h.pdf) and
+[Alex Rubinsteyn (2014)](https://cs.nyu.edu/media/publications/rubinsteyn_alex.pdf)
+and [HotPar '12](https://www.usenix.org/conference/hotpar12/workshop-program/presentation/rubinsteyn)—bridges
+that gap with one guiding idea: **keep array programs in algebraic operator
+form (data-parallel adverbs over explicit index spaces) all the way through
+optimization.** That single choice unifies five design principles:
 
 1. **Specialize on types, values, and shape buckets at call time.** Python
    functions act as templates specialized on argument dtypes, array ranks,
@@ -8,22 +25,24 @@
    length, size-1 broadcast dimensions) specialize automatically, and tiled GPU
    schedules propagate power-of-2 shape buckets and divisibility so aligned
    sizes share one branchless binary.
-2. **Lower everything to seven algebraic primitives.** Instead of shipping
-   hundreds of hand-written kernels, NumPy expressions, comprehensions, matrix
-   products, `einsum`, and `par.*` calls all lower to seven index-space
-   operators (`Map`, `Reduce`/`Fold`, `Scan`, `Filter`/`Expand`, `Scatter`,
-   `Wavefront`, `Tile`). See [Operators & compilation walkthrough](primitives.md).
+2. **Normalize everything into coordinate-driven primitives.** NumPy
+   expressions, comprehensions, matrix products, `einsum`, and `par.*` calls
+   all indexify into six source primitives (`IndexMap`, `IndexReduce`,
+   `IndexScan`, `IndexFilter`/`IndexExpand`, `IndexScatter`, `IndexWavefront`),
+   turning broadcasts, transposes, and slices into plain index arithmetic
+   ([Operators & compilation walkthrough](primitives.md)).
 3. **Fuse algebraically before lowering to loops.** Vertical, nested, filter,
    sibling, and online fusion operate directly on the operator IR with explicit
-   alias, single-use cost, and associativity guards. See
-   [Rewrite rules catalog](rewrites.md).
-4. **Tile for cache and GPU shared memory from one IR.** Target-aware reduction
-   interchange, cache/register micro-tiling, GPU SRAM staging, hardware matrix
-   units (Metal `simdgroup_matrix`, CUDA TF32 WMMA), and
-   [Laws 1–6](algebra.md) all run on the same operator IR before codegen.
+   alias, single-use cost, and associativity guards
+   ([Rewrite rules catalog](rewrites.md)).
+4. **Tile for cache and GPU shared memory from one IR.** Following Hielscher's
+   locality framework, target-aware reduction interchange, `IndexTile`
+   cache/register blocking, GPU SRAM staging, hardware matrix units (Metal
+   `simdgroup_matrix`, CUDA TF32 WMMA), and [Laws 1–6](algebra.md) all run on
+   the same operator IR before codegen.
 5. **Inspectable, fail-loud compilation.** Unsupported constructs raise a
-   source-located `CompileError` instead of silently falling back; every pass is
-   verified by `par.verify` and inspectable via `par.show_rewrite`,
+   source-located `CompileError` instead of silently falling back; every pass
+   is verified by `par.verify` and inspectable via `par.show_rewrite`,
    `f.specialize()`, and `par.find_broken_transform`.
 
 ---

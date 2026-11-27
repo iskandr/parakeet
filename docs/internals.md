@@ -156,3 +156,8 @@ min/max, RNG) so CPU, Metal, and CUDA agree bit-for-bit on integer results.
   pointer, offset, shape, and strides per array). Newly allocated outputs wrap
   into NumPy arrays without copying using a finalizer that releases the native
   buffer; returned input views alias caller memory directly.
+
+---
+
+**Next:** [Design, boundaries, and history](philosophy.md) summarizes the core
+design principles, current compiler limits, and Parakeet's academic lineage.

@@ -1,21 +1,22 @@
 # Algebraic laws
 
-Simple loop fusion removes element-wise temporaries, but modern numerical and
-ML workloads hit harder bottlenecks: quadratic `O(N²)` or `O(M · V)` memory
-explosions, `O(T)` serial recurrences, and reverse-mode tapes that save giant
-intermediates.
+Simple loop fusion eliminates element-wise temporaries, but harder bottlenecks
+remain whenever a program normalizes across a whole row (`O(N²)` attention or
+`O(M · V)` cross-entropy), chains matrix contractions, runs a long serial
+recurrence (`O(T)` depth), or saves a giant tape for reverse-mode AD.
 
-Rather than adding hardcoded "layer" ops, Parakeet solves these with **six
-general algebraic laws** over its [seven operator primitives](primitives.md).
-Because the passes match operator algebra rather than model names, the exact
-same passes accelerate Gaussian kernel regression, exact 1-NN, GBDT histograms,
-and IIR filters alongside attention, cross-entropy, and state-space models.
+Instead of hardcoding model-specific "fused layers", Parakeet encodes these
+optimizations as **six general algebraic laws** over its
+[index-space primitives](primitives.md). Because the passes match operator
+algebra rather than neural-network layer names, the exact same passes optimize
+Gaussian kernel regression, exact 1-NN, GBDT histograms, and IIR filters
+alongside attention, cross-entropy, and state-space models.
 
 ## Semantic contract: real algebra vs. exact order
 
 * **Associative / commutative rewrites** (parallel reductions, monoidal tiling,
   contraction reassociation, chunkwise scans, privatized scatter-add) assume
-  real-arithmetic associativity: floating-point results may differ in the last
+  real-arithmetic associativity: floating-point rounding may differ in the last
   ULP relative to a left-to-right loop, just like NumPy's pairwise summation or
   cuBLAS.
 * **Order-sensitive operations** (first-index ties and NaNs in
@@ -106,7 +107,7 @@ cost orders of magnitude more FLOPs and memory in the wrong parenthesization.
 **The law.** For a single-use intermediate `T = U @ Vᵀ` feeding `Y = W @ T`:
 
 <div class="pk-eq">
-(U · Vᵀ) · Wᵀ  =  U · (Vᵀ · Wᵀ) &nbsp;&nbsp;— choose min( U·K·(R + P),  P·R·(K + U) ) FLOPs
+(U · Vᵀ) · Wᵀ  =  U · (Vᵀ · Wᵀ) &nbsp;&nbsp;— pick min( U·K·(R + P),  P·R·(K + U) ) FLOPs
 </div>
 
 <div class="pk-xform" markdown>
@@ -130,14 +131,14 @@ O = (softmax(Q_abs @ C_kv.T) @ C_kv) @ W_uv
 </div>
 
 `parakeet/transforms/reassociate.py` emits a runtime shape-guarded branch so
-short-query decode automatically runs tiled Law 1 attention directly over the
-compressed latent `C_kv`, while long-query prefill takes the lower-FLOP expanded
-branch.
+short-query decode runs tiled Law 1 attention directly over the compressed
+latent `C_kv`, while long-query prefill automatically takes the lower-FLOP
+expanded branch.
 
 **Shared-KV head-group tiling (GQA):** when a head-group axis `G` of `Q`
 broadcasts against a single KV head, Parakeet folds `G` into the query row
-(`i_eff = g * T_q + i`) so all `G` query heads reuse one shared-memory load of
-`K` and `V`.
+(`i_eff = g * T_q + i`) so all `G` query heads share one SRAM load of `K` and
+`V`.
 
 ---
 
@@ -168,18 +169,18 @@ for t in range(T):
 <div class="pk-xform-title">Compiled schedule (C = 64) <span class="pk-xform-badge">64× shorter scan + GEMMs</span></div>
 
 ```python
-# 0. Parallel intra-chunk decay products (zero-safe)
-# 1. Parallel Y_intra = ((Q @ K.T) * L) @ V
-# 2. Parallel chunk summary B[c] = K_scaled.T @ V
-# 3. 64x shorter scan: S_in[c+1] = A[c]*S_in[c] + B[c]
-# 4. Parallel readout: out = Y_intra + Q @ S_in
+L, A = chunk_decay_products(a, C=64)  # parallel, zero-safe
+Y_intra = ((Q_c @ K_c.T) * L) @ V_c  # parallel over chunks
+B_c = K_scaled.T @ V_c  # parallel chunk summaries
+S_in = scan_affine(A, B_c)  # 64x shorter recurrence
+out = Y_intra + (Q_c @ S_in)  # parallel readout
 ```
 </div>
 </div>
 
 Because `chunkwise scan` runs before `tiling`, the matrix products in Steps 1,
-2, and 4 automatically flow into CPU register tiling, Metal `simdgroup_matrix`,
-and CUDA TF32 WMMA Tensor Cores.
+2, and 4 flow directly into CPU register tiling, Metal `simdgroup_matrix`, and
+CUDA TF32 WMMA Tensor Cores.
 
 ---
 
@@ -217,7 +218,7 @@ Welford variance, `par.fold`).
   atomics on GPU.
 * **Ordered pairwise tile folds:** `Fold.carries` tracks multiple scalar fields
   in one pass while preserving chunk order. `pairwise fold tiling` fuses a
-  pairwise score producer directly into an ordered fold over `L1` / shared-memory
+  pairwise score producer directly into an ordered fold over L1 / shared-memory
   tiles, eliminating `O(Q · R)` distance matrices in both broadcasting NumPy and
   nested-map 1-NN:
 
@@ -225,10 +226,6 @@ Welford variance, `par.fold`).
 
 ---
 
-## Verifying which laws fired
-
-Use `par.show_rewrite(fn, *example_args).summary()` on any function to see which
-laws fired and how operator counts changed. See
-[Walkthrough 1: Causal self-attention](primitives.md#walkthrough-attention) for
-an example report, and the [Kernel gallery](gallery.md) for runnable code
-covering all six laws.
+**Next:** [Rewrite rules catalog](rewrites.md) lists every fusion, tiling, and
+differentiation rule and compares Parakeet 1.x with the 2013–2014 theses. See
+also the [Kernel gallery](gallery.md) for runnable examples across all six laws.

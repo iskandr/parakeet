@@ -24,8 +24,9 @@ import parakeet as par
 | Side-effecting parallel loops | [`par.parfor`](#parfor) |
 
 For differentiation (`par.grad`, `par.jvp`, `par.hvp`), see
-[Automatic differentiation](autodiff.md). For inspecting compiler rewrites
-(`par.show_rewrite`), see [Operators & compilation walkthrough](primitives.md).
+[Automatic differentiation](autodiff.md). To see how all of these operators
+indexify onto Parakeet's internal operator core (and how fusion and tiling fire
+on them), see [Operators & compilation walkthrough](primitives.md#what-the-index-prefix-means).
 
 ---
 

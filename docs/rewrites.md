@@ -160,3 +160,9 @@ vectorization to the system C/CUDA/Metal compiler):
 | Alias & duplication safety guards on fusion; static size-1 broadcast specialization; `DimInfo` shape-bucket specialization | Online runtime tile-size search |
 | Parallel scans, filters, `RaggedArray` expand, wavefront DP, `einsum`, and runtime bounds/shape exceptions | Custom low-level scalar optimizer (1.x delegates scalar opts to clang/gcc/NVRTC/MSL) |
 | Unified CPU + Apple Metal + NVIDIA CUDA with device residency and hardware matrix units | — |
+
+---
+
+**Next:** [Compiler architecture](internals.md) walks through how elaboration,
+all 12 middle-end passes, lowered loop IR, and C/Metal/CUDA codegen fit
+together.

@@ -290,6 +290,107 @@ def gen_pipeline() -> str:
 
 
 # ---------------------------------------------------------------------------
+# 1b. Indexification: array-driven Python -> coordinate-driven Index* IR
+# ---------------------------------------------------------------------------
+
+
+def gen_indexification() -> str:
+  w, h = 680, 316
+  out = [
+    _svg_open(
+      w,
+      h,
+      "Indexification lowers diverse array-driven Python and NumPy operations onto uniform coordinate-driven Index* primitives",
+    )
+  ]
+  out.append(
+    _title(
+      "Why the 'Index' Prefix? Array-Driven Python → Coordinate-Driven IR",
+      "Views, broadcasts, transposes, and par.* operators disappear into integer index expressions.",
+    )
+  )
+
+  # Column headers
+  out.append(_text(20, 72, "SURFACE PYTHON / NUMPY / PAR.*", size=10.2, weight="700", fill=SUB))
+  out.append(_text(324, 72, "INDEX-SPACE PRIMITIVE", size=10.2, weight="700", fill=GREEN_DARK))
+
+  # Top band: Map family -> IndexMap
+  y1 = 82
+  out.append(_box(20, y1, 260, 108, fill=BG_SOFT, stroke=BORDER))
+  map_inputs = [
+    ("x[:, None] - y[None, :]", "broadcast"),
+    ("x.T * 2.0", "transpose + ufunc"),
+    ("par.allpairs(f, x, y)", "pairwise map"),
+    ("[f(xi) for xi in x]", "comprehension"),
+  ]
+  for idx, (code, tag) in enumerate(map_inputs):
+    ry = y1 + 10 + idx * 23
+    out.append(_box(28, ry, 244, 19, fill="#ffffff", stroke=BORDER, rx=4, stroke_width=1.0))
+    out.append(_text(35, ry + 13, code, size=9.6, weight="600", fill=INK, mono=True))
+    out.append(_text(265, ry + 13, tag, size=9.2, fill=MUTED, anchor="end"))
+
+  out.append(_arrow(284, y1 + 54, 316, y1 + 54, color=GREEN_DARK, marker="arr-green", width=2.0))
+
+  out.append(_box(324, y1, 336, 108, fill=GREEN_BG, stroke=GREEN_BD))
+  out.append(_text(338, y1 + 21, "IndexMap", size=12.5, weight="700", fill=GREEN_DARK, mono=True))
+  out.append(
+    _pill(422, y1 + 7, 134, 20, "coordinate box (M, N)", fill="#ffffff", stroke=GREEN_BD, ink=GREEN_DARK, size=9.5)
+  )
+  out.append(_box(338, y1 + 34, 308, 42, fill="#ffffff", stroke=GREEN_BD, rx=5, stroke_width=1.0))
+  out.append(_text(348, y1 + 51, "for (i, j) in (0..M-1, 0..N-1):", size=9.8, weight="600", fill=INK, mono=True))
+  out.append(_text(348, y1 + 67, "  out[i, j] = body(x[i], y[j])", size=9.8, fill=SUB, mono=True))
+  out.append(
+    _text(
+      338,
+      y1 + 95,
+      "No input arrays on the node — broadcasts & views are just index math",
+      size=9.8,
+      weight="500",
+      fill=GREEN_DARK,
+    )
+  )
+
+  # Bottom band: Reduce family -> IndexReduce
+  y2 = 202
+  out.append(_box(20, y2, 260, 96, fill=BG_SOFT, stroke=BORDER))
+  red_inputs = [
+    ("np.sum(x * x, axis=1)", "reduction"),
+    ("np.argmin(d2, axis=1)", "value + index"),
+    ("par.fold(lift, merge, x)", "ordered carry"),
+    ("par.ireduce(f, (K,))", "index reduction"),
+  ]
+  for idx, (code, tag) in enumerate(red_inputs):
+    ry = y2 + 7 + idx * 21
+    out.append(_box(28, ry, 244, 18, fill="#ffffff", stroke=BORDER, rx=4, stroke_width=1.0))
+    out.append(_text(35, ry + 12.5, code, size=9.4, weight="600", fill=INK, mono=True))
+    out.append(_text(265, ry + 12.5, tag, size=9.0, fill=MUTED, anchor="end"))
+
+  out.append(_arrow(284, y2 + 48, 316, y2 + 48, color=BLUE_DARK, marker="arr-blue", width=2.0))
+
+  out.append(_box(324, y2, 336, 96, fill=BLUE_BG, stroke=BLUE_BD))
+  out.append(_text(338, y2 + 21, "IndexReduce", size=12.5, weight="700", fill=BLUE_DARK, mono=True))
+  out.append(
+    _pill(444, y2 + 7, 134, 20, "reduction axis (0..K-1)", fill="#ffffff", stroke=BLUE_BD, ink=BLUE_DARK, size=9.5)
+  )
+  out.append(_box(338, y2 + 32, 308, 38, fill="#ffffff", stroke=BLUE_BD, rx=5, stroke_width=1.0))
+  out.append(_text(348, y2 + 48, "fold (⊕, carries) over k in 0..K-1:", size=9.8, weight="600", fill=INK, mono=True))
+  out.append(_text(348, y2 + 63, "  acc = combine(acc, body(k))", size=9.8, fill=SUB, mono=True))
+  out.append(
+    _text(
+      338,
+      y2 + 86,
+      "One fusion & tiling pass now handles sum, argmin, @, einsum & fold",
+      size=9.8,
+      weight="500",
+      fill=BLUE_DARK,
+    )
+  )
+
+  out.append("</svg>\n")
+  return "".join(out)
+
+
+# ---------------------------------------------------------------------------
 # 2. Algebraic fusion patterns (docs/primitives.md, docs/rewrites.md)
 # ---------------------------------------------------------------------------
 
@@ -758,6 +859,7 @@ def main() -> None:
   ASSETS.mkdir(parents=True, exist_ok=True)
   diagrams = {
     "diag-pipeline.svg": gen_pipeline(),
+    "diag-indexification.svg": gen_indexification(),
     "diag-fusion.svg": gen_fusion(),
     "diag-attention-tiling.svg": gen_attention_tiling(),
     "diag-pairwise-1nn.svg": gen_pairwise_1nn(),
