@@ -1,24 +1,19 @@
 # Kernel gallery
 
-Parakeet compiles ordinary NumPy code, plain Python loops, and explicit
-data-parallel operators (`par.map`, `par.allpairs`, `par.fold`, `par.imap`,
-`par.ireduce`, `par.scatter_add`) through the **same** `@par.jit` decorator and
-the **same** algebraic IR.
+Parakeet compiles NumPy expressions, Python loops, and explicit data-parallel
+operators ([`par.map`](operators.md#map), [`par.allpairs`](operators.md#allpairs),
+[`par.fold`](operators.md#fold), [`par.imap`](operators.md#imap),
+[`par.ireduce`](operators.md#ireduce), [`par.scatter_add`](operators.md#scatter_add))
+through the same `@par.jit` decorator and algebraic IR.
 
-**How this page is organized:** the examples progress from straightforward
-pairwise NumPy fusion and histograms to custom semiring reductions, parallel
-recurrences, and modern attention and loss kernels; introducing Parakeet's
-capabilities one layer at a time. Where a section has tabs, those tabs show
-**alternative ways to write the exact same computation** (idiomatic NumPy vs.
-plain loops vs. explicit Parakeet operators) that all compile to the same
-fused, tiled schedule.
+The examples below move from pairwise NumPy fusion and histograms to custom
+semirings, parallel recurrences, and attention/loss kernels. Where a section
+has tabs, each tab shows an alternative way to write the same kernel that
+compiles to the same fused, tiled schedule.
 
-For a complete end-to-end training walkthrough, see
-[nanoGPT](gallery/nanogpt.md). For genomics, cheminformatics, and 3D protein
-kernels, see [Bioinformatics & structural biology](bioinformatics.md). For the
-underlying identities behind these rewrites, see [Algebraic laws](algebra.md).
-
-Every snippet below is included directly from
+See also [nanoGPT](gallery/nanogpt.md),
+[Bioinformatics & structural biology](bioinformatics.md), and
+[Algebraic laws](algebra.md). Every snippet is included verbatim from
 [`examples/algebraic_gallery.py`](https://github.com/iskandr/parakeet/blob/master/examples/algebraic_gallery.py)
 and verified by `python -m examples.algebraic_gallery`.
 

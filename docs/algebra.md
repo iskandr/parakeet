@@ -1,39 +1,28 @@
 # Algebraic laws
 
-Parakeet lowers numerical Python to a small algebra of data-parallel operators
-(maps, reductions, scans, and filters) with fusion and tiling rules over them.
-Those rules eliminate temporary arrays and improve cache locality for ordinary
-array expressions, comprehensions, and matrix products.
+Ordinary array fusion removes simple element-wise temporaries. Modern numerical
+and ML kernels need more: eliminating quadratic `O(N²)` or `O(M · V)` buffers,
+parallelizing long serial recurrences, and differentiating without saving giant
+intermediates.
 
-Many modern numerical and machine-learning kernels need one step further:
-eliminating quadratic `O(N²)` or `O(M · V)` intermediates, turning long serial
-recurrences into parallel block passes, and avoiding saving giant intermediates
-for reverse-mode differentiation. Rather than adding special-purpose "layer"
-ops to the compiler, Parakeet encodes these transformations as six general
-algebraic laws over a small core of index-operator statements (`IndexMap`,
-`IndexReduce`, `IndexScan`, `IndexFilter`, `IndexExpand`, `IndexScatter`,
-`IndexWavefront`, and `IndexTile` / `TileStage`) plus multi-state `Carry`
-folds.
-
-Because the passes match operator algebra instead of model names, the same
-rules fire on Gaussian kernel regression, shortest-path products, exact
-nearest-neighbor search, histogram split-finding, and IIR filters as on
-attention, cross-entropy, and state-space models.
+Rather than adding hardcoded "layer" ops, Parakeet encodes these optimizations
+as **six general algebraic laws** over its
+[seven index-space primitives](primitives.md). Because the passes match
+operator algebra rather than model names, the same rules fire on Gaussian
+kernel regression, shortest-path products, exact 1-NN, GBDT histograms, and IIR
+filters as on attention, cross-entropy, and state-space models.
 
 ## Semantic contract: real-algebraic rewrites vs. exact order
 
-Algebraic rewrites (parallel reduction, monoidal tiling, contraction
-reassociation, chunkwise affine scans, privatized scatter-add) rely on
-**real-arithmetic associativity and commutativity**: floating-point rounding
-order may differ in the last ULP relative to a left-to-right loop, just as in
-NumPy's pairwise summation or cuBLAS. That assumption is explicit and
-deliberate in Parakeet.
+Parallel reductions, monoidal tiling, contraction reassociation, chunkwise
+scans, and privatized scatter-add assume **real-arithmetic associativity and
+commutativity**: floating-point rounding may differ in the last ULP relative to
+a left-to-right loop, just as in NumPy's pairwise summation or cuBLAS.
 
-Where order *is* semantically observable; equal-distance ties and first-NaN
-propagation in `argmin` / `argmax`, non-commutative structured `parakeet.fold`
-merges, or general sequential reductions; Parakeet preserves **exact
-left-to-right merge order** across chunks and tiles (and refuses to
-parallelize non-associative combiners).
+Where order is observable (equal-distance ties and first-NaN behavior in
+`argmin`/`argmax`, non-commutative `par.fold` merges, or arbitrary sequential
+folds), Parakeet preserves **exact left-to-right merge order** and refuses to
+parallelize non-associative combiners.
 
 ## The six laws at a glance
 

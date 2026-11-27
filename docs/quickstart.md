@@ -100,35 +100,26 @@ keeping arrays resident on a GPU with `parakeet.to_device`.
 
 ## Looking inside
 
+Inspect what Parakeet fused and what native code it generated at any time:
+
 ```python
+print(par.show_rewrite(rms, x).summary())  # algebraic laws and operator counts
+
 spec = rms.specialize(x)  # compile without running
-print(spec.operators)  # high-level operator IR before middle-end passes
-print(spec.ir)  # typed, fused loop IR
 print(spec.source)  # generated C
 ```
 
-```text
-def rms(x_1: array[float64, 1d]):
-    nchunks_9: int64? = @num_chunks(x_n0_3, True)
-    partials_10 = alloc(float64, nchunks_9)
-    parallel[reduce] for chunk_11, (start_12, stop_13) in chunks(x_n0_3, n=nchunks_9):
-        x_15: float64 = (x_1[(x_off_2 + start_12)] * x_1[(x_off_2 + start_12)])
-        acc_14: float64 = x_15
-        for i_16 in range((start_12 + 1), stop_13, 1):  # simd
-            x_17: float64 = (x_1[(x_off_2 + i_16)] * x_1[(x_off_2 + i_16)])
-            acc_14: float64 = (acc_14 + x_17)
-        partials_10[chunk_11] = acc_14
-    acc_8: float64 = 0.0
-    for i_18 in range(0, nchunks_9, 1):
-        acc_8: float64 = (acc_8 + partials_10[i_18])
-    red_19: float64 = acc_8
-    res_20: float64 = sqrt((red_19 / float64(x_n0_3)))
-    return res_20
+For `rms(x)`, `x * x` fuses directly into the chunked parallel reduction with no
+temporary array:
+
+```python
+# Pseudocode of the fused parallel reduction for rms(x):
+partials = parallel_map_chunks(x, lambda chunk: sum(xi * xi for xi in chunk))
+return sqrt(sum(partials) / len(x))
 ```
 
-No temporary for `x * x` exists: the multiplication was fused into the parallel
-reduction. To see a high-level summary of which algebraic rewrites fired on a
-function, call `par.show_rewrite(fn, *example_args).summary()`.
+To inspect the raw typed compiler IR (`spec.operators` and lowered `spec.ir`),
+see [Compiler architecture: Lowered IR](internals.md#lowered-ir).
 
 ## When something is not supported
 

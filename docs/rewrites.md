@@ -1,46 +1,44 @@
 # Rewrite rules and optimizations
 
-Everything Parakeet does to a program between your source and the loops it
-runs, in one place, and how that compares with the two theses that describe
-the original system:
+A catalog of the algebraic rewrites Parakeet applies between Python source and
+native loops, compared against the two NYU PhD theses behind the original
+compiler:
 
-* **[R]** Alex Rubinsteyn, *Runtime Compilation of Array-Oriented Python
-  Programs* (NYU, 2014); the operators and their fusion rules.
-* **[H]** Eric Hielscher, *Locality Optimization for Data Parallel Programs*
-  (NYU, 2013); tiling.
+* **[R]** [Alex Rubinsteyn](https://rubinsteyn.com/),
+  [*Runtime Compilation of Array-Oriented Python Programs*](https://cs.nyu.edu/media/publications/rubinsteyn_alex.pdf)
+  (PhD thesis, NYU, 2014): type specialization, data-parallel operators, and
+  fusion rules.
+* **[H]** [Eric Hielscher](https://github.com/hielscher),
+  [*Locality Optimization for Data Parallel Programs*](https://cs.nyu.edu/media/publications/eric_h.pdf)
+  (PhD thesis, NYU, 2013; also [arXiv:1304.1835](https://arxiv.org/abs/1304.1835)):
+  cache/register tiling and loop interchange over operator trees.
 
-The short version: the rules are the same algebra, applied in two places.
+The same algebra runs in two stages:
 
-* **While elaborating.** An array expression is a *delayed* value: a function
-  from index to element; and the vertical fusion rules fire at the moment an
-  operator is applied to one. `F ∘ G` below means "the element function of
-  the result is `F` applied to the element function of the argument"; no pass
-  looks for the pattern afterwards.
-* **In the middle end.** Elaboration produces the original compiler's
-  *indexified* level: operator statements (`IndexMap`, `IndexReduce`,
-  `IndexScan`, `IndexFilter`, and `IndexScatter`) over index spaces with
-  ordinary scalar bodies (`Specialization.operators` prints it). Middle-end
-  passes rewrite those statements in order:
-  dead code elimination, normalization, vertical fusion (exact and affine
-  map/scan/filter/reduce/scatter), filter fusion, sibling and online monoidal
-  fusion, bilinear contraction reassociation, monoidal tiling and
-  tile-interval pruning, chunkwise affine/bilinear scans,
-  pairwise fold tiling, reduction interchange, and cache/register/GPU tiling.
-  A final pass (`LowerAdverbs` in spirit) lowers operators into loops.
-  `parakeet.transforms.pipeline.PASSES` is the authoritative list, and
-  `find_broken_transform` toggles its passes on one at a time. See
-  [Algebraic laws](algebra.md) for the mathematical identities behind these
-  passes and the [Kernel gallery](gallery.md) for runnable examples.
+1. **During elaboration:** array expressions stay *delayed* (a function from
+   index to value), so vertical fusion (`F ∘ G`) fires as soon as a consumer
+   reads an expression.
+2. **In the middle end:** elaboration emits index-space operator statements
+   (`IndexMap`, `IndexReduce`, `IndexScan`, `IndexFilter`, `IndexExpand`,
+   `IndexScatter`, `IndexWavefront`). Twelve passes in
+   `parakeet.transforms.pipeline.PASSES` rewrite those statements (dead code,
+   normalization, vertical/filter/sibling fusion, contraction reassociation,
+   monoidal tiling, row-pipeline fusion, chunkwise scans, pairwise fold tiling,
+   reduction interchange, and cache/GPU tiling) before lowering to loops.
 
+For example, `x @ y.T` enters the middle end as a map of dot-product reductions:
+
+```python
+# Algebraic view of `x @ y.T` as the middle-end passes see it:
+parallel for i in range(M), j in range(N):
+    out[i, j] = sum(x[i, k] * y[j, k] for k in range(K))
 ```
-map i_27, i_28 over (x_n0_3, y_n0_8):               # x @ y.T, as the passes see it
-    off_29: int64 = (x_off_2 + (i_27 * x_n1_4))
-    off_30: int64 = (y_off_7 + (i_28 * y_n1_9))
-    reduce i_35 over (x_n1_4):
-        x_36: float64 = (x_1[(off_29 + i_35)] * y_6[(off_30 + i_35)])
-        red_39: float64 = fold(add, x_36, init=0.0)
-    arr_24[((i_27 * y_n0_8) + i_28)] = red_39
-```
+
+For worked multi-stage walkthroughs, see
+[Algebraic primitives & walkthrough](primitives.md#worked-end-to-end-compilation-walkthroughs);
+for mathematical identities, see [Algebraic laws](algebra.md); for the raw
+low-level IR format (`spec.operators` / `spec.ir`), see
+[Compiler architecture](internals.md#lowered-ir).
 
 ## Operators
 
@@ -116,7 +114,7 @@ GPUs.
 | rule ([R] Fig. 6.3) | status |
 |---|---|
 | `a = Reduce(f, ⊕1, X); b = Reduce(g, ⊕2, X)` ⇒ `a, b = Reduce(f×g, ⊕1×⊕2, X)` | **yes**, as *sibling fusion* (`transforms/fusion.py`): two `IndexReduce` statements over the same index space, the second not using the first's result, become one statement with two folds. `x.min(), x.max()` reads `x` once |
-| `a = Map(f, X); b = Map(g, X)` ⇒ `a, b = Map(f×g, X)` | **yes** (`transforms/fusion.py`): two pure `IndexMap` statements over the same index space where the second does not read what the first writes share one loop (`np.sin(x), np.cos(x)` reads `x` once) |
+| `a = Map(f, X); b = Map(g, X)` ⇒ `a, b = Map(f×g, X)` | **yes** (`transforms/fusion.py`): independent pure `IndexMap`s over the same index space share one loop (`np.sin(x), np.cos(x)` reads `x` once). On CUDA, independent contiguous maps of differing sizes also batch horizontally into one disjoint-union kernel (reducing per-step launch counts in multi-tensor updates like Adam) |
 
 Conditions the thesis leaves out: the index spaces must be provably equal
 (the same expression once shape variables are resolved), both seeded or both
@@ -186,7 +184,7 @@ is dropped: the index is the loop's own.
 | `PermuteReductions`: interchange a strided inner reduction with a stride-1 outer map | **yes** (`transforms/tiling.py`, *target-aware reduction interchange*): on CPU, when an `IndexMap` of any rank wraps a commutative+associative `IndexReduce` whose inner axis is strided while the map's last index has unit stride (`np.sum(X, axis=0)`), the reduction is hoisted outside an L1-sized strip of contiguous output columns; on GPU (`TargetProfile.is_gpu`), interchange is skipped so warp/SIMD threads coalesce across columns directly |
 | `Map(f, X)` ⇒ `TiledMap(f↑, X)`, applied recursively through a nest of adverbs, stopping at a `Reduce` | **generalized `IndexTile` + `TileStage` operators** (`syntax/ir.py`, `transforms/tiling.py`, `transforms/lowering.py`): any `IndexMap` of rank ≥ 2 wrapping one `IndexReduce` (any number of folds and `Carry` states) plus straight-line prologues/epilogues (`a @ b`, batched 3D+ matmul, `allpairs`, `einsum`, `np.tanh(a @ b + c)`) is rewritten into nested `IndexTile(level="cache")` → `IndexTile(level="register")` operators on CPU, and extracts maximal row/col/k `TileStage`s for GPU `__shared__` (CUDA) and `threadgroup` (Metal) block tiling (`backends/tiled_gpu.py`) |
 | register tiling: a second, innermost tiling with compile-time tile sizes, then unroll and scalar-replace | **general N-D register jamming** (`lowering.jam_register_tile`) on CPU (exact hyper-rectangle partition jamming `2×4` interior blocks and partial remainder faces) + **`4×4` / `2×2` per-thread register micro-tiles** on CUDA and Metal |
-| `TiledReduce`, `TiledScan` | `PermuteReductions` (L1 column-strip tiled reduction), invariant row-reduction hoisting (`split_invariant_map` / `squeeze_unit_map` for `softmax` and `layer_norm`), and chunkwise `TileScan` for affine/bilinear recurrences; Hielscher's general cache-tiled `TiledScan` over arbitrary scans is not implemented |
+| `TiledReduce`, `TiledScan` | `PermuteReductions` (L1 column-strip tiled reduction), invariant row-reduction hoisting (`split_invariant_map` / `squeeze_unit_map`), and chunkwise `TileScan` for affine/bilinear recurrences; [Hielscher's](https://cs.nyu.edu/media/publications/eric_h.pdf) general cache-tiled `TiledScan` over arbitrary scans is not implemented |
 | cache tile sizes found by an online search between a pessimistic and an optimistic estimate | analytical compile-time sizing from queried `TargetProfile` (`parakeet/target.py`: CPU L1/L2/SIMD, CUDA SMs/SMEM/compute capability, Metal threadgroup memory/Apple7 `simdgroup_matrix`), with hardware matrix-unit lowering (`simdgroup_matrix` on Metal, `nvcuda::wmma` TF32 on CUDA `sm_80+` with `config.tensor_cores=True`) |
 | aborts unless each function body is a single adverb (simple algorithm) | aborts unless the element is exactly one reduction; anything else is a plain parallel map |
 

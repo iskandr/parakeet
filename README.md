@@ -11,12 +11,20 @@ loops, and runs those loops across CPU cores or on Apple Metal and NVIDIA CUDA
 GPUs.
 
 Underneath, ordinary NumPy expressions, comprehensions, explicit loops, and
-Parakeet's data-parallel operators (`parakeet.map`, `imap`, `ireduce`, `reduce`,
-`fold`, `scan`, `filter`, `scatter_add`, `allpairs`, `flatmap`, `wavefront`)
-all lower to the same small algebra of index operators. Because the compiler
-keeps that algebraic structure alive until code generation, fusion, cache and
-GPU tiling, and reverse-mode differentiation (`parakeet.grad`) all fall out of
-one representation.
+Parakeet's data-parallel operators ([`parakeet.map`](https://rubinsteyn.com/parakeet/operators/#map),
+[`imap`](https://rubinsteyn.com/parakeet/operators/#imap),
+[`ireduce`](https://rubinsteyn.com/parakeet/operators/#ireduce),
+[`reduce`](https://rubinsteyn.com/parakeet/operators/#reduce),
+[`fold`](https://rubinsteyn.com/parakeet/operators/#fold),
+[`scan`](https://rubinsteyn.com/parakeet/operators/#scan),
+[`filter`](https://rubinsteyn.com/parakeet/operators/#filter),
+[`scatter_add`](https://rubinsteyn.com/parakeet/operators/#scatter_add),
+[`allpairs`](https://rubinsteyn.com/parakeet/operators/#allpairs),
+[`flatmap`](https://rubinsteyn.com/parakeet/operators/#flatmap),
+[`wavefront`](https://rubinsteyn.com/parakeet/operators/#wavefront))
+all lower to the same seven index-space operators. Keeping that algebraic
+structure alive until code generation lets fusion, cache/GPU tiling, and
+reverse-mode differentiation (`parakeet.grad`) all run on one IR.
 
 Parakeet is not a general-purpose compiler for all of Python. It compiles the
 numerical subset and reports a source-located compile error whenever you step
@@ -200,7 +208,8 @@ Warmed medians from [`docs/assets/colab-l4-0dcb7d5.json`](docs/assets/colab-l4-0
 | Gaussian regression, GPU (`1,024 × 4,096 × 32`) | **1.053 ms** | `torch.compile(cdist)` `0.308`, JAX `0.602`, PyKeOps `1.254`, CuPy `17.18` ms | [`rbf_kernel_regression`](examples/algebraic_gallery.py) |
 | GBDT histogram split, GPU (`262,144 × 256`) | **0.370 ms** | `torch.compile` `0.208`, JAX `0.244`, PyTorch `0.335`, CuPy `0.647` ms | [`gbdt_best_split`](examples/algebraic_gallery.py) |
 | Causal attention, GPU (`4 × 512 × 64`) | **0.493 ms** | PyTorch SDPA `0.104`, JAX `0.145`, CuPy `0.490` ms | [`causal_flash_attention`](examples/algebraic_gallery.py) |
-| nanoGPT training step, GPU (`16×64×128×2`) | **6.83 ms** (TF32) / **8.44 ms** (FP32) | PyTorch eager `9.22`, `torch.compile` `3.52`, JAX `1.62` ms | [`examples/nanogpt.py`](examples/nanogpt.py) |
+| nanoGPT training step, GPU (`16×64×128×2`) | **4.57 ms** (FP32) / **4.67 ms** (TF32) | PyTorch eager `8.88`, `torch.compile` `3.63`, JAX `1.59` ms | [`examples/nanogpt.py`](examples/nanogpt.py) |
+| nanoGPT training step, GPU (`32×128×256×4`) | **17.81 ms** (TF32) / **35.24 ms** (FP32) | PyTorch eager `18.93`, `torch.compile` `14.76`, JAX `9.18` ms | [`examples/nanogpt.py`](examples/nanogpt.py) |
 
 See the full [**Benchmarks report**](https://rubinsteyn.com/parakeet/release-benchmarks/)
 for replicate distributions, IQR spreads, scaling curves, memory counters,
@@ -236,36 +245,47 @@ More information
 History
 =======
 
-Parakeet began as an OCaml compiler modeling the array language Q, then shifted
-to modeling Python, and was later reimplemented in Python at New York
-University (Courant Institute) by **Alex Rubinsteyn** and **Eric Hielscher**
-with **Nathaniel Weinman** and advisor **Dennis Shasha** (with early advice
-from **Russell Power**). The Python 2 / NumPy 1 implementation lowered
-numerical Python to a typed SSA IR built around higher-order data-parallel
-adverbs (`Map`, `Reduce`, `Scan`, `OuterMap`, `Filter`), fusing and tiling
-algebraically before emitting C, OpenMP, or CUDA.
+Parakeet began as an OCaml compiler modeling the array language Q, shifted to
+modeling Python, and was reimplemented in Python at New York University
+(Courant Institute) by co-creators [Alex Rubinsteyn](https://rubinsteyn.com/)
+([`@iskandr`](https://github.com/iskandr)) and
+[Eric Hielscher](https://github.com/hielscher)
+([`@hielscher`](https://github.com/hielscher)), with
+[Nathaniel Weinman](https://www2.eecs.berkeley.edu/Pubs/TechRpts/2022/EECS-2022-257.html),
+advised by [Dennis Shasha](https://cs.nyu.edu/~shasha/), and with early advice
+from [Russell Power](https://rjp.io/) ([`@rjpower`](https://github.com/rjpower)).
+That Python 2 / NumPy 1 compiler lowered numerical Python to a typed SSA IR of
+data-parallel adverbs (`Map`, `Reduce`, `Scan`, `OuterMap`, `Filter`), fusing
+and tiling algebraically before emitting C, OpenMP, or CUDA.
 
 The original research is documented in:
 
-* **Alex Rubinsteyn**, [*Runtime Compilation of Array-Oriented Python Programs*](https://cs.nyu.edu/media/publications/rubinsteyn_alex.pdf)
-  (PhD thesis, NYU, 2014): runtime type and value specialization, typed
-  adverb IR, algebraic vertical/nested/horizontal fusion, and multi-core/CUDA
-  code generation.
-* **Eric Hielscher, Alex Rubinsteyn, and Dennis Shasha**,
-  [*Locality Optimization for Data Parallel Programs*](https://arxiv.org/abs/1304.1835)
-  (NYU CS Technical Report TR2013-955 / Eric Hielscher's 2013 NYU PhD thesis
-  work): `TiledMap` / `TiledReduce` / `TiledScan` for unified cache and
-  register tiling over adverb trees.
-* **Alex Rubinsteyn, Eric Hielscher, Nathaniel Weinman, and Dennis Shasha**,
+* [Eric Hielscher](https://github.com/hielscher),
+  [*Locality Optimization for Data Parallel Programs*](https://cs.nyu.edu/media/publications/eric_h.pdf)
+  (PhD thesis, NYU, 2013; also [NYU TR2013-955](https://cs.nyu.edu/media/publications/TR2013-955.pdf) /
+  [arXiv:1304.1835](https://arxiv.org/abs/1304.1835) with
+  [Alex Rubinsteyn](https://rubinsteyn.com/) and
+  [Dennis Shasha](https://cs.nyu.edu/~shasha/)):
+  `TiledMap`, `TiledReduce`, and `TiledScan` for unified cache tiling, register
+  blocking, and loop interchange over adverb trees.
+* [Alex Rubinsteyn](https://rubinsteyn.com/),
+  [*Runtime Compilation of Array-Oriented Python Programs*](https://cs.nyu.edu/media/publications/rubinsteyn_alex.pdf)
+  (PhD thesis, NYU, 2014): runtime type and value specialization, typed adverb
+  IR, algebraic vertical/nested/horizontal fusion, and multi-core/CUDA code
+  generation.
+* [Alex Rubinsteyn](https://rubinsteyn.com/),
+  [Eric Hielscher](https://github.com/hielscher),
+  [Nathaniel Weinman](https://www2.eecs.berkeley.edu/Pubs/TechRpts/2022/EECS-2022-257.html),
+  and [Dennis Shasha](https://cs.nyu.edu/~shasha/),
   [*Parakeet: A Just-In-Time Parallel Accelerator for Python*](https://www.usenix.org/conference/hotpar12/workshop-program/presentation/rubinsteyn)
   (USENIX HotPar '12), plus the [PyData Boston 2013](https://vimeo.com/73895275)
   and [PyData NYC 2013](https://vimeo.com/79556629) talks.
 
-Parakeet 1.x is a rewrite for Python 3.11+ and NumPy 2 that keeps ordinary
-`@jit` NumPy and explicit data-parallel operators in one namespace, extends
-the adverb algebra with scatter reductions, structured multi-state folds,
-ragged compaction, wavefront DP, chunkwise scans, rescaled-monoid GPU tiling,
-and composable automatic differentiation, and targets multi-core CPUs, Apple
-Metal, and NVIDIA CUDA. The older Python 2 codebase remains in the Git history.
+Parakeet 1.x is a rewrite for Python 3.11+ and NumPy 2 that keeps `@jit` NumPy
+and explicit data-parallel operators together, adds scatter reductions,
+multi-state folds, ragged compaction, wavefront DP, chunkwise scans,
+rescaled-monoid GPU tiling, and composable AD, and targets multi-core CPUs,
+Apple Metal, and NVIDIA CUDA. The older Python 2 codebase remains in Git
+history.
 
 BSD 3-clause licensed; see [LICENSE](LICENSE).
