@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 186" width="680" height="186" role="img" aria-label="SSHash + Delta-Map Long-Read RNA (3.01 Mbp)">
+<rect x="0.5" y="0.5" width="679" height="185" rx="10" fill="#ffffff" stroke="#cbd5e1"/>
+<text x="20" y="28" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#0f172a">SSHash + Delta-Map Long-Read RNA (3.01 Mbp)</text>
+<text x="20" y="48" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#475569">80 human Ensembl isoforms, 9.70× unitig collapse, 92.2% hash-probe skip.</text>
+<rect x="224.0" y="64.0" width="288.0" height="80.0" rx="5" fill="#fafbfc" stroke="#e2e8f0"/>
+<rect x="225.0" y="66.4" width="286.0" height="35.2" rx="3" fill="#f0fdfa"/>
+<text x="214.0" y="88.8" text-anchor="end" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#0f766e">Parakeet (multicore)</text>
+<rect x="224.0" y="73.5" width="63.2" height="21" rx="3.5" fill="#0d9488" fill-opacity="0.88"/>
+<circle cx="287.2" cy="84.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="303.7" cy="84.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="295.5" cy="84.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="294.4" cy="84.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="305.7" cy="84.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="288.7" cy="84.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="282.8" cy="84.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="276.7" cy="84.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="284.6" cy="84.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="282.4" cy="84.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="273.4" cy="84.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<text x="522.0" y="88.8" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="700" fill="#0f766e">5.48 ms (549 Mbp/s)</text>
+<rect x="225.0" y="106.4" width="286.0" height="35.2" rx="3" fill="#f0fdfa"/>
+<line x1="224.0" y1="104.0" x2="512.0" y2="104.0" stroke="#f1f5f9"/>
+<text x="214.0" y="128.8" text-anchor="end" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#0f766e">Parakeet (c, 1T)</text>
+<rect x="224.0" y="113.5" width="250.4" height="21" rx="3.5" fill="#0f766e" fill-opacity="0.88"/>
+<circle cx="506.0" cy="124.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="423.8" cy="124.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="498.7" cy="124.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="474.8" cy="124.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="496.9" cy="124.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="482.6" cy="124.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="459.1" cy="124.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="474.4" cy="124.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="474.4" cy="124.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="445.1" cy="124.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="442.9" cy="124.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<text x="522.0" y="128.8" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="700" fill="#0f766e">21.71 ms (138 Mbp/s)</text>
+<text x="20" y="174" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" fill="#64748b">arm64 / Darwin (10 cores) · n=11 replicates (median bar + replicate dots; lower is faster)</text>
+</svg>

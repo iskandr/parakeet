@@ -1723,8 +1723,10 @@ into parallel loops for CPU threads, Apple Metal, or NVIDIA CUDA.</p>
 <ul>
 <li><strong>What you write in Python</strong> operates on <em>values and arrays</em>: standard NumPy
   (<code>np.sum</code>, <code>np.cumsum</code>, <code>x[x &gt; 0]</code>, <code>a @ b</code>) or Parakeet's data-parallel
-  operators (<code>par.map</code>, <code>par.reduce</code>, <code>par.fold</code>, <code>par.scan</code>, <code>par.flatmap</code>,
-  <code>par.scatter_add</code>, <code>par.wavefront</code>).</li>
+  operators (<a href="../operators/#map"><code>par.map</code></a>, <a href="../operators/#reduce"><code>par.reduce</code></a>,
+  <a href="../operators/#fold"><code>par.fold</code></a>, <a href="../operators/#scan"><code>par.scan</code></a>,
+  <a href="../operators/#flatmap"><code>par.flatmap</code></a>, <a href="../operators/#scatter_add"><code>par.scatter_add</code></a>,
+  <a href="../operators/#wavefront"><code>par.wavefront</code></a>).</li>
 <li><strong>What the compiler builds internally</strong> operates on <em>N-D index spaces</em>
   <code>(0..N₀-1, 0..N₁-1, ...)</code> so that arrays of different shapes, slices,
   broadcasts, and transposed views all share one uniform representation. Every
@@ -1741,32 +1743,32 @@ into parallel loops for CPU threads, Apple Metal, or NVIDIA CUDA.</p>
 </thead>
 <tbody>
 <tr>
-<td><code>np.tanh(x) + 1</code>, <code>[f(xi) for xi in x]</code>, <code>par.map</code>, <code>par.imap</code>, <code>par.allpairs</code></td>
+<td><code>np.tanh(x) + 1</code>, <code>[f(xi) for xi in x]</code>, <a href="../operators/#map"><code>par.map</code></a>, <a href="../operators/#imap"><code>par.imap</code></a>, <a href="../operators/#allpairs"><code>par.allpairs</code></a></td>
 <td><a href="#map"><code>IndexMap</code></a></td>
 <td>Independent per-coordinate computation</td>
 </tr>
 <tr>
-<td><code>np.sum</code>, <code>np.argmin</code>, <code>par.reduce</code>, <code>par.fold</code>, <code>par.ireduce</code></td>
+<td><code>np.sum</code>, <code>np.argmin</code>, <a href="../operators/#reduce"><code>par.reduce</code></a>, <a href="../operators/#fold"><code>par.fold</code></a>, <a href="../operators/#ireduce"><code>par.ireduce</code></a></td>
 <td><a href="#reduce-and-fold"><code>IndexReduce</code></a></td>
 <td>Associative or ordered fold (with optional multi-field carries)</td>
 </tr>
 <tr>
-<td><code>np.cumsum</code>, <code>par.scan</code>, affine/bilinear <code>for</code> loops</td>
+<td><code>np.cumsum</code>, <a href="../operators/#scan"><code>par.scan</code></a>, affine/bilinear <code>for</code> loops</td>
 <td><a href="#scan"><code>IndexScan</code></a></td>
 <td>Running prefix accumulation or associative recurrence</td>
 </tr>
 <tr>
-<td><code>x[x &gt; 0]</code>, <code>par.filter</code>, <code>par.flatmap</code>, <code>par.filter_pairs</code></td>
+<td><code>x[x &gt; 0]</code>, <a href="../operators/#filter"><code>par.filter</code></a>, <a href="../operators/#flatmap"><code>par.flatmap</code></a>, <a href="../operators/#filter_pairs"><code>par.filter_pairs</code></a></td>
 <td><a href="#filter-and-expand"><code>IndexFilter</code> / <code>IndexExpand</code></a></td>
 <td>Stream compaction (1-to-0/1) and ragged expansion (1-to-K)</td>
 </tr>
 <tr>
-<td><code>np.bincount</code>, <code>np.add.at</code>, <code>out[idx[i]] += v</code>, <code>par.scatter_add</code></td>
+<td><code>np.bincount</code>, <code>np.add.at</code>, <code>out[idx[i]] += v</code>, <a href="../operators/#scatter_add"><code>par.scatter_add</code></a></td>
 <td><a href="#scatter"><code>IndexScatter</code></a></td>
 <td>Associative accumulation into shared bins</td>
 </tr>
 <tr>
-<td><code>par.wavefront</code>, <code>par.soft_align</code></td>
+<td><a href="../operators/#wavefront"><code>par.wavefront</code></a>, <a href="../operators/#soft_align"><code>par.soft_align</code></a></td>
 <td><a href="#wavefront"><code>IndexWavefront</code></a></td>
 <td>Anti-diagonal and banded 2D dynamic programming</td>
 </tr>
@@ -1783,7 +1785,8 @@ into parallel loops for CPU threads, Apple Metal, or NVIDIA CUDA.</p>
 <p><strong>What it expresses:</strong> Independent evaluation of a pure body at every coordinate
 <code>(i₀, i₁, ...)</code> of an N-D index space, writing into one or more output arrays.</p>
 <p><strong>What you write:</strong> Element-wise NumPy expressions, broadcasting, array
-comprehensions, <code>par.map</code>, <code>par.allpairs</code>, or <code>par.imap</code>.</p>
+comprehensions, <a href="../operators/#map"><code>par.map</code></a>, <a href="../operators/#allpairs"><code>par.allpairs</code></a>,
+or <a href="../operators/#imap"><code>par.imap</code></a>.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># All three lower to the same single IndexMap:</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">x</span> <span class="o">*</span> <span class="mf">0.5</span><span class="p">)</span> <span class="o">+</span> <span class="mf">0.3</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">np</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">xi</span> <span class="o">*</span> <span class="mf">0.5</span><span class="p">)</span> <span class="o">+</span> <span class="mf">0.3</span> <span class="k">for</span> <span class="n">xi</span> <span class="ow">in</span> <span class="n">x</span><span class="p">])</span>
@@ -1802,15 +1805,15 @@ coordinate inversion for slices and transposes. See
 <h3 id="reduce-and-fold">Reduce and Fold (<code>IndexReduce</code>)<a class="headerlink" href="#reduce-and-fold" title="Permanent link">&para;</a></h3>
 <p><strong>What it expresses:</strong> Combining values across a reduction index space into one
 or more scalar accumulators.</p>
-<p><strong>Clearing up <code>par.reduce</code> vs. <code>par.fold</code> vs. <code>par.ireduce</code>:</strong></p>
+<p><strong>Clearing up <a href="../operators/#reduce"><code>par.reduce</code></a> vs. <a href="../operators/#fold"><code>par.fold</code></a> vs. <a href="../operators/#ireduce"><code>par.ireduce</code></a>:</strong></p>
 <ul>
-<li><strong><code>np.sum</code> / <code>np.max</code> / <code>np.argmin</code> / <code>par.reduce(op, x)</code></strong> reduce a single
+<li><strong><code>np.sum</code> / <code>np.max</code> / <code>np.argmin</code> / <a href="../operators/#reduce"><code>par.reduce(op, x)</code></a></strong> reduce a single
   value with a binary combiner (<code>np.add</code>, <code>np.maximum</code>, or a custom function).</li>
-<li><strong><code>par.fold(lift, merge, x, init)</code></strong> reduces structured multi-field state
+<li><strong><a href="../operators/#fold"><code>par.fold(lift, merge, x, init)</code></a></strong> reduces structured multi-field state
   (such as <code>(best_val, best_idx)</code> or Welford <code>(count, mean, m2)</code>) while
   preserving exact left-to-right chunk merge order for ties and non-commutative
   merges.</li>
-<li><strong><code>par.ireduce(fn, shape, combine=np.add)</code></strong> reduces directly over an index
+<li><strong><a href="../operators/#ireduce"><code>par.ireduce(fn, shape, combine=np.add)</code></a></strong> reduces directly over an index
   space without constructing an input array first.</li>
 <li>Internally, all of them become one <strong><code>IndexReduce</code></strong> statement holding one or
   more <code>Fold</code> clauses (with optional <code>Carry</code> fields for multi-state folds like
@@ -1838,7 +1841,8 @@ merging, CPU L1 reduction interchange (<code>np.sum(X, axis=0)</code>), and
 <h3 id="scan">Scan (<code>IndexScan</code>)<a class="headerlink" href="#scan" title="Permanent link">&para;</a></h3>
 <p><strong>What it expresses:</strong> Prefix accumulation where element <code>t</code> depends on all
 preceding elements <code>0..t</code>.</p>
-<p><strong>What you write:</strong> <code>np.cumsum</code>, <code>np.cumprod</code>, <code>par.scan(op, x, init=..., emit=...)</code>,
+<p><strong>What you write:</strong> <code>np.cumsum</code>, <code>np.cumprod</code>,
+<a href="../operators/#scan"><code>par.scan(op, x, init=..., emit=...)</code></a>,
 or plain Python <code>for t in range(T):</code> loops expressing affine (<code>s = a[t]*s + b[t]</code>)
 or bilinear matrix-state recurrences (<code>S = a[t]*S + outer(k[t], v[t])</code>).</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">prefix</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">cumsum</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>  <span class="c1"># additive scan -&gt; 3-stage parallel prefix</span>
@@ -1858,8 +1862,11 @@ for affine IIR filters and Mamba-2 bilinear recurrences.</p>
 <li><strong><code>IndexExpand</code></strong> (1-to-K ragged expansion) runs a two-pass count, prefix-sum
   offsets, and parallel emit into a flat <code>RaggedArray</code> buffer.</li>
 </ul>
-<p><strong>What you write:</strong> Boolean masking <code>x[x &gt; 0]</code>, <code>np.nonzero</code>, <code>par.filter</code>,
-<code>par.filter_reduce</code>, <code>par.flatmap</code>, and <code>par.filter_pairs</code>.</p>
+<p><strong>What you write:</strong> Boolean masking <code>x[x &gt; 0]</code>, <code>np.nonzero</code>,
+<a href="../operators/#filter"><code>par.filter</code></a>,
+<a href="../operators/#filter_reduce"><code>par.filter_reduce</code></a>,
+<a href="../operators/#flatmap"><code>par.flatmap</code></a>, and
+<a href="../operators/#filter_pairs"><code>par.filter_pairs</code></a>.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">positives</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="n">x</span> <span class="o">&gt;</span> <span class="mf">0.0</span><span class="p">]</span>  <span class="c1"># IndexFilter</span>
 <a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">pos_total</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="n">x</span> <span class="o">&gt;</span> <span class="mf">0.0</span><span class="p">])</span>  <span class="c1"># Filter + Reduce -&gt; fused FilterReduce (0 allocs)</span>
 <a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="n">cigar_ops</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">flatmap</span><span class="p">(</span><span class="k">lambda</span> <span class="n">op</span><span class="p">,</span> <span class="n">n</span><span class="p">:</span> <span class="n">n</span><span class="p">,</span> <span class="k">lambda</span> <span class="n">op</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">k</span><span class="p">:</span> <span class="n">op</span><span class="p">,</span> <span class="n">ops</span><span class="p">,</span> <span class="n">lengths</span><span class="p">)</span>  <span class="c1"># IndexExpand</span>
@@ -1874,7 +1881,7 @@ short-circuiting predicate <code>p and q</code>) and filter-reduce fusion
 shared output bins indexed by runtime keys.</p>
 <p><strong>What you write:</strong> <code>np.bincount</code>, <code>np.add.at</code>, canonical <code>for i: out[idx[i]] += v[i]</code>
 loops, filtered comprehensions like <code>[np.sum(v[idx == b]) for b in range(n)]</code>,
-or <code>par.scatter_add</code>.</p>
+or <a href="../operators/#scatter_add"><code>par.scatter_add</code></a>.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">grad_hist</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">bincount</span><span class="p">(</span><span class="n">bin_ids</span><span class="p">,</span> <span class="n">weights</span><span class="o">=</span><span class="n">grads</span><span class="p">,</span> <span class="n">minlength</span><span class="o">=</span><span class="mi">256</span><span class="p">)</span>
 <a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">hess_hist</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">bincount</span><span class="p">(</span><span class="n">bin_ids</span><span class="p">,</span> <span class="n">weights</span><span class="o">=</span><span class="n">hess</span><span class="p">,</span> <span class="n">minlength</span><span class="o">=</span><span class="mi">256</span><span class="p">)</span>
 </code></pre></div>
@@ -1888,7 +1895,9 @@ bins on CPU and parallel atomics/privatization on GPU. Under <code>par.grad</cod
 <p><strong>What it expresses:</strong> 2D dynamic programming recurrences where cell <code>(i, j)</code>
 depends on <code>(i - 1, j)</code>, <code>(i, j - 1)</code>, and <code>(i - 1, j - 1)</code>, executed along
 parallel anti-diagonals (with optional diagonal banding).</p>
-<p><strong>What you write:</strong> <code>par.wavefront</code> (or <code>par.batched_wavefront</code> / <code>par.soft_align</code>
+<p><strong>What you write:</strong> <a href="../operators/#wavefront"><code>par.wavefront</code></a> (or
+<a href="../operators/#batched_wavefront"><code>par.batched_wavefront</code></a> /
+<a href="../operators/#soft_align"><code>par.soft_align</code></a>
 for differentiable soft-min sequence alignment).</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="n">scores</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">wavefront</span><span class="p">(</span>
 <a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>  <span class="n">m</span><span class="p">,</span>

@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 266" width="680" height="266" role="img" aria-label="Batched Kabsch 3D Protein RMSD (2,000 × 128 CA)">
+<rect x="0.5" y="0.5" width="679" height="265" rx="10" fill="#ffffff" stroke="#cbd5e1"/>
+<text x="20" y="28" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#0f172a">Batched Kabsch 3D Protein RMSD (2,000 × 128 CA)</text>
+<text x="20" y="48" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#475569">Compiled 3×3 SVD + determinant vs. Biotite (f32) &amp; NumPy batched SVD (f64).</text>
+<rect x="224.0" y="64.0" width="288.0" height="160.0" rx="5" fill="#fafbfc" stroke="#e2e8f0"/>
+<rect x="225.0" y="66.4" width="286.0" height="35.2" rx="3" fill="#f0fdfa"/>
+<text x="214.0" y="88.8" text-anchor="end" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#0f766e">Parakeet (multicore)</text>
+<rect x="224.0" y="73.5" width="29.0" height="21" rx="3.5" fill="#0d9488" fill-opacity="0.88"/>
+<circle cx="245.7" cy="84.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="256.1" cy="84.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="257.9" cy="84.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="260.0" cy="84.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="254.9" cy="84.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="247.1" cy="84.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="248.3" cy="84.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="253.0" cy="84.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="250.8" cy="84.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="248.1" cy="84.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="253.8" cy="84.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<text x="522.0" y="88.8" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="700" fill="#0f766e">2.92 ms (±0.73)</text>
+<rect x="225.0" y="106.4" width="286.0" height="35.2" rx="3" fill="#f0fdfa"/>
+<line x1="224.0" y1="104.0" x2="512.0" y2="104.0" stroke="#f1f5f9"/>
+<text x="214.0" y="128.8" text-anchor="end" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#0f766e">Parakeet (c, 1T)</text>
+<rect x="224.0" y="113.5" width="120.4" height="21" rx="3.5" fill="#0f766e" fill-opacity="0.88"/>
+<circle cx="302.9" cy="124.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="310.5" cy="124.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="372.1" cy="124.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="320.4" cy="124.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="300.0" cy="124.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="303.3" cy="124.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="361.6" cy="124.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="365.5" cy="124.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="361.6" cy="124.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="344.4" cy="124.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="385.3" cy="124.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<text x="522.0" y="128.8" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="700" fill="#0f766e">12.09 ms (±5.69)</text>
+<line x1="224.0" y1="144.0" x2="512.0" y2="144.0" stroke="#f1f5f9"/>
+<text x="214.0" y="168.8" text-anchor="end" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="500" fill="#0f172a">NumPy batched SVD</text>
+<rect x="224.0" y="153.5" width="250.4" height="21" rx="3.5" fill="#64748b" fill-opacity="0.88"/>
+<circle cx="498.4" cy="164.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="455.9" cy="164.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="490.2" cy="164.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="477.1" cy="164.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="490.0" cy="164.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="438.4" cy="164.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="474.4" cy="164.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="465.5" cy="164.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="476.1" cy="164.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="438.9" cy="164.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="442.1" cy="164.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<text x="522.0" y="168.8" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="500" fill="#0f172a">25.15 ms (±3.47)</text>
+<line x1="224.0" y1="184.0" x2="512.0" y2="184.0" stroke="#f1f5f9"/>
+<text x="214.0" y="208.8" text-anchor="end" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="500" fill="#0f172a">Biotite (batched f32)</text>
+<rect x="224.0" y="193.5" width="212.6" height="21" rx="3.5" fill="#7c3aed" fill-opacity="0.88"/>
+<circle cx="477.0" cy="204.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="439.2" cy="204.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="446.6" cy="204.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="465.4" cy="204.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="427.5" cy="204.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="436.6" cy="204.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="411.4" cy="204.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="418.8" cy="204.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="435.6" cy="204.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="443.1" cy="204.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="436.2" cy="204.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<text x="522.0" y="208.8" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="500" fill="#0f172a">21.35 ms (±1.33)</text>
+<text x="20" y="254" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" fill="#64748b">arm64 / Darwin (10 cores) · n=11 replicates (median bar + replicate dots; lower is faster)</text>
+</svg>

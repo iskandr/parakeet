@@ -779,6 +779,34 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Bioinformatics and structural biology (Apple M1 Pro, 10 cores)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#sequence-alignment-and-long-read-rna-mapping" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sequence alignment and long-read RNA mapping
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cheminformatics-structural-biology-and-bam-pileup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cheminformatics, structural biology, and BAM pileup
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1573,6 +1601,34 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Bioinformatics and structural biology (Apple M1 Pro, 10 cores)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#sequence-alignment-and-long-read-rna-mapping" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sequence alignment and long-read RNA mapping
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cheminformatics-structural-biology-and-bam-pileup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cheminformatics, structural biology, and BAM pileup
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1658,51 +1714,75 @@
 
 <h1 id="benchmarks">Benchmarks<a class="headerlink" href="#benchmarks" title="Permanent link">&para;</a></h1>
 <p>Parakeet is benchmarked head-to-head against general array compilers
-(<code>torch.compile</code>, <code>JAX jit</code>, <code>CuPy</code>, <code>NumPy</code>) and specialist libraries
-(<code>Faiss</code>, <code>PyKeOps</code>, <code>scikit-learn</code>, <code>SciPy</code>, <code>PyTorch SDPA / cross_entropy</code>).
-Every figure plots <strong>all individual warmed replicates</strong>, the <strong>interquartile
-range (IQR, 25th–75th percentile)</strong>, and the <strong>median</strong> directly from the
-committed raw JSON logs; and every workload links to its runnable source code.</p>
+(<a href="https://pytorch.org/docs/stable/generated/torch.compile.html"><code>torch.compile</code></a>,
+<a href="https://docs.jax.dev/en/latest/jit-compilation.html">JAX <code>jit</code></a>,
+<a href="https://cupy.dev/">CuPy</a>, <a href="https://numpy.org/">NumPy</a>) and specialist libraries
+(<a href="https://github.com/facebookresearch/faiss">Faiss</a>,
+<a href="https://www.kernel-operations.io/keops/">PyKeOps</a>,
+<a href="https://scikit-learn.org/">scikit-learn</a>, <a href="https://scipy.org/">SciPy</a>,
+<a href="https://pytorch.org/docs/stable/generated/torch.nn.functional.scaled_dot_product_attention.html">PyTorch SDPA</a> /
+<a href="https://pytorch.org/docs/stable/generated/torch.nn.functional.cross_entropy.html"><code>cross_entropy</code></a>,
+<a href="https://github.com/Martinsos/edlib">edlib</a>, <a href="https://biopython.org/">Biopython</a>,
+<a href="https://www.biotite-python.org/">Biotite</a>, and <a href="https://www.rdkit.org/">RDKit</a>).
+Every figure plots <strong>all individual warmed replicates</strong> (where recorded), the
+<strong>interquartile range (IQR, 25th–75th percentile)</strong>, and the <strong>median</strong> directly
+from the committed raw JSON logs, and every workload links to its runnable
+source code.</p>
 <h2 id="at-a-glance-nvidia-l4-4-thread-cpu">At a glance (NVIDIA L4 &amp; 4-thread CPU)<a class="headerlink" href="#at-a-glance-nvidia-l4-4-thread-cpu" title="Permanent link">&para;</a></h2>
-<p>Latest measurements come from one Google Colab VM with an <strong>NVIDIA L4</strong> GPU and
-a <strong>4-thread CPU</strong> at compiler revision <code>0dcb7d5</code> (<code>float32</code>, GPU inputs
-resident on device, explicit synchronization, reference-checked outputs,
-<code>n = 21</code> GPU replicates / <code>n = 11</code> CPU replicates).
-<a href="../assets/colab-l4-0dcb7d5.json">Download full raw JSON (samples, compile times, allocations, training logs)</a>.</p>
+<p>GPU and CPU cross-framework measurements come from Google Colab VMs with an
+<strong>NVIDIA L4</strong> GPU and a <strong>4-thread CPU</strong> (<code>float32</code>, GPU inputs resident on
+device, explicit synchronization, reference-checked outputs, <code>n = 21</code> GPU
+replicates / <code>n = 11</code> CPU replicates).
+<a href="../assets/colab-l4-0dcb7d5.json">Download forward-suite raw JSON (<code>0dcb7d5</code>)</a> ·
+<a href="../assets/colab-l4-nanogpt.json">Download updated nanoGPT L4 JSON (<code>7bb1dcc</code>)</a>.</p>
 <blockquote>
 <p><strong>Baseline policy &amp; Parakeet variants:</strong> Every GPU benchmark includes the same
-general array-compiler matrix (<strong>Parakeet</strong>, <strong>PyTorch eager</strong>,
-<strong><code>torch.compile</code></strong>, <strong>JAX <code>jit</code></strong>, and <strong>CuPy</strong>), plus domain-specific
-libraries only on the tasks they support (<code>Faiss</code> / <code>scikit-learn</code> / <code>SciPy</code>
-for nearest-neighbor search; <code>PyKeOps</code> for pairwise kernels; <code>edlib</code> /
-<code>Biopython</code> / <code>Biotite</code> / <code>RDKit</code> for bioinformatics). Where multiple Parakeet
-spellings, precision modes, or historical releases were measured on the same
-hardware (NumPy vs. <code>par.map</code>, current vs. <code>1.0.0</code>, FP32 vs. TF32, multicore
-vs. 1-thread), all Parakeet variants are plotted together.</p>
+general array-compiler matrix (<strong>Parakeet</strong>,
+<a href="https://pytorch.org/"><strong>PyTorch eager</strong></a>,
+<a href="https://pytorch.org/docs/stable/generated/torch.compile.html"><strong><code>torch.compile</code></strong></a>,
+<a href="https://docs.jax.dev/en/latest/jit-compilation.html"><strong>JAX <code>jit</code></strong></a>, and
+<a href="https://cupy.dev/"><strong>CuPy</strong></a>), plus domain-specific libraries on the tasks
+they support (<a href="https://github.com/facebookresearch/faiss">Faiss</a> /
+<a href="https://scikit-learn.org/">scikit-learn</a> / <a href="https://scipy.org/">SciPy</a> for
+nearest-neighbor search; <a href="https://www.kernel-operations.io/keops/">PyKeOps</a>
+for pairwise kernels; <a href="https://github.com/Martinsos/edlib">edlib</a> /
+<a href="https://biopython.org/">Biopython</a> / <a href="https://www.biotite-python.org/">Biotite</a> /
+<a href="https://www.rdkit.org/">RDKit</a> for bioinformatics). Where multiple Parakeet
+spellings, precision modes, or compiler revisions were measured on the same
+hardware (NumPy vs. <a href="../operators/#map"><code>par.map</code></a>, current vs. earlier
+revision, FP32 vs. TF32, multicore vs. 1-thread), all Parakeet variants are
+plotted together.</p>
 </blockquote>
 <p><strong>Key takeaways:</strong></p>
 <ul>
 <li><strong>Exact 1-NN (<code>1,024 × 4,096 × 32</code>):</strong> On the L4 GPU, Parakeet's ordinary
-  broadcasting NumPy (<strong>0.223 ms</strong>) and nested-map form (<strong>0.225 ms</strong>) both
-  beat <code>torch.compile(cdist)</code> (<strong>0.257 ms</strong>), <code>PyTorch cdist</code> (<strong>0.251 ms</strong>),
-  <code>JAX jit</code> (<strong>0.500 ms</strong>), Parakeet <code>1.0.0</code> (<strong>0.787 ms</strong>), <code>PyKeOps</code>
-  (<strong>0.953 ms</strong>), and <code>CuPy</code> (<strong>16.93 ms</strong>), trailing only <code>Faiss GpuIndexFlatL2</code>
-  (<strong>0.150 ms</strong>). On 4 CPU threads, Parakeet (<strong>7.91 ms</strong>) beats <code>Faiss Flat</code>
-  (<strong>8.42 ms</strong>), <code>PyKeOps</code> (<strong>29.03 ms</strong>), <code>SciPy cKDTree</code> (<strong>54.27 ms</strong>), and
-  <code>NumPy</code> (<strong>472.3 ms</strong>), just behind <code>scikit-learn</code> brute (<strong>6.49 ms</strong>).</li>
+  broadcasting NumPy (<strong>0.223 ms</strong>) and nested <a href="../operators/#map"><code>par.map</code></a>
+  form (<strong>0.225 ms</strong>) both beat <code>torch.compile(cdist)</code> (<strong>0.257 ms</strong>),
+  PyTorch <code>cdist</code> (<strong>0.251 ms</strong>), JAX <code>jit</code> (<strong>0.500 ms</strong>), Parakeet <code>1.0.0</code>
+  (<strong>0.787 ms</strong>), PyKeOps (<strong>0.953 ms</strong>), and CuPy (<strong>16.93 ms</strong>), trailing only
+  <a href="https://github.com/facebookresearch/faiss">Faiss <code>GpuIndexFlatL2</code></a>
+  (<strong>0.150 ms</strong>). On 4 CPU threads, Parakeet (<strong>7.91 ms</strong>) beats Faiss Flat
+  (<strong>8.42 ms</strong>), PyKeOps (<strong>29.03 ms</strong>),
+  <a href="https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.cKDTree.html">SciPy <code>cKDTree</code></a>
+  (<strong>54.27 ms</strong>), and NumPy (<strong>472.3 ms</strong>), just behind
+  <a href="https://scikit-learn.org/stable/modules/generated/sklearn.neighbors.NearestNeighbors.html">scikit-learn brute</a>
+  (<strong>6.49 ms</strong>).</li>
 <li><strong>Scaling to 16,384 references:</strong> Tiled GPU pairwise folds cut latency by
   <strong>4.8×</strong> (<code>2.597 ms → 0.542 ms</code> on L4) and cut global scratch memory by
   <strong>21×</strong> (<code>64 MiB → 3 MiB</code>, plus a <code>16 KiB</code> shared-memory tile per block).</li>
 <li><strong>Gaussian kernel regression:</strong> On 4 CPU threads, Parakeet (<strong>42.99 ms</strong>)
-  beats <code>PyKeOps</code> (<strong>66.77 ms</strong>) and <code>NumPy</code> (<strong>505.8 ms</strong>, <strong>11.8× faster</strong>).
-  On GPU, Parakeet (<strong>1.053 ms</strong>) beats <code>PyKeOps</code> (<strong>1.254 ms</strong>) and <code>CuPy</code>
-  (<strong>17.18 ms</strong>), while <code>torch.compile(cdist)</code> (<strong>0.308 ms</strong>) and <code>JAX jit</code>
-  (<strong>0.602 ms</strong>) lead.</li>
-<li><strong>End-to-end nanoGPT training (<code>16 × 64 × 128 × 2</code>):</strong> Parakeet with TF32
-  WMMA (<strong>6.83 ms/step</strong>) and FP32 (<strong>8.44 ms/step</strong>) both beat eager PyTorch
-  (<strong>9.22 ms/step</strong>) with identical loss curves, while <code>torch.compile</code>
-  (<strong>3.52 ms</strong>) and <code>JAX jit</code> (<strong>1.62 ms</strong>) lead on larger dense transformer
-  blocks.</li>
+  beats <a href="https://www.kernel-operations.io/keops/">PyKeOps</a> (<strong>66.77 ms</strong>) and
+  NumPy (<strong>505.8 ms</strong>, <strong>11.8× faster</strong>). On GPU, Parakeet (<strong>1.053 ms</strong>) beats
+  PyKeOps (<strong>1.254 ms</strong>) and CuPy (<strong>17.18 ms</strong>), while <code>torch.compile(cdist)</code>
+  (<strong>0.308 ms</strong>) and JAX <code>jit</code> (<strong>0.602 ms</strong>) lead.</li>
+<li><strong>End-to-end nanoGPT training (NVIDIA L4, zero cuBLAS in Parakeet):</strong>
+  Shape-adaptive double-buffered <code>cp.async</code> WMMA tiles, reshape-transparent
+  epilogue fusion, and 1-warp-per-row reductions cut step time from <strong>6.83 ms to
+  4.69 ms</strong> on the small 2-layer model (<strong>2.06× faster</strong> than PyTorch eager at
+  <strong>9.67 ms</strong>) and from <strong>32.32 ms to 19.54 ms</strong> (<strong>1.65× faster</strong>) on the
+  medium 4-layer model, matching PyTorch eager (<strong>18.96 ms</strong>, backed by cuBLAS
+  and cuDNN) and within <strong>1.31×</strong> of <code>torch.compile</code> (<strong>14.91 ms</strong>) while
+  compiling faster than both <code>torch.compile</code> (29.8 s) and JAX <code>jit</code> (23.5 s).</li>
 </ul>
 <hr />
 <h2 id="pairwise-search-and-kernel-regression">Pairwise search and kernel regression<a class="headerlink" href="#pairwise-search-and-kernel-regression" title="Permanent link">&para;</a></h2>
@@ -1737,70 +1817,70 @@ exclude index construction. Implementations:
 <td style="text-align: right;"><strong>1.053</strong></td>
 </tr>
 <tr>
-<td><strong>Parakeet (nested <code>par.map</code>)</strong></td>
+<td><strong>Parakeet (nested <a href="../operators/#map"><code>par.map</code></a>)</strong></td>
 <td style="text-align: right;"><strong>7.907</strong></td>
 <td style="text-align: right;"><strong>0.225</strong></td>
 <td style="text-align: right;">-</td>
 <td style="text-align: right;">-</td>
 </tr>
 <tr>
-<td>Faiss Flat (<code>IndexFlatL2</code> / <code>GpuIndexFlatL2</code>)</td>
+<td><a href="https://github.com/facebookresearch/faiss">Faiss Flat</a> (<code>IndexFlatL2</code> / <code>GpuIndexFlatL2</code>)</td>
 <td style="text-align: right;">8.417</td>
 <td style="text-align: right;">0.150</td>
 <td style="text-align: right;">-</td>
 <td style="text-align: right;">-</td>
 </tr>
 <tr>
-<td>scikit-learn brute</td>
+<td><a href="https://scikit-learn.org/stable/modules/generated/sklearn.neighbors.NearestNeighbors.html">scikit-learn brute</a></td>
 <td style="text-align: right;">6.492</td>
 <td style="text-align: right;">-</td>
 <td style="text-align: right;">-</td>
 <td style="text-align: right;">-</td>
 </tr>
 <tr>
-<td><code>torch.compile</code> over <code>cdist</code></td>
+<td><a href="https://pytorch.org/docs/stable/generated/torch.compile.html"><code>torch.compile</code></a> over <code>cdist</code></td>
 <td style="text-align: right;">-</td>
 <td style="text-align: right;">0.257</td>
 <td style="text-align: right;">-</td>
 <td style="text-align: right;">0.308</td>
 </tr>
 <tr>
-<td>PyTorch <code>cdist</code></td>
+<td><a href="https://pytorch.org/docs/stable/generated/torch.cdist.html">PyTorch <code>cdist</code></a></td>
 <td style="text-align: right;">-</td>
 <td style="text-align: right;">0.251</td>
 <td style="text-align: right;">-</td>
 <td style="text-align: right;">0.444</td>
 </tr>
 <tr>
-<td><code>torch.compile</code> over broadcasting</td>
+<td><a href="https://pytorch.org/docs/stable/generated/torch.compile.html"><code>torch.compile</code></a> over broadcasting</td>
 <td style="text-align: right;">-</td>
 <td style="text-align: right;">0.688</td>
 <td style="text-align: right;">-</td>
 <td style="text-align: right;">0.598</td>
 </tr>
 <tr>
-<td>JAX <code>jit</code></td>
+<td><a href="https://docs.jax.dev/en/latest/jit-compilation.html">JAX <code>jit</code></a></td>
 <td style="text-align: right;">-</td>
 <td style="text-align: right;">0.500</td>
 <td style="text-align: right;">-</td>
 <td style="text-align: right;">0.602</td>
 </tr>
 <tr>
-<td>PyKeOps <code>Genred</code></td>
+<td><a href="https://www.kernel-operations.io/keops/">PyKeOps <code>Genred</code></a></td>
 <td style="text-align: right;">29.027</td>
 <td style="text-align: right;">0.953</td>
 <td style="text-align: right;">66.769</td>
 <td style="text-align: right;">1.254</td>
 </tr>
 <tr>
-<td>SciPy <code>cKDTree</code> (exact)</td>
+<td><a href="https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.cKDTree.html">SciPy <code>cKDTree</code></a> (exact)</td>
 <td style="text-align: right;">54.266</td>
 <td style="text-align: right;">-</td>
 <td style="text-align: right;">-</td>
 <td style="text-align: right;">-</td>
 </tr>
 <tr>
-<td>NumPy / CuPy broadcasting</td>
+<td><a href="https://numpy.org/">NumPy</a> / <a href="https://cupy.dev/">CuPy</a> broadcasting</td>
 <td style="text-align: right;">472.283</td>
 <td style="text-align: right;">16.932</td>
 <td style="text-align: right;">505.780</td>
@@ -1810,7 +1890,7 @@ exclude index construction. Implementations:
 </table>
 <p>At the smaller <code>256 × 1,024 × 3</code> shape, CPU PyKeOps led at <code>0.219 ms</code>
 (interleaved sweep: <code>0.241 ms</code>) vs. <code>0.559 ms</code> for Parakeet broadcasting, and
-GPU <code>JAX jit</code> led at <code>0.079 ms</code> vs. <code>0.179 ms</code> for Parakeet broadcasting. Note
+GPU JAX <code>jit</code> led at <code>0.079 ms</code> vs. <code>0.179 ms</code> for Parakeet broadcasting. Note
 that on the large Gaussian workload, JAX's first-call compilation took <code>672 s</code>
 before reaching its <code>0.602 ms</code> warmed median (all tables report warmed
 execution times).</p>
@@ -1829,10 +1909,10 @@ tie/NaN semantics.</p>
 <th style="text-align: right;">References (<code>Q = 1,024, D = 32</code>)</th>
 <th style="text-align: right;">L4 <code>1.0.0</code> NumPy</th>
 <th style="text-align: right;">L4 Tiled NumPy</th>
-<th style="text-align: right;">L4 Tiled <code>par.map</code></th>
+<th style="text-align: right;">L4 Tiled <a href="../operators/#map"><code>par.map</code></a></th>
 <th style="text-align: right;">A10G <code>1.0.0</code> NumPy</th>
 <th style="text-align: right;">A10G Tiled NumPy</th>
-<th style="text-align: right;">A10G Tiled <code>par.map</code></th>
+<th style="text-align: right;">A10G Tiled <a href="../operators/#map"><code>par.map</code></a></th>
 <th style="text-align: right;"><code>1.0.0</code> Global Scratch</th>
 <th style="text-align: right;">Tiled Global Scratch</th>
 </tr>
@@ -1877,15 +1957,15 @@ tie/NaN semantics.</p>
 The <code>1.0.0</code> nested-map form was not GPU-eligible (it required CPU fallback);
 the tiled pairwise fold executes both spellings strictly on CUDA with zero
 fallbacks.</p>
-<h3 id="structured-state-parfold-vs-numpy">Structured state (<code>par.fold</code> vs. NumPy)<a class="headerlink" href="#structured-state-parfold-vs-numpy" title="Permanent link">&para;</a></h3>
+<h3 id="structured-state-parfold-vs-numpy">Structured state (<a href="../operators/#fold"><code>par.fold</code></a> vs. NumPy)<a class="headerlink" href="#structured-state-parfold-vs-numpy" title="Permanent link">&para;</a></h3>
 <p>At <code>1,024 × 4,096 × 32</code> on the L4 with strict CUDA dispatch and zero timed host
 transfers (<a href="../gallery/#inverse-distance-smoothing">browse both programs</a>):</p>
 <ul>
-<li><strong>Exact 1-NN:</strong> explicit <code>par.fold</code> (<code>nearest_fold</code>) took <strong>0.235 ms</strong> vs.
-  broadcasting NumPy (<code>nearest_numpy</code>) at <strong>0.222 ms</strong>.</li>
-<li><strong>Inverse-distance smoothing:</strong> explicit <code>par.fold</code> (<code>smooth_fold</code>) took
-  <strong>0.270 ms</strong> (2 kernel launches) vs. broadcasting NumPy (<code>smooth_numpy</code>) at
-  <strong>0.275 ms</strong> (3 kernel launches).</li>
+<li><strong>Exact 1-NN:</strong> explicit <a href="../operators/#fold"><code>par.fold</code></a> (<code>nearest_fold</code>) took
+  <strong>0.235 ms</strong> vs. broadcasting NumPy (<code>nearest_numpy</code>) at <strong>0.222 ms</strong>.</li>
+<li><strong>Inverse-distance smoothing:</strong> explicit <a href="../operators/#fold"><code>par.fold</code></a>
+  (<code>smooth_fold</code>) took <strong>0.270 ms</strong> (2 kernel launches) vs. broadcasting NumPy
+  (<code>smooth_numpy</code>) at <strong>0.275 ms</strong> (3 kernel launches).</li>
 </ul>
 <hr />
 <h2 id="forward-gpu-kernels-and-nanogpt-training">Forward GPU kernels and nanoGPT training<a class="headerlink" href="#forward-gpu-kernels-and-nanogpt-training" title="Permanent link">&para;</a></h2>
@@ -1899,9 +1979,9 @@ transfers (<a href="../gallery/#inverse-distance-smoothing">browse both programs
 <th>Workload</th>
 <th style="text-align: right;">Parakeet</th>
 <th style="text-align: right;">PyTorch</th>
-<th style="text-align: right;"><code>torch.compile</code></th>
-<th style="text-align: right;">JAX <code>jit</code></th>
-<th style="text-align: right;">CuPy</th>
+<th style="text-align: right;"><a href="https://pytorch.org/docs/stable/generated/torch.compile.html"><code>torch.compile</code></a></th>
+<th style="text-align: right;"><a href="https://docs.jax.dev/en/latest/jit-compilation.html">JAX <code>jit</code></a></th>
+<th style="text-align: right;"><a href="https://cupy.dev/">CuPy</a></th>
 <th>Implementation</th>
 </tr>
 </thead>
@@ -1918,7 +1998,7 @@ transfers (<a href="../gallery/#inverse-distance-smoothing">browse both programs
 <tr>
 <td>Causal attention (<code>4 × 512 × 64</code>)</td>
 <td style="text-align: right;"><strong>0.493 ms</strong></td>
-<td style="text-align: right;">0.104 ms (SDPA)</td>
+<td style="text-align: right;">0.104 ms (<a href="https://pytorch.org/docs/stable/generated/torch.nn.functional.scaled_dot_product_attention.html">SDPA</a>)</td>
 <td style="text-align: right;">0.198 ms</td>
 <td style="text-align: right;">0.145 ms</td>
 <td style="text-align: right;">0.490 ms</td>
@@ -1927,7 +2007,7 @@ transfers (<a href="../gallery/#inverse-distance-smoothing">browse both programs
 <tr>
 <td>Linear cross-entropy (<code>512 × 128 × 2,048</code>)</td>
 <td style="text-align: right;"><strong>1.447 ms</strong></td>
-<td style="text-align: right;">0.068 ms</td>
+<td style="text-align: right;">0.068 ms (<a href="https://pytorch.org/docs/stable/generated/torch.nn.functional.cross_entropy.html"><code>cross_entropy</code></a>)</td>
 <td style="text-align: right;">0.155 ms</td>
 <td style="text-align: right;">0.189 ms</td>
 <td style="text-align: right;">0.431 ms</td>
@@ -1936,12 +2016,18 @@ transfers (<a href="../gallery/#inverse-distance-smoothing">browse both programs
 </tbody>
 </table>
 <h3 id="end-to-end-nanogpt-training-nvidia-l4">End-to-end nanoGPT training (NVIDIA L4)<a class="headerlink" href="#end-to-end-nanogpt-training-nvidia-l4" title="Permanent link">&para;</a></h3>
-<p><img alt="End-to-end nanoGPT training step times on NVIDIA L4" src="../assets/bench-nanogpt-l4.svg" /></p>
+<p><img alt="Small nanoGPT training step times on NVIDIA L4" src="../assets/bench-nanogpt-small-l4.svg" /></p>
+<p><img alt="Medium nanoGPT training step times on NVIDIA L4" src="../assets/bench-nanogpt-med-l4.svg" /></p>
 <p>Each step runs the full forward pass, reverse-mode backpropagation, and Adam
 update (4 attention heads, median of 20 warmed steps in milliseconds). Parakeet
-and JAX compile the optimizer directly into the training step; <code>torch.compile</code>
-wraps the forward/loss and runs the optimizer separately. Initial and final
-losses match across all arms (<code>4.200 → 1.426</code> on the smaller configuration).
+and <a href="https://docs.jax.dev/en/latest/jit-compilation.html">JAX <code>jit</code></a> compile the
+optimizer directly into the training step;
+<a href="https://pytorch.org/docs/stable/generated/torch.compile.html"><code>torch.compile</code></a>
+wraps the forward/loss and runs the optimizer separately. Parakeet compiles all
+GEMM, attention, LayerNorm, and Adam kernels natively via NVRTC with <strong>zero
+cuBLAS calls</strong> (cutting launches/step from <code>437</code> to <code>271</code> on <code>L=4</code>). FP32 loss
+curves match PyTorch to <code>4e-5</code> (<code>4.21668 → 3.38968</code> vs. <code>3.38972</code> on <code>L=4</code>), and
+TF32 loss curves match JAX's TF32 (<code>3.48364</code> vs. <code>3.47658</code>).
 <a href="../gallery/nanogpt/">Follow the complete nanoGPT walkthrough</a>.</p>
 <table>
 <thead>
@@ -1949,6 +2035,7 @@ losses match across all arms (<code>4.200 → 1.426</code> on the smaller config
 <th>Batch × context × width × layers</th>
 <th style="text-align: right;">Parakeet FP32</th>
 <th style="text-align: right;">Parakeet TF32 (WMMA)</th>
+<th style="text-align: right;">Parakeet <code>0dcb7d5</code> TF32</th>
 <th style="text-align: right;">PyTorch eager</th>
 <th style="text-align: right;"><code>torch.compile</code></th>
 <th style="text-align: right;">JAX <code>jit</code></th>
@@ -1957,31 +2044,43 @@ losses match across all arms (<code>4.200 → 1.426</code> on the smaller config
 <tbody>
 <tr>
 <td><code>16 × 64 × 128 × 2</code></td>
-<td style="text-align: right;"><strong>8.439 ms</strong></td>
-<td style="text-align: right;"><strong>6.833 ms</strong></td>
-<td style="text-align: right;">9.217 ms</td>
-<td style="text-align: right;">3.515 ms</td>
-<td style="text-align: right;">1.619 ms</td>
+<td style="text-align: right;"><strong>4.685 ms</strong></td>
+<td style="text-align: right;"><strong>4.749 ms</strong></td>
+<td style="text-align: right;">6.833 ms</td>
+<td style="text-align: right;">9.667 ms</td>
+<td style="text-align: right;">3.688 ms</td>
+<td style="text-align: right;">1.562 ms</td>
 </tr>
 <tr>
 <td><code>32 × 128 × 256 × 4</code></td>
-<td style="text-align: right;">45.499 ms</td>
+<td style="text-align: right;"><strong>37.388 ms</strong></td>
+<td style="text-align: right;"><strong>19.542 ms</strong></td>
 <td style="text-align: right;">32.317 ms</td>
-<td style="text-align: right;">18.554 ms</td>
-<td style="text-align: right;">14.480 ms</td>
-<td style="text-align: right;">9.411 ms</td>
+<td style="text-align: right;">18.956 ms</td>
+<td style="text-align: right;">14.913 ms</td>
+<td style="text-align: right;">9.167 ms</td>
 </tr>
 </tbody>
 </table>
 <hr />
 <h2 id="bioinformatics-and-structural-biology-apple-m1-pro-10-cores">Bioinformatics and structural biology (Apple M1 Pro, 10 cores)<a class="headerlink" href="#bioinformatics-and-structural-biology-apple-m1-pro-10-cores" title="Permanent link">&para;</a></h2>
 <p>Head-to-head comparison of compiled Parakeet <code>1.8.0</code> kernels against
-specialist C/C++/Cython libraries (<code>edlib 1.3.9</code>, <code>Biopython 1.88</code> C
-<code>PairwiseAligner</code>, <code>Biotite 2.0.0</code>, <code>RDKit 2026.9.2</code>, and <code>NumPy 2.5.5</code>),
-verified for exact output agreement before timing (<code>n = 11</code> warmed replicates).
+specialist C/C++/Cython libraries
+(<a href="https://github.com/Martinsos/edlib"><code>edlib 1.3.9</code></a>,
+<a href="https://biopython.org/"><code>Biopython 1.88</code></a> C <code>PairwiseAligner</code>,
+<a href="https://www.biotite-python.org/"><code>Biotite 2.0.0</code></a>,
+<a href="https://www.rdkit.org/"><code>RDKit 2026.9.2</code></a>, and
+<a href="https://numpy.org/"><code>NumPy 2.5.5</code></a>), verified for exact output agreement before
+timing (<code>n = 11</code> warmed replicates).
 <a href="../assets/bio-benchmarks-m1pro.json">Download raw JSON</a>.</p>
-<p><img alt="Sequence alignment and RNA mapping benchmarks on Apple M1 Pro" src="../assets/bench-bio-seq-m1pro.svg" /></p>
-<p><img alt="Cheminformatics, structural biology, and BAM pileup benchmarks on Apple M1 Pro" src="../assets/bench-bio-struct-m1pro.svg" /></p>
+<h3 id="sequence-alignment-and-long-read-rna-mapping">Sequence alignment and long-read RNA mapping<a class="headerlink" href="#sequence-alignment-and-long-read-rna-mapping" title="Permanent link">&para;</a></h3>
+<p><img alt="Myers 64-bit edit distance latency on Apple M1 Pro" src="../assets/bench-bio-myers-m1pro.svg" /></p>
+<p><img alt="Affine-gap Gotoh alignment and traceback latency on Apple M1 Pro" src="../assets/bench-bio-gotoh-m1pro.svg" /></p>
+<p><img alt="SSHash and delta-map long-read RNA mapping latency on Apple M1 Pro" src="../assets/bench-bio-rna-m1pro.svg" /></p>
+<h3 id="cheminformatics-structural-biology-and-bam-pileup">Cheminformatics, structural biology, and BAM pileup<a class="headerlink" href="#cheminformatics-structural-biology-and-bam-pileup" title="Permanent link">&para;</a></h3>
+<p><img alt="2048-bit Tanimoto 1-NN search latency on Apple M1 Pro" src="../assets/bench-bio-tanimoto-m1pro.svg" /></p>
+<p><img alt="Batched Kabsch 3D protein RMSD latency on Apple M1 Pro" src="../assets/bench-bio-kabsch-m1pro.svg" /></p>
+<p><img alt="6-channel BAM pileup latency on Apple M1 Pro" src="../assets/bench-bio-pileup-m1pro.svg" /></p>
 <table>
 <thead>
 <tr>
@@ -1998,7 +2097,7 @@ verified for exact output agreement before timing (<code>n = 11</code> warmed re
 <td>Edit distance (<code>1,000 × 256 bp</code>, Myers)</td>
 <td style="text-align: right;"><strong>2.043 ms</strong> (±0.61)</td>
 <td style="text-align: right;">3.778 ms (±0.08)</td>
-<td style="text-align: right;"><code>edlib</code> (C++ Myers): 7.577 ms</td>
+<td style="text-align: right;"><a href="https://github.com/Martinsos/edlib">edlib</a> (C++ Myers): 7.577 ms</td>
 <td style="text-align: right;"><strong>3.7×</strong> (2.0× at 1T)</td>
 <td><a href="https://github.com/iskandr/parakeet/blob/master/examples/bio_algorithms.py"><code>examples/bio_algorithms.py</code></a></td>
 </tr>
@@ -2006,7 +2105,7 @@ verified for exact output agreement before timing (<code>n = 11</code> warmed re
 <td>Affine-gap Gotoh + traceback (<code>200 × 128 bp</code>)</td>
 <td style="text-align: right;"><strong>3.816 ms</strong> (±1.39)</td>
 <td style="text-align: right;">19.685 ms (±2.46)</td>
-<td style="text-align: right;"><code>Biopython</code> C (score-only): 8.555 ms; <code>Biotite</code> Cython: 22.723 ms</td>
+<td style="text-align: right;"><a href="https://biopython.org/">Biopython</a> C (score-only): 8.555 ms; <a href="https://www.biotite-python.org/">Biotite</a> Cython: 22.723 ms</td>
 <td style="text-align: right;"><strong>2.2×</strong> vs Biopython, <strong>6.0×</strong> vs Biotite</td>
 <td><a href="https://github.com/iskandr/parakeet/blob/master/examples/bio_algorithms.py"><code>examples/bio_algorithms.py</code></a></td>
 </tr>
@@ -2014,7 +2113,7 @@ verified for exact output agreement before timing (<code>n = 11</code> warmed re
 <td>2048-bit Tanimoto 1-NN (<code>256 × 8,192</code>)</td>
 <td style="text-align: right;"><strong>16.829 ms</strong> (±5.89)</td>
 <td style="text-align: right;">59.056 ms (±12.62)</td>
-<td style="text-align: right;"><code>RDKit</code> (C++ BulkTanimoto): 461.748 ms</td>
+<td style="text-align: right;"><a href="https://www.rdkit.org/">RDKit</a> (C++ <code>BulkTanimoto</code>): 461.748 ms</td>
 <td style="text-align: right;"><strong>27.4×</strong> (7.8× at 1T)</td>
 <td><a href="https://github.com/iskandr/parakeet/blob/master/examples/bio_gallery.py"><code>examples/bio_gallery.py</code></a></td>
 </tr>
@@ -2022,7 +2121,7 @@ verified for exact output agreement before timing (<code>n = 11</code> warmed re
 <td>Batched Kabsch 3D RMSD (<code>2,000 × 128</code> CA)</td>
 <td style="text-align: right;"><strong>2.915 ms</strong> (±0.73)</td>
 <td style="text-align: right;">12.094 ms (±5.69)</td>
-<td style="text-align: right;"><code>Biotite</code> (batched f32): 21.352 ms; <code>NumPy</code> batched SVD (f64): 25.152 ms</td>
+<td style="text-align: right;"><a href="https://www.biotite-python.org/">Biotite</a> (batched f32): 21.352 ms; <a href="https://numpy.org/">NumPy</a> batched SVD (f64): 25.152 ms</td>
 <td style="text-align: right;"><strong>7.3×</strong> vs Biotite, <strong>8.6×</strong> vs NumPy</td>
 <td><a href="https://github.com/iskandr/parakeet/blob/master/examples/bio_algorithms.py"><code>examples/bio_algorithms.py</code></a></td>
 </tr>
@@ -2030,15 +2129,15 @@ verified for exact output agreement before timing (<code>n = 11</code> warmed re
 <td>6-channel BAM pileup (<code>2M</code> alignments)</td>
 <td style="text-align: right;"><strong>17.576 ms</strong> (±1.68)</td>
 <td style="text-align: right;">32.160 ms (±14.79)</td>
-<td style="text-align: right;"><code>NumPy</code> (6× <code>bincount</code>): 40.317 ms</td>
+<td style="text-align: right;"><a href="https://numpy.org/">NumPy</a> (6× <code>bincount</code>): 40.317 ms</td>
 <td style="text-align: right;"><strong>2.3×</strong> (1.3× at 1T)</td>
 <td><a href="https://github.com/iskandr/parakeet/blob/master/examples/bio_gallery.py"><code>examples/bio_gallery.py</code></a></td>
 </tr>
 <tr>
-<td>SSHash + delta-map long-read RNA (<code>3.01 Mbp</code>, 80 human Ensembl isoforms)</td>
+<td><a href="https://github.com/jermp/sshash">SSHash</a> + delta-map long-read RNA (<code>3.01 Mbp</code>, 80 human Ensembl isoforms)</td>
 <td style="text-align: right;"><strong>5.480 ms</strong> (<strong>548.6 Mbp/s</strong>)</td>
 <td style="text-align: right;">21.705 ms (138.5 Mbp/s)</td>
-<td style="text-align: right;">9.70× unitig collapse, 92.2% hash-probe skip, Oarfish EM <code>r = 0.965</code></td>
+<td style="text-align: right;">9.70× unitig collapse, 92.2% hash-probe skip, <a href="https://github.com/COMBINE-lab/oarfish">Oarfish</a> EM <code>r = 0.965</code></td>
 <td style="text-align: right;">4.0× multicore scaling</td>
 <td><a href="https://github.com/iskandr/parakeet/blob/master/examples/patro_longread_rna.py"><code>examples/patro_longread_rna.py</code></a></td>
 </tr>
@@ -2074,6 +2173,11 @@ raw JSON samples:</p>
 <td>Release cross-framework suite (CPU &amp; GPU)</td>
 <td><a href="https://github.com/iskandr/parakeet/blob/master/benchmarks/release_comparison.py"><code>benchmarks/release_comparison.py</code></a></td>
 <td><code>python benchmarks/release_comparison.py</code> / <code>modal run tools/modal_release_bench.py</code></td>
+</tr>
+<tr>
+<td>nanoGPT GPU training suite</td>
+<td><a href="https://github.com/iskandr/parakeet/blob/master/tools/colab_nanogpt_bench.py"><code>tools/colab_nanogpt_bench.py</code></a></td>
+<td><code>python tools/colab_nanogpt_bench.py</code></td>
 </tr>
 <tr>
 <td>Bioinformatics head-to-head suite</td>
@@ -2138,42 +2242,42 @@ pre-pairwise-fold release measurements are archived below.
 <td style="text-align: right;">28.951</td>
 </tr>
 <tr>
-<td>Parakeet, nested <code>par.map</code></td>
+<td>Parakeet, nested <a href="../operators/#map"><code>par.map</code></a></td>
 <td style="text-align: right;">0.638</td>
 <td style="text-align: right;">6.132</td>
 <td style="text-align: right;">-</td>
 <td style="text-align: right;">-</td>
 </tr>
 <tr>
-<td>PyKeOps <code>Genred</code></td>
+<td><a href="https://www.kernel-operations.io/keops/">PyKeOps <code>Genred</code></a></td>
 <td style="text-align: right;">0.255</td>
 <td style="text-align: right;">18.246</td>
 <td style="text-align: right;">1.087</td>
 <td style="text-align: right;">38.038</td>
 </tr>
 <tr>
-<td>Faiss <code>IndexFlatL2</code></td>
+<td><a href="https://github.com/facebookresearch/faiss">Faiss <code>IndexFlatL2</code></a></td>
 <td style="text-align: right;">0.033</td>
 <td style="text-align: right;">9.577</td>
 <td style="text-align: right;">-</td>
 <td style="text-align: right;">-</td>
 </tr>
 <tr>
-<td>SciPy <code>cKDTree</code> (exact)</td>
+<td><a href="https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.cKDTree.html">SciPy <code>cKDTree</code></a> (exact)</td>
 <td style="text-align: right;">1.441</td>
 <td style="text-align: right;">51.846</td>
 <td style="text-align: right;">-</td>
 <td style="text-align: right;">-</td>
 </tr>
 <tr>
-<td>scikit-learn brute</td>
+<td><a href="https://scikit-learn.org/stable/modules/generated/sklearn.neighbors.NearestNeighbors.html">scikit-learn brute</a></td>
 <td style="text-align: right;">1.042</td>
 <td style="text-align: right;">6.647</td>
 <td style="text-align: right;">-</td>
 <td style="text-align: right;">-</td>
 </tr>
 <tr>
-<td>NumPy broadcasting</td>
+<td><a href="https://numpy.org/">NumPy</a> broadcasting</td>
 <td style="text-align: right;">9.899</td>
 <td style="text-align: right;">326.690</td>
 <td style="text-align: right;">10.915</td>
@@ -2207,7 +2311,7 @@ pre-pairwise-fold release measurements are archived below.
 <td style="text-align: right;">0.276</td>
 </tr>
 <tr>
-<td>PyTorch eager / specialist</td>
+<td><a href="https://pytorch.org/">PyTorch</a> eager / specialist</td>
 <td style="text-align: right;">0.128</td>
 <td style="text-align: right;">0.323</td>
 <td style="text-align: right;">0.166</td>
@@ -2217,7 +2321,7 @@ pre-pairwise-fold release measurements are archived below.
 <td style="text-align: right;">0.225</td>
 </tr>
 <tr>
-<td><code>torch.compile</code></td>
+<td><a href="https://pytorch.org/docs/stable/generated/torch.compile.html"><code>torch.compile</code></a></td>
 <td style="text-align: right;">0.089</td>
 <td style="text-align: right;">0.208</td>
 <td style="text-align: right;">0.106</td>
@@ -2227,7 +2331,7 @@ pre-pairwise-fold release measurements are archived below.
 <td style="text-align: right;">0.175</td>
 </tr>
 <tr>
-<td>JAX <code>jit</code></td>
+<td><a href="https://docs.jax.dev/en/latest/jit-compilation.html">JAX <code>jit</code></a></td>
 <td style="text-align: right;">0.115</td>
 <td style="text-align: right;">0.424</td>
 <td style="text-align: right;">0.098</td>
@@ -2237,7 +2341,7 @@ pre-pairwise-fold release measurements are archived below.
 <td style="text-align: right;">0.188</td>
 </tr>
 <tr>
-<td>PyKeOps <code>Genred</code></td>
+<td><a href="https://www.kernel-operations.io/keops/">PyKeOps <code>Genred</code></a></td>
 <td style="text-align: right;">0.262</td>
 <td style="text-align: right;">0.962</td>
 <td style="text-align: right;">0.295</td>
@@ -2247,7 +2351,7 @@ pre-pairwise-fold release measurements are archived below.
 <td style="text-align: right;">-</td>
 </tr>
 <tr>
-<td>Faiss <code>GpuIndexFlatL2</code></td>
+<td><a href="https://github.com/facebookresearch/faiss">Faiss <code>GpuIndexFlatL2</code></a></td>
 <td style="text-align: right;">0.079</td>
 <td style="text-align: right;">0.154</td>
 <td style="text-align: right;">-</td>
@@ -2257,7 +2361,7 @@ pre-pairwise-fold release measurements are archived below.
 <td style="text-align: right;">-</td>
 </tr>
 <tr>
-<td>CuPy</td>
+<td><a href="https://cupy.dev/">CuPy</a></td>
 <td style="text-align: right;">0.483</td>
 <td style="text-align: right;">12.359</td>
 <td style="text-align: right;">0.527</td>

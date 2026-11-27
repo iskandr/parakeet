@@ -1,0 +1,93 @@
+{
+  "gpu": "NVIDIA L4 (23034 MiB, sm_89, CUDA 13.0, Driver 580.82.07)",
+  "python": "3.13.16",
+  "benchmark_script": "tools/colab_nanogpt_bench.py",
+  "previous_revision": "0dcb7d5",
+  "current_revision": "7bb1dcc",
+  "configs": {
+    "small_B16_T64_C128_L2": {
+      "parakeet_fp32": {
+        "compile_s": 12.575,
+        "median_ms": 4.685,
+        "loss0": 4.20043,
+        "loss_end": 1.42627,
+        "uploads_per_step": 0.0,
+        "downloads_per_step": 1.0,
+        "launches_per_step": 148.0
+      },
+      "parakeet_tf32_wmma": {
+        "compile_s": 7.681,
+        "median_ms": 4.749,
+        "loss0": 4.20039,
+        "loss_end": 1.43355,
+        "uploads_per_step": 0.0,
+        "downloads_per_step": 1.0,
+        "launches_per_step": 148.0
+      },
+      "parakeet_prev_tf32": {
+        "median_ms": 6.833,
+        "revision": "0dcb7d5"
+      },
+      "torch_eager": {
+        "compile_s": 0.74,
+        "median_ms": 9.667,
+        "loss0": 4.20043,
+        "loss_end": 1.42628
+      },
+      "torch_compile": {
+        "compile_s": 19.897,
+        "median_ms": 3.688,
+        "loss0": 4.20043,
+        "loss_end": 1.42627
+      },
+      "jax_jit": {
+        "compile_s": 18.971,
+        "median_ms": 1.562,
+        "loss0": 4.20043,
+        "loss_end": 1.4366
+      }
+    },
+    "med_B32_T128_C256_L4": {
+      "parakeet_fp32": {
+        "compile_s": 28.095,
+        "median_ms": 37.388,
+        "loss0": 4.21668,
+        "loss_end": 3.38968,
+        "uploads_per_step": 0.0,
+        "downloads_per_step": 1.0,
+        "launches_per_step": 271.0
+      },
+      "parakeet_tf32_wmma": {
+        "compile_s": 20.827,
+        "median_ms": 19.542,
+        "loss0": 4.21661,
+        "loss_end": 3.48364,
+        "uploads_per_step": 0.0,
+        "downloads_per_step": 1.0,
+        "launches_per_step": 271.0
+      },
+      "parakeet_prev_tf32": {
+        "median_ms": 32.317,
+        "revision": "0dcb7d5"
+      },
+      "torch_eager": {
+        "compile_s": 0.028,
+        "median_ms": 18.956,
+        "loss0": 4.21668,
+        "loss_end": 3.38972
+      },
+      "torch_compile": {
+        "compile_s": 29.843,
+        "median_ms": 14.913,
+        "loss0": 4.21668,
+        "loss_end": 3.39009
+      },
+      "jax_jit": {
+        "compile_s": 23.524,
+        "median_ms": 9.167,
+        "loss0": 4.21668,
+        "loss_end": 3.47658
+      }
+    }
+  }
+}

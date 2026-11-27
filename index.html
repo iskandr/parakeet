@@ -1365,7 +1365,9 @@
 <h1 id="_1"><img alt="Parakeet" class="pk-wordmark" height="520" src="assets/logo.png" width="1746" /><a class="headerlink" href="#_1" title="Permanent link">&para;</a></h1>
 <p class="pk-lead">A data-parallel compiler for numerical Python.</p>
 <p>Write ordinary NumPy, loops, comprehensions, or explicit data-parallel
-operators (<code>map</code>, <code>reduce</code>, <code>scan</code>, <code>allpairs</code>). Parakeet specializes your
+operators (<a href="operators/#map"><code>par.map</code></a>, <a href="operators/#reduce"><code>par.reduce</code></a>,
+<a href="operators/#fold"><code>par.fold</code></a>, <a href="operators/#scan"><code>par.scan</code></a>,
+<a href="operators/#allpairs"><code>par.allpairs</code></a>). Parakeet specializes your
 function for its input types, fuses and tiles the array algebra, and compiles
 native code for multi-core CPUs, Apple Metal, and NVIDIA CUDA.</p>
 <p><a class="md-button md-button--primary" href="quickstart/">Get started</a>
@@ -1405,42 +1407,42 @@ explicit N-D coordinate space, while your code stays idiomatic NumPy or <code>pa
 <div class="pk-prim-grid">
 <div class="pk-prim-card">
 <div class="pk-prim-head"><strong>Map</strong> <code>IndexMap</code></div>
-<p>Independent per-element work over an N-D index space: broadcasting, comprehensions, <code>par.map</code>, <code>par.allpairs</code>.
+<p>Independent per-element work over an N-D index space: broadcasting, comprehensions, <a href="operators/#map"><code>par.map</code></a>, <a href="operators/#imap"><code>par.imap</code></a>, <a href="operators/#allpairs"><code>par.allpairs</code></a>.
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">np</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">x</span> <span class="o">*</span> <span class="mf">0.5</span><span class="p">)</span> <span class="o">+</span> <span class="mf">0.3</span>
 </code></pre></div>
 <a href="primitives/#map">Details &amp; fusion rules</a></p>
 </div>
 <div class="pk-prim-card">
 <div class="pk-prim-head"><strong>Reduce &amp; Fold</strong> <code>IndexReduce</code></div>
-<p>Associative reductions (<code>np.sum</code>, <code>par.reduce</code>) and ordered multi-state folds (<code>np.argmin</code>, <code>par.fold</code>).
+<p>Associative reductions (<code>np.sum</code>, <a href="operators/#reduce"><code>par.reduce</code></a>, <a href="operators/#ireduce"><code>par.ireduce</code></a>) and ordered multi-state folds (<code>np.argmin</code>, <a href="operators/#fold"><code>par.fold</code></a>).
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">np</span><span class="o">.</span><span class="n">argmin</span><span class="p">(</span><span class="n">d2</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
 </code></pre></div>
 <a href="primitives/#reduce-and-fold">Details &amp; <code>reduce</code> vs <code>fold</code></a></p>
 </div>
 <div class="pk-prim-card">
 <div class="pk-prim-head"><strong>Scan</strong> <code>IndexScan</code></div>
-<p>Prefix sums (<code>np.cumsum</code>, <code>par.scan</code>) and affine/bilinear <code>for</code> recurrences (IIR filters, Mamba-2 SSMs).
+<p>Prefix sums (<code>np.cumsum</code>, <a href="operators/#scan"><code>par.scan</code></a>) and affine/bilinear <code>for</code> recurrences (IIR filters, Mamba-2 SSMs).
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">np</span><span class="o">.</span><span class="n">cumsum</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>  <span class="c1"># or affine for-loop</span>
 </code></pre></div>
 <a href="primitives/#scan">Details &amp; chunkwise duality</a></p>
 </div>
 <div class="pk-prim-card">
 <div class="pk-prim-head"><strong>Filter &amp; Expand</strong> <code>IndexFilter</code> <code>IndexExpand</code></div>
-<p>Stream compaction (1-to-0/1 boolean masking) and 2-pass ragged expansion (1-to-K <code>par.flatmap</code>).
+<p>Stream compaction (1-to-0/1 boolean masking, <a href="operators/#filter"><code>par.filter</code></a>) and 2-pass ragged expansion (1-to-K <a href="operators/#flatmap"><code>par.flatmap</code></a>, <a href="operators/#filter_pairs"><code>par.filter_pairs</code></a>).
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="n">x</span> <span class="o">&gt;</span> <span class="mf">0.0</span><span class="p">])</span>  <span class="c1"># 0-alloc FilterReduce</span>
 </code></pre></div>
 <a href="primitives/#filter-and-expand">Details &amp; filter fusion</a></p>
 </div>
 <div class="pk-prim-card">
 <div class="pk-prim-head"><strong>Scatter</strong> <code>IndexScatter</code></div>
-<p>Associative bin accumulation (<code>np.bincount</code>, <code>np.add.at</code>, <code>out[idx[i]] += v</code>, <code>par.scatter_add</code>).
+<p>Associative bin accumulation (<code>np.bincount</code>, <code>np.add.at</code>, <code>out[idx[i]] += v</code>, <a href="operators/#scatter_add"><code>par.scatter_add</code></a>).
 <div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">np</span><span class="o">.</span><span class="n">bincount</span><span class="p">(</span><span class="n">bins</span><span class="p">,</span> <span class="n">weights</span><span class="o">=</span><span class="n">grads</span><span class="p">,</span> <span class="n">minlength</span><span class="o">=</span><span class="mi">256</span><span class="p">)</span>
 </code></pre></div>
 <a href="primitives/#scatter">Details &amp; histogram fusion</a></p>
 </div>
 <div class="pk-prim-card">
 <div class="pk-prim-head"><strong>Wavefront</strong> <code>IndexWavefront</code></div>
-<p>Anti-diagonal and banded 2D dynamic programming for sequence alignment and differentiable DP.
+<p>Anti-diagonal and banded 2D dynamic programming (<a href="operators/#wavefront"><code>par.wavefront</code></a>, <a href="operators/#soft_align"><code>par.soft_align</code></a>) for sequence alignment and differentiable DP.
 <div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="n">par</span><span class="o">.</span><span class="n">soft_align</span><span class="p">(</span><span class="n">scores</span><span class="p">,</span> <span class="n">gamma</span><span class="o">=</span><span class="mf">1.0</span><span class="p">)</span>
 </code></pre></div>
 <a href="primitives/#wavefront">Details &amp; banded DP</a></p>
