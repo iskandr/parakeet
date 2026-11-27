@@ -27,7 +27,7 @@
     
     
       
-        <title>How it works - Parakeet</title>
+        <title>Compiler architecture - Parakeet</title>
       
     
     
@@ -82,7 +82,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#how-it-works" class="md-skip">
+        <a href="#compiler-architecture" class="md-skip">
           Skip to content
         </a>
       
@@ -116,7 +116,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              How it works
+              Compiler architecture
             
           </span>
         </div>
@@ -969,7 +969,7 @@
   <span class="md-ellipsis">
     
   
-    How it works
+    Compiler architecture
   
 
     
@@ -987,7 +987,7 @@
   <span class="md-ellipsis">
     
   
-    How it works
+    Compiler architecture
   
 
     
@@ -1035,17 +1035,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#the-operator-ir" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        The operator IR
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#middle-end-passes" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1057,10 +1046,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#backends" class="md-nav__link">
+  <a href="#lowered-ir" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Backends
+        Lowered IR (spec.operators and spec.ir)
       
     </span>
   </a>
@@ -1068,10 +1057,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#calling-convention" class="md-nav__link">
+  <a href="#backends-and-calling-convention" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Calling convention
+        Backends and calling convention
       
     </span>
   </a>
@@ -1342,17 +1331,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#the-operator-ir" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        The operator IR
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#middle-end-passes" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1364,10 +1342,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#backends" class="md-nav__link">
+  <a href="#lowered-ir" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Backends
+        Lowered IR (spec.operators and spec.ir)
       
     </span>
   </a>
@@ -1375,10 +1353,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#calling-convention" class="md-nav__link">
+  <a href="#backends-and-calling-convention" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Calling convention
+        Backends and calling convention
       
     </span>
   </a>
@@ -1405,157 +1383,173 @@
   
 
 
-<h1 id="how-it-works">How it works<a class="headerlink" href="#how-it-works" title="Permanent link">&para;</a></h1>
+<h1 id="compiler-architecture">Compiler architecture<a class="headerlink" href="#compiler-architecture" title="Permanent link">&para;</a></h1>
+<p>This page covers how Parakeet compiles Python into native CPU and GPU code,
+including the low-level typed IR (<code>spec.operators</code> and <code>spec.ir</code>) that sits
+underneath the algebraic rewrite passes.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a> Python function + argument types
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>        │  elaborate (parakeet/frontend/, lib/)
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>        ▼
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a> operator IR (IndexMap, IndexReduce, IndexScan, IndexFilter, IndexScatter)
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>        │  middle-end passes + lowering (parakeet/transforms/)  ──►  f.specialize(x).operators / .ir
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a> operator IR (IndexMap, IndexReduce, IndexScan, IndexFilter, IndexExpand, IndexScatter, IndexWavefront)
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>        │  12 middle-end passes + lowering (parakeet/transforms/)  ──►  f.specialize(x).operators / .ir
 <a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>        ▼
-<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a> typed loop IR (parakeet/syntax/ir.py)
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a> typed loop IR (parakeet/syntax/ir.py: ParLoop, ForRange, flat buffer loads/stores)
 <a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>        │  emit C (backends/c.py)            ├─► Metal kernels (backends/metal.py)
 <a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>        ▼                                    └─► CUDA kernels  (backends/cuda.py)
 <a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a> system C compiler ─► shared library, cached on disk ─► called through ctypes
 </code></pre></div>
 <h2 id="specialization">Specialization<a class="headerlink" href="#specialization" title="Permanent link">&para;</a></h2>
-<p>Calling a <code>@jit</code> function classifies its arguments; dtype, rank, and layout of
-arrays, the types of scalars, the structure of tuples/records, and the identity
-of functions; into a <em>type key</em>. Each distinct key gets one compiled
-<em>specialization</em>, cached per function. Values read from globals and closures
-are classified the same way on every call and passed as hidden arguments, so
-compiled code never sees stale data.</p>
+<p>Calling a <code>@jit</code> function classifies its arguments (array dtype, rank, layout;
+scalar types; tuple/record structure; callable identity) into a <em>type key</em>.
+Each distinct key compiles to one cached specialization. Globals and closed-over
+values are classified the same way on every call and passed as hidden arguments
+so compiled code never reads stale values.</p>
 <h2 id="elaboration">Elaboration<a class="headerlink" href="#elaboration" title="Permanent link">&para;</a></h2>
-<p>The frontend is a <em>staged interpreter</em>: it walks the function's Python AST with
-an environment of compile-time values and emits IR only for what must happen at
-run time.</p>
+<p>The frontend is a <em>staged interpreter</em> walking the Python AST with compile-time
+values and emitting IR only for runtime work:</p>
 <ul>
-<li><strong>Scalars</strong> are IR expressions with a NumPy type.</li>
-<li><strong>Tuples, NamedTuples, fixed-key dicts, frozen dataclasses, slices, functions,
-  closures, and dtypes</strong> exist at compile time. Calling a helper function means
-  elaborating its body in place, so by the time IR is produced there are no
-  Python calls, closures, or tuple objects left.</li>
-<li><strong>Arrays</strong> are either <em>concrete</em> (a buffer plus offset, shape, and strides as
-  scalar expressions; slicing is just arithmetic on those) or <em>delayed</em>: a
-  function from index to element. <code>np.tanh(x * a) + b</code> builds a delayed array
-  three layers deep, and no operator is emitted until something consumes it: a
-  store, a reduction, or <code>return</code>. That consumer's operator evaluates the whole
-  expression per element. This handles basic element-wise fusion by
-  construction; larger multi-operator rewrites happen next in the middle end.</li>
+<li><strong>Scalars</strong> become typed IR expressions.</li>
+<li><strong>Tuples, <code>NamedTuple</code>s, fixed-key dicts, dataclasses, slices, functions, and
+  dtypes</strong> live at compile time. Helper calls inline directly, leaving no
+  Python call frames or tuple allocations in the IR.</li>
+<li><strong>Arrays</strong> are either <em>concrete</em> (a buffer pointer plus offset, shape, and
+  strides, so views and slices are pure integer arithmetic) or <em>delayed</em> (a
+  function from index to value). Delayed expressions fuse into their consumer
+  at elaboration time before any middle-end pass runs.</li>
 </ul>
-<p>Three questions cannot be answered in one forward pass, so elaboration is
-<em>restarted</em> with what it learned:</p>
+<p>Three situations trigger an elaboration restart with refined information:</p>
 <ol>
-<li>the type of a variable modified in a loop (<code>x = 0</code> then <code>x += 0.5</code>; restart
-   with <code>x: float</code>);</li>
-<li>whether a delayed array must be evaluated eagerly; because it would be
-   evaluated twice, inside a loop, or after an array it reads has been modified
-   (which would change the answer);</li>
-<li>which arguments must be compile-time constants (<code>axis=axis</code>), in which case
-   the specialization is additionally keyed on that argument's value.</li>
+<li>A loop-carried variable changes type (<code>x = 0</code> then <code>x += 0.5</code>; restart with
+   <code>x: float</code>).</li>
+<li>A delayed array needs eager evaluation because it is read twice, read inside
+   a loop, or invalidated by an aliasing store.</li>
+<li>An argument must be specialized by value (<code>axis=axis</code>, tuple lengths, or
+   unit broadcast dimensions).</li>
 </ol>
-<h2 id="the-operator-ir">The operator IR<a class="headerlink" href="#the-operator-ir" title="Permanent link">&para;</a></h2>
-<p>The result of elaboration is a small imperative language: typed scalar
-variables, flat buffers with load/store, <code>if</code>, counted and unbounded loops,
-scoped buffer allocation, and runtime checks. On top of it sit five core
-<em>operator statements</em>, preserving the adverb algebra of the original NYU
-compiler:</p>
-<ul>
-<li><code>IndexMap(shape, index, body)</code>: run <code>body</code> for every index; iterations are
-  independent.</li>
-<li><code>IndexReduce(shape, index, body, folds)</code>: fold the values <code>body</code> computes at
-  every index; each <code>Fold</code> stores its combiner block, an associative primitive
-  name when recognized, and optional multi-state <code>carries</code>. With <code>where</code>, only
-  indices satisfying a predicate participate.</li>
-<li><code>IndexFilter(n, index, body, keep)</code>: compact the indices where <code>keep</code> holds,
-  in order, into a new array.</li>
-<li><code>IndexScan(n, index, body, fold, emit)</code>: a running fold; <code>emit</code> runs at every
-  index with the running state.</li>
-<li><code>IndexScatter(shape, index, body, dest_size, target, updates)</code>: associative
-  index-directed scatter-add (<code>np.bincount</code>, <code>parakeet.scatter_add</code>),
-  supporting multiple fused updates over a shared key.</li>
-</ul>
-<p>Tiling passes introduce <code>IndexTile</code> and <code>TileStage</code> nodes on top of the same
-IR. <code>spec.operators</code> prints a function before the middle-end passes, and
-<code>spec.ir</code> prints it after lowering. The final pass (<code>transforms/lowering.py</code>)
-replaces operator statements with loops and with the single parallel construct,
-<code>ParLoop</code>, which runs its body over chunks of an index range.</p>
-<p>Memory management is static: a buffer belongs to the scope that allocated it
-and is released when that scope ends, unless it escapes into a longer-lived
-variable, in which case a reference count keeps it alive. Parallel loop bodies
-never mutate reference counts of shared buffers.</p>
 <h2 id="middle-end-passes">Middle-end passes<a class="headerlink" href="#middle-end-passes" title="Permanent link">&para;</a></h2>
-<p><code>parakeet/transforms/pipeline.py</code> lists the eleven passes over the operator
-statements in order (<code>parakeet.transforms.pipeline.names()</code>). Every pass is
-checked by <code>parakeet.verify</code> when <code>config.verify</code> is enabled, and
-<code>config.skip_transforms</code> can omit individual passes:</p>
+<p><code>parakeet/transforms/pipeline.py</code> runs twelve passes over the operator IR in
+order (<code>parakeet.transforms.pipeline.names()</code>). Every pass is checked by
+<code>parakeet.verify</code> when <code>config.verify</code> is enabled, and <code>config.skip_transforms</code>
+can omit passes individually:</p>
 <ol>
-<li><strong>Dead code</strong> (<code>simplify.py</code>): removes pure operator statements and unused
-   allocations that nothing reads, to a fixed point.</li>
+<li><strong>Dead code</strong> (<code>simplify.py</code>): drops pure operators and unused allocations
+   to a fixed point.</li>
 <li><strong>Normalize</strong> (<code>normalize.py</code>): squeezes unit <code>keepdims=True</code> map axes and
    hoists row-invariant inner reductions (<code>softmax</code>, <code>layer_norm</code>).</li>
-<li><strong>Vertical fusion</strong> (<code>fusion.py</code>): collapses producer-consumer operator
-   pairs (<code>Map → Map</code> including affine transposes/slices and matmul epilogues,
-   <code>Scan → Map</code> into <code>IndexScan.emit</code>, <code>Map → Filter</code>, <code>Map → Reduce</code>,
-   <code>Map → Scatter</code>) and flattens nested maps.</li>
-<li><strong>Filter fusion</strong> (<code>fusion.py</code>): merges adjacent <code>IndexFilter</code>s into one
-   short-circuiting filter and turns <code>Filter → Reduce</code> into a zero-allocation
-   guarded <code>IndexReduce</code>.</li>
-<li><strong>Sibling fusion</strong> (<code>fusion.py</code>): merges independent <code>IndexReduce</code>s, pure
-   <code>IndexMap</code>s, compatible <code>IndexScatter</code>s sharing a key, and online
-   <code>max</code> + <code>sum(exp(x - m))</code> pairs into single passes.</li>
+<li><strong>Vertical fusion</strong> (<code>fusion.py</code>): collapses producer-consumer pairs
+   (<code>Map -&gt; Map</code> including affine transposes/slices and matmul epilogues,
+   <code>Scan -&gt; Map</code> into <code>IndexScan.emit</code>, <code>Map -&gt; Filter/Reduce/Scatter</code>) and
+   flattens nested maps.</li>
+<li><strong>Filter fusion</strong> (<code>fusion.py</code>): merges adjacent <code>IndexFilter</code>s and turns
+   <code>Filter -&gt; Reduce</code> into a zero-allocation guarded <code>IndexReduce</code>.</li>
+<li><strong>Sibling fusion</strong> (<code>fusion.py</code>): merges independent reductions, pure maps
+   (including disjoint-union horizontal batching on CUDA), compatible same-key
+   scatters, and online <code>max</code> + <code>sum(exp(x - m))</code> pairs.</li>
 <li><strong>Contraction reassociation</strong> (<code>reassociate.py</code>): reorders chained bilinear
-   contractions when doing so saves FLOPs (including latent-attention
+   contractions when doing so lowers FLOPs (including latent-attention
    absorption).</li>
 <li><strong>Monoidal tiling</strong> (<code>monoid_tile.py</code>): tiles rescaled semiring reductions
    (attention, Split-K decoding, linear cross-entropy, Gaussian regression) and
    applies affine tile-interval mask pruning.</li>
+<li><strong>Row pipeline fusion</strong> (<code>fusion.py</code>): collapses multi-stage per-row
+   reduction + normalization chains (such as LayerNorm and RMSNorm forward and
+   backward) into single-pass warp-cooperative row pipelines on GPU.</li>
 <li><strong>Chunkwise scan</strong> (<code>tile_scan.py</code>): rewrites affine and bilinear
-   matrix-state <code>for</code> recurrences into parallel chunkwise scans.</li>
+   matrix-state <code>for</code> loops into parallel chunkwise scans.</li>
 <li><strong>Pairwise fold tiling</strong> (<code>pairwise_fold.py</code>): fuses pairwise score
-   producers into ordered tile-summary folds on CPU and GPU (such as exact 1-NN).</li>
+    producers into ordered tile-summary folds on CPU and GPU (such as 1-NN).</li>
 <li><strong>Reduction interchange</strong> (<code>tiling.py</code>): hoists strided commutative,
-    associative inner reductions outside L1-sized contiguous output strips on
-    CPU (<code>PermuteReductions</code>).</li>
+    associative inner reductions outside L1-sized output strips on CPU
+    (<code>PermuteReductions</code>).</li>
 <li><strong>Tiling</strong> (<code>tiling.py</code>): rewrites maps wrapping reductions into nested
-    cache/register tiles on CPU and shared-memory tiles on CUDA and Metal.</li>
+    cache/register tiles on CPU and shared-memory tiles on CUDA and Metal, plus
+    single-pass <code>atomicAdd</code> reductions on CUDA.</li>
 </ol>
-<p>After those eleven passes, <strong>lowering</strong> (<code>lowering.py</code>) turns operators into
-loops and <code>ParLoop</code> chunks.</p>
-<p>One transform still runs during elaboration rather than as a middle-end pass:</p>
+<p>After these twelve passes, <strong>lowering</strong> (<code>lowering.py</code>) converts all operator
+statements into scalar loops and the single parallel loop construct, <code>ParLoop</code>.</p>
+<p>One transform runs during elaboration rather than as a middle-end pass:
+<strong>differentiation</strong> (<code>autodiff.py</code>, <code>jvp.py</code>, <code>algebraic_vjp.py</code>), which records
+array operators on an algebraic tape during elaboration, applies sufficient-statistic
+rematerialization (for attention, cross-entropy, softmax, and norms), and walks
+the tape backwards to emit adjoint operators.</p>
+<h2 id="lowered-ir">Lowered IR (<code>spec.operators</code> and <code>spec.ir</code>)<a class="headerlink" href="#lowered-ir" title="Permanent link">&para;</a></h2>
+<p>The <a href="../primitives/">primitives guide</a> and <a href="../rewrites/">rewrite rules</a> use
+Python pseudocode to show algebraic transformations cleanly. Underneath, the
+compiler represents functions in a typed, explicit-offset SSA IR with scoped
+static memory management (buffers are freed when their allocating scope exits,
+with reference counting only when a buffer escapes).</p>
+<p>Inspect both stages on any <code>@par.jit</code> function via <code>.specialize(*args)</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">parakeet</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">par</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="nd">@par</span><span class="o">.</span><span class="n">jit</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="k">def</span><span class="w"> </span><span class="nf">rms</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>  <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">x</span> <span class="o">*</span> <span class="n">x</span><span class="p">))</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="n">spec</span> <span class="o">=</span> <span class="n">rms</span><span class="o">.</span><span class="n">specialize</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="mi">1024</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">))</span>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="nb">print</span><span class="p">(</span><span class="n">spec</span><span class="o">.</span><span class="n">operators</span><span class="p">)</span>  <span class="c1"># operator IR before middle-end passes</span>
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="nb">print</span><span class="p">(</span><span class="n">spec</span><span class="o">.</span><span class="n">ir</span><span class="p">)</span>  <span class="c1"># lowered loop IR after all 12 passes + lowering</span>
+</code></pre></div>
+<p>In <code>spec.ir</code>, <code>IndexReduce</code> has been lowered into a chunked <code>ParLoop</code> with
+explicit flat-buffer offsets (<code>x_off_2</code>), typed SSA temporaries (<code>x_15</code>,
+<code>acc_14</code>), and a SIMD inner loop:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>def rms(x_1: array[float64, 1d]):
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    nchunks_9: int64? = @num_chunks(x_n0_3, True)
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>    partials_10 = alloc(float64, nchunks_9)
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    parallel[reduce] for chunk_11, (start_12, stop_13) in chunks(x_n0_3, n=nchunks_9):
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>        x_15: float64 = (x_1[(x_off_2 + start_12)] * x_1[(x_off_2 + start_12)])
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>        acc_14: float64 = x_15
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>        for i_16 in range((start_12 + 1), stop_13, 1):  # simd
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>            x_17: float64 = (x_1[(x_off_2 + i_16)] * x_1[(x_off_2 + i_16)])
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>            acc_14: float64 = (acc_14 + x_17)
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>        partials_10[chunk_11] = acc_14
+<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>    acc_8: float64 = 0.0
+<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>    for i_18 in range(0, nchunks_9, 1):
+<a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>        acc_8: float64 = (acc_8 + partials_10[i_18])
+<a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>    res_20: float64 = sqrt((acc_8 / float64(x_n0_3)))
+<a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a>    return res_20
+</code></pre></div>
+<p>To trace the IR after every pass that modifies a function, pass a callback to
+<code>trace_passes</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">parakeet.syntax</span><span class="w"> </span><span class="kn">import</span> <span class="n">ir</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">prev</span> <span class="o">=</span> <span class="kc">None</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="k">def</span><span class="w"> </span><span class="nf">on_pass</span><span class="p">(</span><span class="n">stage</span><span class="p">,</span> <span class="n">fn</span><span class="p">):</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>  <span class="k">global</span> <span class="n">prev</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>  <span class="n">text</span> <span class="o">=</span> <span class="n">ir</span><span class="o">.</span><span class="n">fmt_function</span><span class="p">(</span><span class="n">fn</span><span class="p">)</span>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>  <span class="k">if</span> <span class="n">text</span> <span class="o">!=</span> <span class="n">prev</span><span class="p">:</span>
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"=== </span><span class="si">{</span><span class="n">stage</span><span class="si">}</span><span class="s2"> ===</span><span class="se">\n</span><span class="si">{</span><span class="n">text</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>    <span class="n">prev</span> <span class="o">=</span> <span class="n">text</span>
+<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>
+<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>
+<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="n">rms</span><span class="o">.</span><span class="n">trace_passes</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="mi">1024</span><span class="p">),</span> <span class="n">_trace</span><span class="o">=</span><span class="n">on_pass</span><span class="p">)</span>
+</code></pre></div>
+<h2 id="backends-and-calling-convention">Backends and calling convention<a class="headerlink" href="#backends-and-calling-convention" title="Permanent link">&para;</a></h2>
+<p>All targets share one C-family scalar emitter (<code>backends/cfamily.py</code>) and one
+set of C scalar helpers (NumPy floor division/modulo, NaN-propagating min/max,
+and RNG) so CPU, Metal, and CUDA agree bit-for-bit on integer results.</p>
 <ul>
-<li><strong>Differentiation</strong> (<code>autodiff.py</code>, <code>derivatives.py</code>, <code>algebraic_vjp.py</code>):
-  <code>grad</code> elaborates the function with a tape that records array operators on
-  differentiated values, runs algebraic rematerialization rules (for attention,
-  cross-entropy, and norms), and walks the tape backwards to emit adjoint
-  operators. Scalars differentiate directly from their expression trees, and
-  views map to the same views of their adjoint buffers.</li>
+<li><strong>Host C:</strong> each <code>ParLoop</code> body is outlined into a function taking a context
+  struct (identical bodies up to alpha-renaming share one compiled function)
+  and dispatched through a function pointer supplied at call time (thread pool,
+  OpenMP, GCD, or sequential), so one shared library serves every CPU backend.</li>
+<li><strong>GPU kernels:</strong> eligible <code>ParLoop</code>s and tiled plans emit Metal or CUDA
+  kernels (<code>backends/metal.py</code>, <code>backends/cuda.py</code>, <code>backends/tiled_gpu.py</code>,
+  <code>backends/monoidal_gpu.py</code>). On CUDA, alpha-canonical kernel deduplication
+  collapses structurally identical kernels across layers (for example, repeated
+  transformer blocks) into a single NVRTC compilation. Arrays remain resident
+  on the device across consecutive GPU kernels within a call, and across calls
+  when wrapped with <code>par.to_device</code>.</li>
+<li><strong>Calling convention:</strong> compiled entry points accept flat arrays of 64-bit
+  slots (scalars, and for each array its buffer pointer, offset, shape, and
+  strides). Newly allocated output buffers are handed to NumPy without copying
+  via a finalizer that releases the native reference; views of inputs return as
+  views of caller memory.</li>
 </ul>
-<h2 id="backends">Backends<a class="headerlink" href="#backends" title="Permanent link">&para;</a></h2>
-<p>All targets are C-like, so one emitter (<code>backends/cfamily.py</code>) prints scalar
-expressions and control flow while backend modules supply target types, math
-intrinsics, tiled GPU codegen (<code>backends/tiled_gpu.py</code>, <code>backends/monoidal_gpu.py</code>),
-and runtime error reporting.</p>
-<ul>
-<li>The <strong>host</strong> program is always C. Each <code>ParLoop</code> body is outlined into a
-  function taking a context struct (identical bodies up to alpha-renaming share
-  one compiled function) and dispatched through a function pointer supplied at
-  call time (the thread pool, OpenMP, GCD, or a sequential loop) so one
-  compiled library serves every CPU backend.</li>
-<li>For <strong>GPU</strong> backends, eligible <code>ParLoop</code>s and tiled plans are also emitted as
-  Metal or CUDA kernels. Arrays stay resident on the device across consecutive
-  GPU kernels within a call (and across calls when wrapped with
-  <code>parakeet.to_device</code>).</li>
-</ul>
-<p>Scalar helpers (Python/NumPy floor division and modulo, integer powers, shifts,
-NaN-propagating min/max, and the RNG) live once as C text and are included in
-the C, Metal, and CUDA preludes so all backends agree bit-for-bit on integer
-results.</p>
-<h2 id="calling-convention">Calling convention<a class="headerlink" href="#calling-convention" title="Permanent link">&para;</a></h2>
-<p>A compiled entry point takes flat arrays of 64-bit slots: scalars, and for each
-array its buffer pointer, offset, shape, and strides. Results return the same
-way. Buffers allocated by compiled code are handed to NumPy without copying
-using a finalizer that releases the native reference; views of inputs return as
-NumPy views of the caller's memory.</p>
 
 
 

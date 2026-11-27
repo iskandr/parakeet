@@ -1046,7 +1046,7 @@
   <span class="md-ellipsis">
     
   
-    How it works
+    Compiler architecture
   
 
     
@@ -1462,25 +1462,19 @@ explicit N-D coordinate space, while your code stays idiomatic NumPy or <code>pa
 <a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="k">def</span><span class="w"> </span><span class="nf">scaled_tanh_comp</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">beta</span><span class="o">=</span><span class="mf">0.3</span><span class="p">):</span>
 <a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>  <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">np</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">xi</span> <span class="o">*</span> <span class="n">alpha</span><span class="p">)</span> <span class="o">+</span> <span class="n">beta</span> <span class="k">for</span> <span class="n">xi</span> <span class="ow">in</span> <span class="n">x</span><span class="p">])</span>
 </code></pre></div>
-<p>Both versions lower to the same single fused parallel loop with no temporary
-arrays. Because programs stay in this operator representation until code
-generation, a small set of general passes does the optimization work across
-domains:</p>
+<p>Both versions compile to one fused parallel loop with no temporary arrays.
+Keeping programs in operator form until codegen lets a few general passes cover
+all domains:</p>
 <ul>
-<li><strong>Fusion.</strong> Producer-consumer chains, filtered reductions (<code>np.sum(x[x &gt; 0])</code>),
-  and sibling histograms sharing the same bin IDs merge into one traversal.
-  <a href="gallery/#histograms-and-tree-splits">See the tree-split example</a>.</li>
-<li><strong>Tiling and single-pass reductions.</strong> Associative reductions and bilinear
-  products tile into CPU cache or GPU shared memory, so Gaussian kernel
-  regression, nearest-neighbor search, and attention stream blocks instead of
-  allocating giant pairwise matrices. <a href="algebra/">Read the algebraic laws</a> or
-  <a href="primitives/#worked-end-to-end-compilation-walkthroughs">follow the worked compilation walkthrough</a>.</li>
-<li><strong>Differentiation.</strong> <code>par.grad</code>, <code>par.value_and_grad</code>, and <code>par.jvp</code>
-  differentiate the primitives directly, compiling a full training step into
-  one native function. <a href="autodiff/">Learn about gradients</a>.</li>
-<li><strong>Inspection.</strong> Every stage is visible: inspect the operator IR, see which
-  rewrites fired with <code>par.show_rewrite</code>, or read the generated C, Metal, or
-  CUDA source. <a href="gallery/#inspecting-algebraic-rewrites">Inspect a rewrite</a>.</li>
+<li><strong>Fusion:</strong> producer-consumer chains, filtered reductions (<code>np.sum(x[x &gt; 0])</code>),
+  and same-key histograms merge into one pass (<a href="gallery/#histograms-and-tree-splits">tree-split example</a>).</li>
+<li><strong>Tiling:</strong> associative reductions and bilinear products stream through CPU
+  cache or GPU shared memory without allocating <code>N × M</code> score matrices
+  (<a href="algebra/">algebraic laws</a>, <a href="primitives/#worked-end-to-end-compilation-walkthroughs">compilation walkthrough</a>).</li>
+<li><strong>Gradients:</strong> <code>par.grad</code>, <code>par.value_and_grad</code>, and <code>par.jvp</code> differentiate
+  the primitives directly into one compiled training step (<a href="autodiff/">gradients</a>).</li>
+<li><strong>Inspection:</strong> check which rewrites fired with <code>par.show_rewrite</code>, or print
+  the generated C, Metal, or CUDA source (<a href="internals/">compiler architecture</a>).</li>
 </ul>
 <h2 id="where-to-go-next">Where to go next<a class="headerlink" href="#where-to-go-next" title="Permanent link">&para;</a></h2>
 <ul>

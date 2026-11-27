@@ -1285,7 +1285,7 @@
   <span class="md-ellipsis">
     
   
-    How it works
+    Compiler architecture
   
 
     
@@ -1830,22 +1830,18 @@
 
 
 <h1 id="kernel-gallery">Kernel gallery<a class="headerlink" href="#kernel-gallery" title="Permanent link">&para;</a></h1>
-<p>Parakeet compiles ordinary NumPy code, plain Python loops, and explicit
-data-parallel operators (<code>par.map</code>, <code>par.allpairs</code>, <code>par.fold</code>, <code>par.imap</code>,
-<code>par.ireduce</code>, <code>par.scatter_add</code>) through the <strong>same</strong> <code>@par.jit</code> decorator and
-the <strong>same</strong> algebraic IR.</p>
-<p><strong>How this page is organized:</strong> the examples progress from straightforward
-pairwise NumPy fusion and histograms to custom semiring reductions, parallel
-recurrences, and modern attention and loss kernels; introducing Parakeet's
-capabilities one layer at a time. Where a section has tabs, those tabs show
-<strong>alternative ways to write the exact same computation</strong> (idiomatic NumPy vs.
-plain loops vs. explicit Parakeet operators) that all compile to the same
-fused, tiled schedule.</p>
-<p>For a complete end-to-end training walkthrough, see
-<a href="nanogpt/">nanoGPT</a>. For genomics, cheminformatics, and 3D protein
-kernels, see <a href="../bioinformatics/">Bioinformatics &amp; structural biology</a>. For the
-underlying identities behind these rewrites, see <a href="../algebra/">Algebraic laws</a>.</p>
-<p>Every snippet below is included directly from
+<p>Parakeet compiles NumPy expressions, Python loops, and explicit data-parallel
+operators (<a href="../operators/#map"><code>par.map</code></a>, <a href="../operators/#allpairs"><code>par.allpairs</code></a>,
+<a href="../operators/#fold"><code>par.fold</code></a>, <a href="../operators/#imap"><code>par.imap</code></a>,
+<a href="../operators/#ireduce"><code>par.ireduce</code></a>, <a href="../operators/#scatter_add"><code>par.scatter_add</code></a>)
+through the same <code>@par.jit</code> decorator and algebraic IR.</p>
+<p>The examples below move from pairwise NumPy fusion and histograms to custom
+semirings, parallel recurrences, and attention/loss kernels. Where a section
+has tabs, each tab shows an alternative way to write the same kernel that
+compiles to the same fused, tiled schedule.</p>
+<p>See also <a href="nanogpt/">nanoGPT</a>,
+<a href="../bioinformatics/">Bioinformatics &amp; structural biology</a>, and
+<a href="../algebra/">Algebraic laws</a>. Every snippet is included verbatim from
 <a href="https://github.com/iskandr/parakeet/blob/master/examples/algebraic_gallery.py"><code>examples/algebraic_gallery.py</code></a>
 and verified by <code>python -m examples.algebraic_gallery</code>.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">NamedTuple</span>

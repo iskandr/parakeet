@@ -1167,7 +1167,7 @@
   <span class="md-ellipsis">
     
   
-    How it works
+    Compiler architecture
   
 
     
@@ -1594,46 +1594,42 @@
 
 
 <h1 id="rewrite-rules-and-optimizations">Rewrite rules and optimizations<a class="headerlink" href="#rewrite-rules-and-optimizations" title="Permanent link">&para;</a></h1>
-<p>Everything Parakeet does to a program between your source and the loops it
-runs, in one place, and how that compares with the two theses that describe
-the original system:</p>
+<p>A catalog of the algebraic rewrites Parakeet applies between Python source and
+native loops, compared against the two NYU PhD theses behind the original
+compiler:</p>
 <ul>
-<li><strong>[R]</strong> Alex Rubinsteyn, <em>Runtime Compilation of Array-Oriented Python
-  Programs</em> (NYU, 2014); the operators and their fusion rules.</li>
-<li><strong>[H]</strong> Eric Hielscher, <em>Locality Optimization for Data Parallel Programs</em>
-  (NYU, 2013); tiling.</li>
+<li><strong>[R]</strong> <a href="https://rubinsteyn.com/">Alex Rubinsteyn</a>,
+  <a href="https://cs.nyu.edu/media/publications/rubinsteyn_alex.pdf"><em>Runtime Compilation of Array-Oriented Python Programs</em></a>
+  (PhD thesis, NYU, 2014): type specialization, data-parallel operators, and
+  fusion rules.</li>
+<li><strong>[H]</strong> <a href="https://github.com/hielscher">Eric Hielscher</a>,
+  <a href="https://cs.nyu.edu/media/publications/eric_h.pdf"><em>Locality Optimization for Data Parallel Programs</em></a>
+  (PhD thesis, NYU, 2013; also <a href="https://arxiv.org/abs/1304.1835">arXiv:1304.1835</a>):
+  cache/register tiling and loop interchange over operator trees.</li>
 </ul>
-<p>The short version: the rules are the same algebra, applied in two places.</p>
-<ul>
-<li><strong>While elaborating.</strong> An array expression is a <em>delayed</em> value: a function
-  from index to element; and the vertical fusion rules fire at the moment an
-  operator is applied to one. <code>F ∘ G</code> below means "the element function of
-  the result is <code>F</code> applied to the element function of the argument"; no pass
-  looks for the pattern afterwards.</li>
-<li><strong>In the middle end.</strong> Elaboration produces the original compiler's
-  <em>indexified</em> level: operator statements (<code>IndexMap</code>, <code>IndexReduce</code>,
-  <code>IndexScan</code>, <code>IndexFilter</code>, and <code>IndexScatter</code>) over index spaces with
-  ordinary scalar bodies (<code>Specialization.operators</code> prints it). Middle-end
-  passes rewrite those statements in order:
-  dead code elimination, normalization, vertical fusion (exact and affine
-  map/scan/filter/reduce/scatter), filter fusion, sibling and online monoidal
-  fusion, bilinear contraction reassociation, monoidal tiling and
-  tile-interval pruning, chunkwise affine/bilinear scans,
-  pairwise fold tiling, reduction interchange, and cache/register/GPU tiling.
-  A final pass (<code>LowerAdverbs</code> in spirit) lowers operators into loops.
-  <code>parakeet.transforms.pipeline.PASSES</code> is the authoritative list, and
-  <code>find_broken_transform</code> toggles its passes on one at a time. See
-  <a href="../algebra/">Algebraic laws</a> for the mathematical identities behind these
-  passes and the <a href="../gallery/">Kernel gallery</a> for runnable examples.</li>
-</ul>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>map i_27, i_28 over (x_n0_3, y_n0_8):               # x @ y.T, as the passes see it
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    off_29: int64 = (x_off_2 + (i_27 * x_n1_4))
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    off_30: int64 = (y_off_7 + (i_28 * y_n1_9))
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    reduce i_35 over (x_n1_4):
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>        x_36: float64 = (x_1[(off_29 + i_35)] * y_6[(off_30 + i_35)])
-<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>        red_39: float64 = fold(add, x_36, init=0.0)
-<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    arr_24[((i_27 * y_n0_8) + i_28)] = red_39
+<p>The same algebra runs in two stages:</p>
+<ol>
+<li><strong>During elaboration:</strong> array expressions stay <em>delayed</em> (a function from
+   index to value), so vertical fusion (<code>F ∘ G</code>) fires as soon as a consumer
+   reads an expression.</li>
+<li><strong>In the middle end:</strong> elaboration emits index-space operator statements
+   (<code>IndexMap</code>, <code>IndexReduce</code>, <code>IndexScan</code>, <code>IndexFilter</code>, <code>IndexExpand</code>,
+   <code>IndexScatter</code>, <code>IndexWavefront</code>). Twelve passes in
+   <code>parakeet.transforms.pipeline.PASSES</code> rewrite those statements (dead code,
+   normalization, vertical/filter/sibling fusion, contraction reassociation,
+   monoidal tiling, row-pipeline fusion, chunkwise scans, pairwise fold tiling,
+   reduction interchange, and cache/GPU tiling) before lowering to loops.</li>
+</ol>
+<p>For example, <code>x @ y.T</code> enters the middle end as a map of dot-product reductions:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Algebraic view of `x @ y.T` as the middle-end passes see it:</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">parallel</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">M</span><span class="p">),</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">N</span><span class="p">):</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">out</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">k</span><span class="p">]</span> <span class="o">*</span> <span class="n">y</span><span class="p">[</span><span class="n">j</span><span class="p">,</span> <span class="n">k</span><span class="p">]</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">K</span><span class="p">))</span>
 </code></pre></div>
+<p>For worked multi-stage walkthroughs, see
+<a href="../primitives/#worked-end-to-end-compilation-walkthroughs">Algebraic primitives &amp; walkthrough</a>;
+for mathematical identities, see <a href="../algebra/">Algebraic laws</a>; for the raw
+low-level IR format (<code>spec.operators</code> / <code>spec.ir</code>), see
+<a href="../internals/#lowered-ir">Compiler architecture</a>.</p>
 <h2 id="operators">Operators<a class="headerlink" href="#operators" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -1815,7 +1811,7 @@ GPUs.</p>
 </tr>
 <tr>
 <td><code>a = Map(f, X); b = Map(g, X)</code> ⇒ <code>a, b = Map(f×g, X)</code></td>
-<td><strong>yes</strong> (<code>transforms/fusion.py</code>): two pure <code>IndexMap</code> statements over the same index space where the second does not read what the first writes share one loop (<code>np.sin(x), np.cos(x)</code> reads <code>x</code> once)</td>
+<td><strong>yes</strong> (<code>transforms/fusion.py</code>): independent pure <code>IndexMap</code>s over the same index space share one loop (<code>np.sin(x), np.cos(x)</code> reads <code>x</code> once). On CUDA, independent contiguous maps of differing sizes also batch horizontally into one disjoint-union kernel (reducing per-step launch counts in multi-tensor updates like Adam)</td>
 </tr>
 </tbody>
 </table>
@@ -1915,7 +1911,7 @@ is dropped: the index is the loop's own.</p>
 </tr>
 <tr>
 <td><code>TiledReduce</code>, <code>TiledScan</code></td>
-<td><code>PermuteReductions</code> (L1 column-strip tiled reduction), invariant row-reduction hoisting (<code>split_invariant_map</code> / <code>squeeze_unit_map</code> for <code>softmax</code> and <code>layer_norm</code>), and chunkwise <code>TileScan</code> for affine/bilinear recurrences; Hielscher's general cache-tiled <code>TiledScan</code> over arbitrary scans is not implemented</td>
+<td><code>PermuteReductions</code> (L1 column-strip tiled reduction), invariant row-reduction hoisting (<code>split_invariant_map</code> / <code>squeeze_unit_map</code>), and chunkwise <code>TileScan</code> for affine/bilinear recurrences; <a href="https://cs.nyu.edu/media/publications/eric_h.pdf">Hielscher's</a> general cache-tiled <code>TiledScan</code> over arbitrary scans is not implemented</td>
 </tr>
 <tr>
 <td>cache tile sizes found by an online search between a pessimistic and an optimistic estimate</td>

@@ -1106,7 +1106,7 @@
   <span class="md-ellipsis">
     
   
-    How it works
+    Compiler architecture
   
 
     
@@ -1472,35 +1472,25 @@
 
 
 <h1 id="algebraic-laws">Algebraic laws<a class="headerlink" href="#algebraic-laws" title="Permanent link">&para;</a></h1>
-<p>Parakeet lowers numerical Python to a small algebra of data-parallel operators
-(maps, reductions, scans, and filters) with fusion and tiling rules over them.
-Those rules eliminate temporary arrays and improve cache locality for ordinary
-array expressions, comprehensions, and matrix products.</p>
-<p>Many modern numerical and machine-learning kernels need one step further:
-eliminating quadratic <code>O(N²)</code> or <code>O(M · V)</code> intermediates, turning long serial
-recurrences into parallel block passes, and avoiding saving giant intermediates
-for reverse-mode differentiation. Rather than adding special-purpose "layer"
-ops to the compiler, Parakeet encodes these transformations as six general
-algebraic laws over a small core of index-operator statements (<code>IndexMap</code>,
-<code>IndexReduce</code>, <code>IndexScan</code>, <code>IndexFilter</code>, <code>IndexExpand</code>, <code>IndexScatter</code>,
-<code>IndexWavefront</code>, and <code>IndexTile</code> / <code>TileStage</code>) plus multi-state <code>Carry</code>
-folds.</p>
-<p>Because the passes match operator algebra instead of model names, the same
-rules fire on Gaussian kernel regression, shortest-path products, exact
-nearest-neighbor search, histogram split-finding, and IIR filters as on
-attention, cross-entropy, and state-space models.</p>
+<p>Ordinary array fusion removes simple element-wise temporaries. Modern numerical
+and ML kernels need more: eliminating quadratic <code>O(N²)</code> or <code>O(M · V)</code> buffers,
+parallelizing long serial recurrences, and differentiating without saving giant
+intermediates.</p>
+<p>Rather than adding hardcoded "layer" ops, Parakeet encodes these optimizations
+as <strong>six general algebraic laws</strong> over its
+<a href="../primitives/">seven index-space primitives</a>. Because the passes match
+operator algebra rather than model names, the same rules fire on Gaussian
+kernel regression, shortest-path products, exact 1-NN, GBDT histograms, and IIR
+filters as on attention, cross-entropy, and state-space models.</p>
 <h2 id="semantic-contract-real-algebraic-rewrites-vs-exact-order">Semantic contract: real-algebraic rewrites vs. exact order<a class="headerlink" href="#semantic-contract-real-algebraic-rewrites-vs-exact-order" title="Permanent link">&para;</a></h2>
-<p>Algebraic rewrites (parallel reduction, monoidal tiling, contraction
-reassociation, chunkwise affine scans, privatized scatter-add) rely on
-<strong>real-arithmetic associativity and commutativity</strong>: floating-point rounding
-order may differ in the last ULP relative to a left-to-right loop, just as in
-NumPy's pairwise summation or cuBLAS. That assumption is explicit and
-deliberate in Parakeet.</p>
-<p>Where order <em>is</em> semantically observable; equal-distance ties and first-NaN
-propagation in <code>argmin</code> / <code>argmax</code>, non-commutative structured <code>parakeet.fold</code>
-merges, or general sequential reductions; Parakeet preserves <strong>exact
-left-to-right merge order</strong> across chunks and tiles (and refuses to
-parallelize non-associative combiners).</p>
+<p>Parallel reductions, monoidal tiling, contraction reassociation, chunkwise
+scans, and privatized scatter-add assume <strong>real-arithmetic associativity and
+commutativity</strong>: floating-point rounding may differ in the last ULP relative to
+a left-to-right loop, just as in NumPy's pairwise summation or cuBLAS.</p>
+<p>Where order is observable (equal-distance ties and first-NaN behavior in
+<code>argmin</code>/<code>argmax</code>, non-commutative <code>par.fold</code> merges, or arbitrary sequential
+folds), Parakeet preserves <strong>exact left-to-right merge order</strong> and refuses to
+parallelize non-associative combiners.</p>
 <h2 id="the-six-laws-at-a-glance">The six laws at a glance<a class="headerlink" href="#the-six-laws-at-a-glance" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
