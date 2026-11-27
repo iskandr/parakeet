@@ -13,12 +13,12 @@ hide:
 
 <p class="pk-lead">A data-parallel compiler for numerical Python.</p>
 
-Write ordinary NumPy, loops, comprehensions, or explicit data-parallel
+Write ordinary NumPy, Python loops, comprehensions, or explicit data-parallel
 operators ([`par.map`](operators.md#map), [`par.reduce`](operators.md#reduce),
 [`par.fold`](operators.md#fold), [`par.scan`](operators.md#scan),
-[`par.allpairs`](operators.md#allpairs)). Parakeet specializes your
-function for its input types, fuses and tiles the array algebra, and compiles
-native code for multi-core CPUs, Apple Metal, and NVIDIA CUDA.
+[`par.allpairs`](operators.md#allpairs)). Parakeet specializes your function
+for its input types, fuses and tiles the array math, and compiles native code
+for multi-core CPUs, Apple Metal, and NVIDIA CUDA.
 
 [Get started](quickstart.md){ .md-button .md-button--primary }
 [Explore the gallery](gallery.md){ .md-button }
@@ -40,9 +40,9 @@ def nearest(x, y):
   return np.argmin(d2, axis=1)
 ```
 
-Parakeet computes distances a tile at a time on both CPU and GPU, keeping only
-the winning reference index per tile rather than allocating the full `N × M`
-distance matrix. Ties preserve NumPy's first-index rule.
+Parakeet streams distances a tile at a time on both CPU and GPU, keeping only
+the winning index per tile rather than allocating the `N × M` distance matrix.
+Ties preserve NumPy's exact first-index rule.
 
 [Compare timings, scaling, and memory](release-benchmarks.md#at-a-glance-nvidia-l4-4-thread-cpu)
 
@@ -59,78 +59,56 @@ Requires Python 3.11+, NumPy 2, and a system C compiler. For GPU backends,
 install `parakeet[metal]` on Apple Silicon or `parakeet[cuda12]` with an NVIDIA
 GPU.
 
-## Algebraic primitives
-
-Rather than shipping hundreds of hand-written C or GPU kernels for individual
-NumPy functions, Parakeet lowers ordinary Python, NumPy, and `par.*` calls onto
-**seven composable operators**. Inside the compiler IR, each operator carries an
-`Index` prefix (`IndexMap`, `IndexReduce`, ...) to mark that it runs over an
-explicit N-D coordinate space, while your code stays idiomatic NumPy or `par.*`.
-[Read the full primitives guide and end-to-end compilation walkthrough](primitives.md).
+## What Parakeet gives you
 
 <div class="pk-prim-grid" markdown>
 
 <div class="pk-prim-card" markdown>
-<div class="pk-prim-head"><strong>Map</strong> <code>IndexMap</code></div>
-Independent per-element work over an N-D index space: broadcasting, comprehensions, [`par.map`](operators.md#map), [`par.imap`](operators.md#imap), [`par.allpairs`](operators.md#allpairs).
-```python
-np.tanh(x * 0.5) + 0.3
-```
-[Details & fusion rules](primitives.md#map)
+<div class="pk-prim-head"><strong>Idiomatic Python &amp; NumPy</strong></div>
+
+Write NumPy expressions, comprehensions, explicit loops, `@dataclass` modules,
+or explicit operators (`par.map`, `par.fold`, `par.scan`, `par.scatter_add`,
+`par.wavefront`). Unsupported constructs fail loudly with your exact source line.
+
+[Compiled language](language.md) · [Operators](operators.md)
 </div>
 
 <div class="pk-prim-card" markdown>
-<div class="pk-prim-head"><strong>Reduce &amp; Fold</strong> <code>IndexReduce</code></div>
-Associative reductions (`np.sum`, [`par.reduce`](operators.md#reduce), [`par.ireduce`](operators.md#ireduce)) and ordered multi-state folds (`np.argmin`, [`par.fold`](operators.md#fold)).
-```python
-np.argmin(d2, axis=1)
-```
-[Details &amp; <code>reduce</code> vs <code>fold</code>](primitives.md#reduce-and-fold)
+<div class="pk-prim-head"><strong>Automatic Fusion &amp; Tiling</strong></div>
+
+Chained array expressions, boolean filters, same-key histograms, matrix
+products, pairwise distances, and online softmax attention fuse and tile into
+cache or GPU shared memory without materializing giant intermediates.
+
+[How Parakeet optimizes](primitives.md) · [Algebraic laws](algebra.md)
 </div>
 
 <div class="pk-prim-card" markdown>
-<div class="pk-prim-head"><strong>Scan</strong> <code>IndexScan</code></div>
-Prefix sums (`np.cumsum`, [`par.scan`](operators.md#scan)) and affine/bilinear `for` recurrences (IIR filters, Mamba-2 SSMs).
-```python
-np.cumsum(x)  # or affine for-loop
-```
-[Details &amp; chunkwise duality](primitives.md#scan)
+<div class="pk-prim-head"><strong>Composable Gradients</strong></div>
+
+`par.grad`, `par.value_and_grad`, `par.jvp`, `par.vjp`, and `par.hvp`
+differentiate directly through loops, arrays, and `@dataclass` parameters—so
+forward pass, backward pass, and optimizer compile into one native step.
+
+[Automatic differentiation](autodiff.md)
 </div>
 
 <div class="pk-prim-card" markdown>
-<div class="pk-prim-head"><strong>Filter &amp; Expand</strong> <code>IndexFilter</code> <code>IndexExpand</code></div>
-Stream compaction (1-to-0/1 boolean masking, [`par.filter`](operators.md#filter)) and 2-pass ragged expansion (1-to-K [`par.flatmap`](operators.md#flatmap), [`par.filter_pairs`](operators.md#filter_pairs)).
-```python
-np.sum(x[x > 0.0])  # 0-alloc FilterReduce
-```
-[Details &amp; filter fusion](primitives.md#filter-and-expand)
-</div>
+<div class="pk-prim-head"><strong>Multi-core CPU, Metal &amp; CUDA</strong></div>
 
-<div class="pk-prim-card" markdown>
-<div class="pk-prim-head"><strong>Scatter</strong> <code>IndexScatter</code></div>
-Associative bin accumulation (`np.bincount`, `np.add.at`, `out[idx[i]] += v`, [`par.scatter_add`](operators.md#scatter_add)).
-```python
-np.bincount(bins, weights=grads, minlength=256)
-```
-[Details &amp; histogram fusion](primitives.md#scatter)
-</div>
+One Python function compiles to sequential C, multi-core threads, OpenMP, GCD,
+Apple Metal, or NVIDIA CUDA (with TF32 Tensor Cores). Keep arrays resident on
+device across calls with `par.to_device`.
 
-<div class="pk-prim-card" markdown>
-<div class="pk-prim-head"><strong>Wavefront</strong> <code>IndexWavefront</code></div>
-Anti-diagonal and banded 2D dynamic programming ([`par.wavefront`](operators.md#wavefront), [`par.soft_align`](operators.md#soft_align)) for sequence alignment and differentiable DP.
-```python
-par.soft_align(scores, gamma=1.0)
-```
-[Details &amp; banded DP](primitives.md#wavefront)
-</div>
-
-<div class="pk-prim-card pk-prim-card--wide" markdown>
-<div class="pk-prim-head"><strong>Tile</strong> <code>IndexTile</code></div>
-Emitted automatically by the middle end for CPU cache/register micro-tiles and GPU shared memory on matrix products, <code>einsum</code>, 1-NN, and online softmax attention.
-[Walk through causal attention from 4 lines of NumPy to a single tiled kernel](primitives.md#walkthrough-attention)
+[Backends and GPUs](backends.md) · [Benchmarks](release-benchmarks.md)
 </div>
 
 </div>
+
+## Same fused loop, any style
+
+NumPy expressions, comprehensions, and explicit operators compile to the same
+single-pass parallel loop with zero temporary arrays:
 
 ```python
 @par.jit
@@ -143,26 +121,13 @@ def scaled_tanh_comp(x, alpha=0.5, beta=0.3):
   return np.array([np.tanh(xi * alpha) + beta for xi in x])
 ```
 
-Both versions compile to one fused parallel loop with no temporary arrays.
-Keeping programs in operator form until codegen lets a few general passes cover
-all domains:
-
-- **Fusion:** producer-consumer chains, filtered reductions (`np.sum(x[x > 0])`),
-  and same-key histograms merge into one pass ([tree-split example](gallery.md#histograms-and-tree-splits)).
-- **Tiling:** associative reductions and bilinear products stream through CPU
-  cache or GPU shared memory without allocating `N × M` score matrices
-  ([algebraic laws](algebra.md), [compilation walkthrough](primitives.md#worked-end-to-end-compilation-walkthroughs)).
-- **Gradients:** `par.grad`, `par.value_and_grad`, and `par.jvp` differentiate
-  the primitives directly into one compiled training step ([gradients](autodiff.md)).
-- **Inspection:** check which rewrites fired with `par.show_rewrite`, or print
-  the generated C, Metal, or CUDA source ([compiler architecture](internals.md)).
-
 ## Where to go next
 
-- **New to Parakeet?** Start with [Getting started](quickstart.md): five
-  minutes from `pip install` to your first compiled function and generated C.
-- **Learn by example:** Browse the [Kernel gallery](gallery.md) for runnable
-  NumPy and data-parallel kernels, or check the [Release benchmarks](release-benchmarks.md).
-- **Go deeper:** Read [Ideas, history, and boundaries](philosophy.md) for the
-  design principles, project history, and what Parakeet does and does not
-  support.
+* **New to Parakeet?** Follow [Getting started](quickstart.md) — five minutes
+  from `pip install` to your first compiled function and gradient.
+* **Learn by example:** Browse the [Kernel gallery](gallery.md),
+  [Train nanoGPT](gallery/nanogpt.md), or
+  [Bioinformatics & structural biology](bioinformatics.md).
+* **Under the hood:** See [Operators & compilation walkthrough](primitives.md)
+  and [Compiler architecture](internals.md) for how Parakeet fuses, tiles, and
+  lowers your code.

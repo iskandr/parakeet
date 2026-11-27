@@ -6,6 +6,12 @@
   --pk-panel: #edf4ef;
   --pk-edge: #bfd3c6;
   --pk-ink: #203a30;
+  --pk-before-bg: #fef6f5;
+  --pk-before-edge: #f3c4be;
+  --pk-before-ink: #8f241c;
+  --pk-after-bg: #edf6f1;
+  --pk-after-edge: #a7d4be;
+  --pk-after-ink: #1b543c;
 }
 
 [data-md-color-scheme="slate"] {
@@ -15,8 +21,15 @@
   --pk-panel: #24382f;
   --pk-edge: #435d50;
   --pk-ink: #e6f1e8;
+  --pk-before-bg: #352224;
+  --pk-before-edge: #6b3b40;
+  --pk-before-ink: #f7b8b4;
+  --pk-after-bg: #1e332a;
+  --pk-after-edge: #3e6b57;
+  --pk-after-ink: #9fdbb7;
 }
 
+/* Homepage hero */
 .pk-intro {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.03fr);
@@ -59,15 +72,19 @@
 .pk-example h2 { color: var(--pk-ink); font-size: 1.15rem; font-weight: 600; margin: 0; }
 .pk-example pre > code { background: var(--md-default-bg-color); font-size: .67rem; }
 .pk-example p:last-child { margin-bottom: 0; }
+
+/* Tables and SVG figures */
 .md-typeset table:not([class]) { font-variant-numeric: tabular-nums; }
 .md-typeset img[src$=".svg"] {
   display: block;
   width: 100%;
-  max-width: 100%;
+  max-width: 680px;
   height: auto;
-  margin: 1rem 0 1.25rem;
+  margin: 1rem auto 1.35rem;
+  border-radius: 10px;
 }
 
+/* Feature / operator card grids */
 .pk-prim-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -79,7 +96,7 @@
   background: var(--pk-panel);
   border: 1px solid var(--pk-edge);
   border-radius: 0.45rem;
-  padding: 0.85rem 1rem;
+  padding: 0.9rem 1.05rem;
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
@@ -95,7 +112,7 @@
   align-items: baseline;
   gap: 0.4rem;
   color: var(--pk-ink);
-  font-size: 0.96rem;
+  font-size: 0.98rem;
 }
 
 .pk-prim-head code {
@@ -107,8 +124,8 @@
 
 .pk-prim-card p {
   margin: 0;
-  font-size: 0.84rem;
-  line-height: 1.45;
+  font-size: 0.86rem;
+  line-height: 1.48;
 }
 
 .pk-prim-card pre {
@@ -123,8 +140,92 @@
 
 .pk-prim-card p:last-child {
   margin-top: auto;
-  font-size: 0.8rem;
+  font-size: 0.82rem;
   font-weight: 600;
+}
+
+/* Side-by-side Before -> After transformation panels */
+.pk-xform {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem;
+  margin: 1rem 0 1.35rem;
+  align-items: stretch;
+}
+
+.pk-xform-col {
+  border-radius: 0.5rem;
+  padding: 0.8rem 0.95rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.pk-xform-col--before {
+  background: var(--pk-before-bg);
+  border: 1px solid var(--pk-before-edge);
+}
+
+.pk-xform-col--after {
+  background: var(--pk-after-bg);
+  border: 1px solid var(--pk-after-edge);
+}
+
+.pk-xform-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.pk-xform-col--before .pk-xform-title { color: var(--pk-before-ink); }
+.pk-xform-col--after .pk-xform-title { color: var(--pk-after-ink); }
+
+.pk-xform-badge {
+  font-family: var(--md-code-font-family);
+  font-size: 0.69rem;
+  font-weight: 600;
+  padding: 0.12rem 0.45rem;
+  border-radius: 999px;
+  background: var(--md-default-bg-color);
+  border: 1px solid currentColor;
+  opacity: 0.9;
+}
+
+.pk-xform-col pre {
+  margin: 0 !important;
+  flex: 1;
+}
+
+.pk-xform-col pre > code {
+  background: var(--md-default-bg-color);
+  font-size: 0.72rem;
+  line-height: 1.42;
+}
+
+.pk-xform-col p {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.42;
+}
+
+/* Typographic equation blocks */
+.pk-eq {
+  background: var(--pk-panel);
+  border-inline-start: 0.22rem solid var(--pk-edge);
+  border-radius: 0.35rem;
+  padding: 0.75rem 1rem;
+  margin: 0.85rem 0 1.1rem;
+  font-family: var(--md-code-font-family);
+  font-size: 0.82rem;
+  line-height: 1.65;
+  color: var(--pk-ink);
+  overflow-x: auto;
 }
 
 @media (max-width: 60em) {
@@ -132,4 +233,5 @@
   .pk-wordmark { width: min(100%, 13rem); }
   .pk-example { max-width: 34rem; }
   .pk-prim-grid { grid-template-columns: minmax(0, 1fr); }
+  .pk-xform { grid-template-columns: minmax(0, 1fr); }
 }

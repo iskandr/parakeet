@@ -1,12 +1,11 @@
 # Supported functions
 
-This page is generated from Parakeet's library registry by `tools/gen_supported.py`, so it always
-matches the installed version.  Anything not listed here raises an `UnsupportedError` that names the
-function (and suggests similarly named supported ones).
+Generated from Parakeet's library registry by `tools/gen_supported.py`. Anything not listed here
+raises an `UnsupportedError` naming the function (and suggesting similarly named supported ones).
 
 ## NumPy element-wise functions (ufuncs)
 
-All follow NumPy's broadcasting and type promotion rules exactly.
+All follow NumPy 2 broadcasting and type promotion rules.
 
 |  |  |  |  |
 |---|---|---|---|
@@ -101,10 +100,9 @@ All follow NumPy's broadcasting and type promotion rules exactly.
 | `divmod` | `enumerate` | `filter` | `getattr` |
 | `hasattr` | `isinstance` | `len` | `list` |
 | `map` | `max` | `min` | `ord` |
-| `pow` | `print` | `range` | `reversed` |
-| `round` | `slice` | `sorted` | `sum` |
-| `tuple` | `zip` | `bool` | `float` |
-| `int` |  |  |  |
+| `pow` | `range` | `reversed` | `round` |
+| `slice` | `sorted` | `sum` | `tuple` |
+| `zip` | `bool` | `float` | `int` |
 
 ## `math`
 
@@ -126,7 +124,9 @@ All follow NumPy's broadcasting and type promotion rules exactly.
 
 |  |  |  |  |
 |---|---|---|---|
-| `parakeet.allpairs` | `parakeet.each` | `parakeet.filter` | `parakeet.imap` |
-| `parakeet.ireduce` | `parakeet.map` | `parakeet.outer_map` | `parakeet.parfor` |
-| `parakeet.pmap1` | `parakeet.pmap2` | `parakeet.pmap2_trim` | `parakeet.reduce` |
-| `parakeet.scan` |  |  |  |
+| `parakeet.allpairs` | `parakeet.batched_wavefront` | `parakeet.each` | `parakeet.filter` |
+| `parakeet.filter_pairs` | `parakeet.filter_reduce` | `parakeet.fixed_list` | `parakeet.flatmap` |
+| `parakeet.fold` | `parakeet.imap` | `parakeet.ireduce` | `parakeet.map` |
+| `parakeet.outer_map` | `parakeet.parfor` | `parakeet.pmap1` | `parakeet.pmap2` |
+| `parakeet.pmap2_trim` | `parakeet.reduce` | `parakeet.scan` | `parakeet.scatter_add` |
+| `parakeet.soft_align` | `parakeet.topk` | `parakeet.wavefront` |  |

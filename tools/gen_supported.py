@@ -13,11 +13,40 @@ import numpy as np
 
 from parakeet import lib, prims
 
+# Builtins registered solely to emit a helpful UnsupportedError message.
+_UNSUPPORTED_STUBS = frozenset({"print"})
 
-def names_in(module, prefix: str) -> list[str]:
+_PARAKEET_OPERATORS = (
+  "allpairs",
+  "batched_wavefront",
+  "each",
+  "filter",
+  "filter_pairs",
+  "filter_reduce",
+  "fixed_list",
+  "flatmap",
+  "fold",
+  "imap",
+  "ireduce",
+  "map",
+  "outer_map",
+  "parfor",
+  "pmap1",
+  "pmap2",
+  "pmap2_trim",
+  "reduce",
+  "scan",
+  "scatter_add",
+  "soft_align",
+  "topk",
+  "wavefront",
+)
+
+
+def names_in(module, prefix: str, *, exclude: frozenset[str] = frozenset()) -> list[str]:
   out = set()
   for name in dir(module):
-    if name.startswith("_"):
+    if name.startswith("_") or name in exclude:
       continue
     obj = getattr(module, name)
     try:
@@ -44,13 +73,12 @@ def main() -> None:
   sections = [
     "# Supported functions",
     "",
-    "This page is generated from Parakeet's library registry by `tools/gen_supported.py`, so it always",
-    "matches the installed version.  Anything not listed here raises an `UnsupportedError` that names the",
-    "function (and suggests similarly named supported ones).",
+    "Generated from Parakeet's library registry by `tools/gen_supported.py`. Anything not listed here",
+    "raises an `UnsupportedError` naming the function (and suggesting similarly named supported ones).",
     "",
     "## NumPy element-wise functions (ufuncs)",
     "",
-    "All follow NumPy's broadcasting and type promotion rules exactly.",
+    "All follow NumPy 2 broadcasting and type promotion rules.",
     "",
     table(ufuncs),
     "",
@@ -68,7 +96,7 @@ def main() -> None:
     "",
     "## Python builtins",
     "",
-    table(names_in(builtins, "") + ["bool", "float", "int"]),
+    table(names_in(builtins, "", exclude=_UNSUPPORTED_STUBS) + ["bool", "float", "int"]),
     "",
     "## `math`",
     "",
@@ -76,12 +104,7 @@ def main() -> None:
     "",
     "## Parakeet operators",
     "",
-    table(
-      sorted(
-        f"parakeet.{n}"
-        for n in ("map each allpairs outer_map reduce scan imap ireduce parfor filter pmap1 pmap2 pmap2_trim".split())
-      )
-    ),
+    table(sorted(f"parakeet.{n}" for n in _PARAKEET_OPERATORS)),
     "",
   ]
   out = Path(__file__).resolve().parent.parent / "docs" / "supported.md"

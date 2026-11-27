@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 272" width="680" height="272" role="img" aria-label="Forward-mode JVP vs reverse-mode VJP and algebraic rematerialization">
+<defs>
+  <marker id="arr" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+    <path d="M 1 1.5 L 9 5 L 1 8.5 z" fill="#64748b"/>
+  </marker>
+  <marker id="arr-green" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+    <path d="M 1 1.5 L 9 5 L 1 8.5 z" fill="#245744"/>
+  </marker>
+  <marker id="arr-blue" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+    <path d="M 1 1.5 L 9 5 L 1 8.5 z" fill="#176083"/>
+  </marker>
+  <marker id="arr-red" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+    <path d="M 1 1.5 L 9 5 L 1 8.5 z" fill="#dc2626"/>
+  </marker>
+  <pattern id="hatch" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+    <line x1="0" y1="0" x2="0" y2="7" stroke="#cbd5e1" stroke-width="1.5"/>
+  </pattern>
+</defs>
+<rect x="0.5" y="0.5" width="679" height="271" rx="10" fill="#ffffff" stroke="#cbd5e1"/>
+<text x="20" y="28" font-family="'Source Sans 3', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15.5" font-weight="700" fill="#0f172a">Automatic Differentiation: Forward, Reverse, and Rematerialization</text>
+<text x="20" y="46" font-family="'Source Sans 3', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#475569">Choose mode by input/output shape; Law 2 avoids saving O(T²) or O(M·V) tapes.</text>
+<rect x="20.0" y="62.0" width="326.0" height="194.0" rx="7" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.2"/>
+<text x="34.0" y="83.0" text-anchor="start" font-family="'Source Sans 3', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.8" font-weight="700" fill="#176083">Forward Mode (jvp / jacfwd)</text>
+<text x="34.0" y="98.0" text-anchor="start" font-family="'Source Sans 3', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10.2" font-weight="500" fill="#475569">Best when outputs m &gt;&gt; inputs n · O(1) memory</text>
+<rect x="34.0" y="108.0" width="76.0" height="26.0" rx="13.0" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.0"/>
+<text x="72.0" y="124.4" text-anchor="middle" font-family="'IBM Plex Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="600" fill="#176083">(x, v)</text>
+<line x1="110.0" y1="121.0" x2="134.0" y2="121.0" stroke="#176083" stroke-width="1.6" marker-end="url(#arr-blue)"/>
+<rect x="136.0" y="108.0" width="72.0" height="26.0" rx="13.0" fill="#ffffff" stroke="#93c5fd" stroke-width="1.0"/>
+<text x="172.0" y="124.4" text-anchor="middle" font-family="'IBM Plex Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="600" fill="#0f172a">f  +  df</text>
+<line x1="208.0" y1="121.0" x2="232.0" y2="121.0" stroke="#176083" stroke-width="1.6" marker-end="url(#arr-blue)"/>
+<rect x="234.0" y="108.0" width="96.0" height="26.0" rx="13.0" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.0"/>
+<text x="282.0" y="124.4" text-anchor="middle" font-family="'IBM Plex Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="600" fill="#176083">(y, J · v)</text>
+<line x1="34" y1="150" x2="332" y2="150" stroke="#cbd5e1" stroke-width="1"/>
+<text x="34.0" y="171.0" text-anchor="start" font-family="'Source Sans 3', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.8" font-weight="700" fill="#245744">Reverse Mode (grad / vjp / jacrev)</text>
+<text x="34.0" y="186.0" text-anchor="start" font-family="'Source Sans 3', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10.2" font-weight="500" fill="#475569">Best when inputs n &gt;&gt; outputs m (e.g. scalar loss)</text>
+<rect x="34.0" y="198.0" width="76.0" height="24.0" rx="12.0" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.0"/>
+<text x="72.0" y="213.4" text-anchor="middle" font-family="'IBM Plex Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="600" fill="#0f172a">x</text>
+<line x1="110.0" y1="210.0" x2="134.0" y2="210.0" stroke="#64748b" stroke-width="1.4" marker-end="url(#arr)"/>
+<rect x="136.0" y="198.0" width="72.0" height="24.0" rx="12.0" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.0"/>
+<text x="172.0" y="213.3" text-anchor="middle" font-family="'IBM Plex Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9.6" font-weight="600" fill="#0f172a">forward f</text>
+<line x1="208.0" y1="210.0" x2="232.0" y2="210.0" stroke="#64748b" stroke-width="1.4" marker-end="url(#arr)"/>
+<rect x="234.0" y="198.0" width="96.0" height="24.0" rx="12.0" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.0"/>
+<text x="282.0" y="213.3" text-anchor="middle" font-family="'IBM Plex Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9.6" font-weight="600" fill="#0f172a">y  (+ stats)</text>
+<rect x="34.0" y="228.0" width="76.0" height="22.0" rx="11.0" fill="#edf4ef" stroke="#86c5a8" stroke-width="1.0"/>
+<text x="72.0" y="242.3" text-anchor="middle" font-family="'IBM Plex Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9.8" font-weight="600" fill="#245744">uᵀ · J</text>
+<line x1="134.0" y1="239.0" x2="112.0" y2="239.0" stroke="#245744" stroke-width="1.5" marker-end="url(#arr-green)"/>
+<rect x="136.0" y="228.0" width="72.0" height="22.0" rx="11.0" fill="#edf4ef" stroke="#86c5a8" stroke-width="1.0"/>
+<text x="172.0" y="242.3" text-anchor="middle" font-family="'IBM Plex Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9.6" font-weight="600" fill="#245744">pullback</text>
+<line x1="232.0" y1="239.0" x2="210.0" y2="239.0" stroke="#245744" stroke-width="1.5" marker-end="url(#arr-green)"/>
+<rect x="234.0" y="228.0" width="96.0" height="22.0" rx="11.0" fill="#edf4ef" stroke="#86c5a8" stroke-width="1.0"/>
+<text x="282.0" y="242.3" text-anchor="middle" font-family="'IBM Plex Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9.6" font-weight="600" fill="#245744">seed u</text>
+<rect x="360.0" y="62.0" width="300.0" height="194.0" rx="7" fill="#edf4ef" stroke="#86c5a8" stroke-width="1.2"/>
+<text x="376.0" y="83.0" text-anchor="start" font-family="'Source Sans 3', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.8" font-weight="700" fill="#245744">Law 2: Algebraic Rematerialization</text>
+<text x="376.0" y="98.0" text-anchor="start" font-family="'Source Sans 3', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10.2" font-weight="500" fill="#475569">Recompute score tiles on-chip instead of saving them.</text>
+<rect x="376.0" y="110.0" width="268.0" height="56.0" rx="6" fill="#fef2f2" stroke="#fca5a5" stroke-width="1.2"/>
+<text x="388.0" y="128.0" text-anchor="start" font-family="'Source Sans 3', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10.8" font-weight="700" fill="#991b1b">Naive Reverse Tape</text>
+<text x="388.0" y="145.0" text-anchor="start" font-family="'Source Sans 3', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10" font-weight="500" fill="#475569">Saves S (T×T) &amp; P (T×T)  or  logits (M×V)</text>
+<text x="388.0" y="159.0" text-anchor="start" font-family="'Source Sans 3', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="9.8" font-weight="600" fill="#991b1b">O(T²) / O(M·V) memory blow-up</text>
+<line x1="510.0" y1="166.0" x2="510.0" y2="182.0" stroke="#245744" stroke-width="1.8" marker-end="url(#arr-green)"/>
+<rect x="376.0" y="184.0" width="268.0" height="60.0" rx="6" fill="#ffffff" stroke="#0d9488" stroke-width="1.4"/>
+<text x="388.0" y="202.0" text-anchor="start" font-family="'Source Sans 3', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10.8" font-weight="700" fill="#245744">Parakeet Algebraic VJP / HVP</text>
+<text x="388.0" y="219.0" text-anchor="start" font-family="'IBM Plex Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="500" fill="#0f172a">Saves only (Q, K, V, O, lse)  —  O(T·D)</text>
+<text x="388.0" y="235.0" text-anchor="start" font-family="'Source Sans 3', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10" font-weight="500" fill="#245744">Recomputes P = exp(S − lse) tile-by-tile</text>
+</svg>

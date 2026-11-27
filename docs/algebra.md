@@ -1,241 +1,231 @@
 # Algebraic laws
 
-Ordinary array fusion removes simple element-wise temporaries. Modern numerical
-and ML kernels need more: eliminating quadratic `O(N²)` or `O(M · V)` buffers,
-parallelizing long serial recurrences, and differentiating without saving giant
-intermediates.
+Simple loop fusion eliminates element-wise temporaries, but harder bottlenecks
+remain whenever a program normalizes across a whole row (`O(N²)` attention or
+`O(M · V)` cross-entropy), chains matrix contractions, runs a long serial
+recurrence (`O(T)` depth), or saves a giant tape for reverse-mode AD.
 
-Rather than adding hardcoded "layer" ops, Parakeet encodes these optimizations
-as **six general algebraic laws** over its
-[seven index-space primitives](primitives.md). Because the passes match
-operator algebra rather than model names, the same rules fire on Gaussian
-kernel regression, shortest-path products, exact 1-NN, GBDT histograms, and IIR
-filters as on attention, cross-entropy, and state-space models.
+Instead of hardcoding model-specific "fused layers", Parakeet encodes these
+optimizations as **six general algebraic laws** over its
+[index-space primitives](primitives.md). Because the passes match operator
+algebra rather than neural-network layer names, the exact same passes optimize
+Gaussian kernel regression, exact 1-NN, GBDT histograms, and IIR filters
+alongside attention, cross-entropy, and state-space models.
 
-## Semantic contract: real-algebraic rewrites vs. exact order
+## Semantic contract: real algebra vs. exact order
 
-Parallel reductions, monoidal tiling, contraction reassociation, chunkwise
-scans, and privatized scatter-add assume **real-arithmetic associativity and
-commutativity**: floating-point rounding may differ in the last ULP relative to
-a left-to-right loop, just as in NumPy's pairwise summation or cuBLAS.
-
-Where order is observable (equal-distance ties and first-NaN behavior in
-`argmin`/`argmax`, non-commutative `par.fold` merges, or arbitrary sequential
-folds), Parakeet preserves **exact left-to-right merge order** and refuses to
-parallelize non-associative combiners.
+* **Associative / commutative rewrites** (parallel reductions, monoidal tiling,
+  contraction reassociation, chunkwise scans, privatized scatter-add) assume
+  real-arithmetic associativity: floating-point rounding may differ in the last
+  ULP relative to a left-to-right loop, just like NumPy's pairwise summation or
+  cuBLAS.
+* **Order-sensitive operations** (first-index ties and NaNs in
+  `argmin`/`argmax`, non-commutative `par.fold` merges, arbitrary user folds)
+  preserve **exact left-to-right merge order**.
 
 ## The six laws at a glance
 
-| Law | Algebraic idea | Middle-end pass | Example workloads |
+| Law | Core idea | Compiler pass | Workloads |
 |---|---|---|---|
-| **Law 1**: Rescaled semiring monoids | Associative rescaling fold `(m₁, l₁, o₁) ⊕ (m₂, l₂, o₂)` | `monoidal tiling` | Softmax attention, Split-K decoding, linear cross-entropy, Gaussian (RBF) kernel regression, 1-pass `logsumexp` |
-| **Law 2**: Algebraic AD rematerialization | Sufficient-statistic VJPs that recompute score tiles on the fly | `algebraic_vjp` (in `autodiff`) | Attention backward (no `N × N` saved), cross-entropy backward (no `M × V` saved), 1-pass LayerNorm / RMSNorm VJP |
-| **Law 3**: Bilinear contraction reassociation & shared-KV tiling | `(U @ Vᵀ) @ Wᵀ = U @ (Vᵀ @ Wᵀ)` + folding shared-KV query groups into tiles | `contraction reassociation` | Multi-head latent attention absorption, grouped-query attention, low-rank `(X @ A) @ B` chains |
-| **Law 4**: Chunkwise state-space duality | Affine composition `(a₂, b₂) ∘ (a₁, b₁) = (a₂ a₁, a₂ b₁ + b₂)` and block duality | `chunkwise scan` | Parallel IIR / EMA / Kalman filters, Mamba-2 and gated linear attention recurrences |
-| **Law 5**: Affine tile-interval pruning | Interval bounds `[i₀, i₀+Bₘ-1] × [j₀, j₀+Bₙ-1]` over index predicates | `TileInterval` in `analysis` | Causal and sliding-window masks, banded matrices, spatial cutoffs, runtime boolean tile skipping |
-| **Law 6**: Privatized scatter & multi-state carries | Commutative/associative scatter-add and ordered multi-field folds | `IndexScatter`, `Fold.carries`, `pairwise fold tiling` | GBDT histogram splits, exact 1-NN search, `argmin`/`argmax` with values, sparse updates |
+| **1. Rescaled semiring monoids** | Associative rescaling state `(m, l, o)` | `monoidal tiling` | Softmax attention, Split-K decode, linear cross-entropy, RBF regression, 1-pass `logsumexp` |
+| **2. Algebraic AD rematerialization** | Recompute score tiles from sufficient statistics | `algebraic_vjp` | Attention backward, cross-entropy backward, 1-pass LayerNorm / RMSNorm VJP |
+| **3. Bilinear contraction reassociation** | Reorder `(U @ Vᵀ) @ Wᵀ` + share KV head tiles | `contraction reassociation` | Multi-head latent attention (MLA), grouped-query attention (GQA), low-rank chains |
+| **4. Chunkwise state-space duality** | Block-parallel affine / bilinear composition | `chunkwise scan` | Parallel IIR / EMA / Kalman filters, Mamba-2 & gated linear attention |
+| **5. Affine tile-interval pruning** | Propagate `[i₀, i₀+Bₘ-1] × [j₀, j₀+Bₙ-1]` bounds | `TileInterval` | Causal & sliding-window masks, banded matrices, spatial cutoffs |
+| **6. Privatized scatter & ordered carries** | Thread-private histograms & tiled ordered folds | `IndexScatter`, `pairwise fold tiling` | GBDT tree splits, exact 1-NN, multi-channel BAM pileup, `par.fold` |
 
 ---
 
 ## Law 1: Rescaled semiring monoids
 
-Any reduction whose output depends on a global normalizing statistic (a row
-maximum `m`, a sum of exponentials `l`, or a norm) can fuse with a downstream
-weighted sum in a single tiled pass whenever its running state forms an
-associative monoid `(S, ⊕, e)`.
+**The problem.** Softmax attention, linear cross-entropy, and Gaussian kernel
+regression all normalize by a row-wide `max` and `sum(exp(...))` before taking a
+weighted sum—naively requiring `O(N · M)` or `O(M · V)` buffers.
 
-For softmax-weighted contractions (attention and Gaussian kernel regression),
-the state carries the running maximum `m`, normalizing sum `l`, and
-unnormalized output vector `o`:
+**The law.** Maintaining the running maximum `m`, normalizing sum `l`, and
+unnormalized output `o` forms an associative monoid `(S, ⊕, e)`:
 
-```text
-m = max(m₁, m₂)
-(m₁, l₁, o₁) ⊕ (m₂, l₂, o₂) = (
-    m,
-    l₁ · exp(m₁ - m) + l₂ · exp(m₂ - m),
-    o₁ · exp(m₁ - m) + o₂ · exp(m₂ - m),
+<div class="pk-eq">
+m = max(m₁, m₂)<br>
+(m₁, l₁, o₁) ⊕ (m₂, l₂, o₂) = (<br>
+&nbsp;&nbsp;m,<br>
+&nbsp;&nbsp;l₁ · exp(m₁ − m) + l₂ · exp(m₂ − m),<br>
+&nbsp;&nbsp;o₁ · exp(m₁ − m) + o₂ · exp(m₂ − m)<br>
 )
-```
+</div>
 
-Because `⊕` is associative, the same monoid covers four workloads without
-allocating an `N × M` or `M × V` matrix:
+Because `⊕` is associative, tiles can be reduced in cache or GPU shared memory
+and merged in any grouping without materializing the full score matrix:
 
-1. **Tiled softmax attention (`flash_monoid`):** streams tiles of `K` and `V`
-   through CPU cache or GPU shared memory against a tile of `Q`, never
-   materializing the score matrix `S` or probability matrix `P`.
-2. **Split-K decoding (`split_k=True`):** when the query grid is too small to
-   fill a GPU (for instance, autoregressive decode with small `T_q` and long
-   `T_kv`), Parakeet splits `T_kv` across threadblocks computing partial
-   `(mₚ, lₚ, oₚ)` summaries and merges them with the same `⊕`.
-3. **Tiled linear cross-entropy (`monoid_lse`):** tiles `H @ W` over the
-   vocabulary dimension `V` using the scalar `(m, l)` monoid while gathering
-   the target score on the fly, avoiding an `M × V` logit matrix.
-4. **Gaussian / RBF kernel regression (`score_op="sqdist"`):** recognizes
-   `-γ · ||xᵢ - yⱼ||²` feeding a normalized exponential sum and compiles
-   Nadaraya-Watson smoothing into one `O(N + M)`-memory kernel.
+![Causal attention compiled from naive O(T^2) buffers to tiled monoid with block skipping](assets/diag-attention-tiling.svg)
+
+**Where it fires:**
+
+* **Tiled softmax attention (`flash_monoid`):** streams `K, V` tiles against `Q`
+  with zero `S`/`P` allocation.
+* **Split-K decoding (`split_k=True`):** when query count is tiny (decode) and
+  `T_kv` is long, splits `T_kv` across GPU threadblocks and merges partial
+  `(mₚ, lₚ, oₚ)` summaries with `⊕`.
+* **Tiled linear cross-entropy (`monoid_lse`):** tiles `H @ W` over vocabulary
+  `V` with the scalar `(m, l)` monoid, eliminating the `M × V` logit tensor.
+* **Gaussian / RBF kernel regression (`score_op="sqdist"`):** fuses
+  `-γ · ‖xᵢ − yⱼ‖²` into the same `O(N + M)` streaming kernel.
 
 ---
 
 ## Law 2: Algebraic rematerialization in reverse-mode AD
 
-A naive reverse-mode tape saves every forward intermediate, which would bring
-back `O(N²)` memory for attention and `O(M · V)` memory for linear
-cross-entropy. Parakeet's tape optimizer (`parakeet/transforms/algebraic_vjp.py`)
-runs at the operator level before lowering and substitutes sufficient-statistic
-adjoints where an algebraic identity exists:
+**The problem.** A naive reverse-mode tape saves every forward intermediate,
+bringing back `O(T²)` memory for attention and `O(M · V)` memory for linear
+cross-entropy.
 
-* **Attention backward (`flash_monoid_bwd`):** saves only `(Q, K, V, O, lse)`: no `N × N` tensor is kept. A cheap `O(N · D)` pass computes
-  `Dᵢ = sum_d dO[i, d] · O[i, d]`, and the tiled backward kernel recomputes
-  each score tile `P = exp(S - lse)` and `dS = P · (dO @ Vᵀ - D)` in on-chip
-  memory while accumulating `dK` and `dV`.
-* **Linear cross-entropy backward (`cce_bwd`):** saves only `(H, W, targets, lse)`
-  and recomputes tile probabilities `p[i, v] = exp(hᵢ · wᵥ - lseᵢ)` while
-  accumulating `dH` and `dW`.
-* **LayerNorm and RMSNorm VJP:** collapses multi-pass mean/variance backward
-  graphs into a single pass over the saved normalized output and inverse scale.
-* **Standalone softmax VJP:** drops the `max` adjoint completely using
-  `dS = P · (dP - sum(P · dP))`.
+**The law.** Before loop lowering, `parakeet/transforms/algebraic_vjp.py`
+substitutes sufficient-statistic adjoints that save only compact `O(T · D)`
+tensors and recompute score tiles on-chip during backpropagation:
+
+![Algebraic rematerialization saves only (Q, K, V, O, lse) and recomputes score tiles on-chip](assets/diag-autodiff.svg)
+
+**Where it fires:**
+
+* **Attention backward (`flash_monoid_bwd`):** saves `(Q, K, V, O, lse)`,
+  computes `Dᵢ = ∑_d dO[i, d] · O[i, d]`, and recomputes `P = exp(S − lse)` and
+  `dS = P · (dO @ Vᵀ − D)` tile-by-tile (also composes with forward-over-reverse
+  `par.hvp`).
+* **Linear cross-entropy backward (`cce_bwd`):** saves `(H, W, targets, lse)`
+  and recomputes `p[i, v] = exp(hᵢ · wᵥ − lseᵢ)` on-chip.
+* **LayerNorm / RMSNorm & softmax VJPs:** collapses multi-pass backward graphs
+  into one pass (`dS = P · (dP − ∑ P · dP)`, dropping the `max` adjoint).
 
 ---
 
 ## Law 3: Bilinear contraction reassociation & shared-KV tiling
 
-For a chain of two bilinear contractions sharing a single-use intermediate `T`:
+**The problem.** Chaining two bilinear contractions (`(X @ A) @ B`, or latent
+attention `K = C_kv @ W_uk`, `V = C_kv @ W_uv`, `O = softmax(Q @ Kᵀ) @ V`) can
+cost orders of magnitude more FLOPs and memory in the wrong parenthesization.
 
-```text
-T[u, k] = sum_r U[u, r] · V[k, r]
-Y[p, u] = sum_k W[p, k] · T[u, k]
+**The law.** For a single-use intermediate `T = U @ Vᵀ` feeding `Y = W @ T`:
+
+<div class="pk-eq">
+(U · Vᵀ) · Wᵀ  =  U · (Vᵀ · Wᵀ) &nbsp;&nbsp;— pick min( U·K·(R + P),  P·R·(K + U) ) FLOPs
+</div>
+
+<div class="pk-xform" markdown>
+<div class="pk-xform-col pk-xform-col--before" markdown>
+<div class="pk-xform-title">Expanded (prefill optimal) <span class="pk-xform-badge">materializes K, V</span></div>
+
+```python
+K = C_kv @ W_uk
+V = C_kv @ W_uv
+O = softmax(Q @ K.T) @ V
 ```
+</div>
+<div class="pk-xform-col pk-xform-col--after" markdown>
+<div class="pk-xform-title">Absorbed (decode optimal) <span class="pk-xform-badge">stays in latent C_kv</span></div>
 
-reassociating the summation order computes the same result:
-
-```text
-M[p, r] = sum_k W[p, k] · V[k, r]
-Y[p, u] = sum_r M[p, r] · U[u, r]
+```python
+Q_abs = Q @ W_uk.T  # absorb W_uk into Q
+O = (softmax(Q_abs @ C_kv.T) @ C_kv) @ W_uv
 ```
+</div>
+</div>
 
-`parakeet/transforms/reassociate.py` compares the multiply-add counts
-`U·K·(R + P)` against `P·R·(K + U)` and chooses the cheaper order:
+`parakeet/transforms/reassociate.py` emits a runtime shape-guarded branch so
+short-query decode runs tiled Law 1 attention directly over the compressed
+latent `C_kv`, while long-query prefill automatically takes the lower-FLOP
+expanded branch.
 
-* **Latent attention absorption:** given `K = C_kv @ W_uk`, `V = C_kv @ W_uv`,
-  and `O = softmax(Q @ Kᵀ) @ V`, Law 3 emits a runtime shape-guarded branch
-  that absorbs `W_uk` into `Q` (`Q_abs = Q @ W_ukᵀ`) and moves `W_uv` after
-  attention (`O = (P @ C_kv) @ W_uv`). Because monoidal tiling (Law 1) runs
-  right after Law 3 on both branches, short-query decode runs tiled attention
-  directly over the compressed latent `C_kv` without materializing expanded
-  `K` or `V`, while long-query prefill automatically takes the lower-FLOP
-  expanded branch.
-* **Low-rank matrix chains:** `(X @ A) @ B` and `X @ (A @ B)` pick the
-  lower-FLOP association at runtime, and remain differentiable under `grad`.
-* **Shared-KV head-group tiling:** when a batch axis `g` of `Q` (size `G`) does
-  not vary in `K` or `V` (grouped-query attention), Parakeet folds `g` into the
-  query row index (`i_eff = g * T_q + i`) so all `G` query heads share one
-  shared-memory load of `K` and `V`.
+**Shared-KV head-group tiling (GQA):** when a head-group axis `G` of `Q`
+broadcasts against a single KV head, Parakeet folds `G` into the query row
+(`i_eff = g * T_q + i`) so all `G` query heads share one SRAM load of `K` and
+`V`.
 
 ---
 
 ## Law 4: Chunkwise state-space duality
 
-A sequential loop of length `T` has `O(T)` serial depth and cannot use multiple
-cores or GPU threadblocks directly. `parakeet/transforms/tile_scan.py`
-recognizes two associative recurrence patterns inside plain Python
-`for t in range(T):` loops:
+**The problem.** Plain Python recurrences (`for t in range(T): s = a[t] * s + b[t]`)
+have `O(T)` serial depth and leave multi-core CPUs and GPUs idle.
 
-1. **Affine recurrences (`s[t] = a[t] * s[t - 1] + b[t]`):** covers exponential
-   moving averages, IIR filters, and scalar Kalman filters. The loop is
-   rewritten into a 3-stage chunkwise scan (chunk size `C = 64`) using affine
-   composition `(a₂, b₂) ∘ (a₁, b₁) = (a₂ a₁, a₂ b₁ + b₂)`, reducing serial
-   depth by 64× with no `O(T)` temporary arrays.
-2. **Bilinear matrix-state recurrences:**
-   ```python
-   for t in range(T):
-     S = a[t] * S + k[t][:, None] * v[t][None, :]
-     out[t] = q[t] @ S
-   ```
-   Rewritten into a 4-step division-free chunkwise scan (`C = 64`):
-   - **Step 0:** parallel cumulative decay products inside each chunk (exact
-     even when `a[t] == 0` or `a[t] < 0`, and when `T` is not a multiple of `C`).
-   - **Step 1:** intra-chunk quadratic attention-form products
-     `Y_intra[c] = ((Q[c] @ K[c]ᵀ) * L[c]) @ V[c]`.
-   - **Step 2:** chunk state summary `B[c] = K_scaled[c]ᵀ @ V[c]`.
-   - **Step 3:** 64× shorter inter-chunk recurrence
-     `S_in[c + 1] = A[c] * S_in[c] + B[c]`.
-   - **Step 4:** off-diagonal readout `Y_off[c] = Q[c] @ S_in[c]` combined with
-     `Y_intra[c]`.
+**The law.** Affine maps compose associatively,
+`(a₂, b₂) ∘ (a₁, b₁) = (a₂ · a₁, a₂ · b₁ + b₂)`.
+`parakeet/transforms/tile_scan.py` partitions time into chunks of `C = 64` and
+rewrites both scalar affine loops (EMA, IIR, Kalman) and bilinear matrix-state
+loops (Mamba-2 / gated linear attention) into a division-free parallel scan:
 
-   Because `chunkwise scan` runs before `tiling`, the matrix products in Steps 1,
-   2, and 4 automatically flow into CPU register tiling, Metal
-   `simdgroup_matrix`, and CUDA `nvcuda::wmma` Tensor Cores.
+![Law 4 rewrites an O(T) serial recurrence into 4 parallel chunked steps](assets/diag-chunkwise-scan.svg)
+
+<div class="pk-xform" markdown>
+<div class="pk-xform-col pk-xform-col--before" markdown>
+<div class="pk-xform-title">What you write <span class="pk-xform-badge">O(T) serial depth</span></div>
+
+```python
+for t in range(T):
+  S = a[t] * S + k[t][:, None] * v[t][None, :]
+  out[t] = q[t] @ S
+```
+</div>
+<div class="pk-xform-col pk-xform-col--after" markdown>
+<div class="pk-xform-title">Compiled schedule (C = 64) <span class="pk-xform-badge">64× shorter scan + GEMMs</span></div>
+
+```python
+L, A = chunk_decay_products(a, C=64)  # parallel, zero-safe
+Y_intra = ((Q_c @ K_c.T) * L) @ V_c  # parallel over chunks
+B_c = K_scaled.T @ V_c  # parallel chunk summaries
+S_in = scan_affine(A, B_c)  # 64x shorter recurrence
+out = Y_intra + (Q_c @ S_in)  # parallel readout
+```
+</div>
+</div>
+
+Because `chunkwise scan` runs before `tiling`, the matrix products in Steps 1,
+2, and 4 flow directly into CPU register tiling, Metal `simdgroup_matrix`, and
+CUDA TF32 WMMA Tensor Cores.
 
 ---
 
 ## Law 5: Affine tile-interval mask pruning
 
-In `parakeet/transforms/analysis.py`, `TileInterval` propagates coordinate
-bounds `[i₀, i₀ + B_M - 1]` and `[j₀, j₀ + B_N - 1]` through affine index
-expressions and boolean connectives:
+**The problem.** Causal masks (`j <= i`), sliding windows (`i - j <= W`), and
+banded matrices evaluate millions of entries that are immediately discarded.
 
-* **Causal masks (`j <= i`):** proves tiles with `j₀ > i₀ + B_M - 1` are
-  entirely false (skipped before loading `K` or `V`) and tiles with
-  `j₀ + B_N - 1 <= i₀` are entirely true (run through a branchless inner loop).
-* **Sliding windows (`(j <= i) & (i - j <= W)`):** skips both future tiles and
-  tiles outside the window, reducing `O(N²)` work to `O(N · W)` from ordinary
-  mask code.
-* **Runtime boolean masks:** when a mask comes from a runtime array, GPU
-  kernels cooperatively check whether any entry in the tile is true and skip
-  empty tiles before loading values.
+**The law.** `TileInterval` (`parakeet/transforms/analysis.py`) propagates
+coordinate intervals `[i₀, i₀ + Bₘ − 1] × [j₀, j₀ + Bₙ − 1]` through affine
+index predicates to classify every tile statically:
 
----
+| Tile condition | Example (causal `j <= i`) | Action emitted |
+|---|---|---|
+| Always false | `j₀ > i₀ + Bₘ − 1` | **Skip tile** before loading `K` or `V` |
+| Always true | `j₀ + Bₙ − 1 ≤ i₀` | **Branchless inner loop** (mask check removed) |
+| Boundary / mixed | `i₀ − Bₙ < j₀ ≤ i₀ + Bₘ − 1` | Evaluate per-element mask |
 
-## Law 6: Privatized scatter & multi-state carries
-
-Two patterns show up constantly outside dense linear algebra: accumulating into
-shared bins (`np.bincount`, `parakeet.scatter_add`) and folding structured
-state (`argmin`, Welford variance, custom `parakeet.fold`).
-
-* **Keyed histogram fusion:** sibling `IndexScatter` statements sharing the
-  same index expression (such as gradient and Hessian histograms in a decision
-  tree split search) merge into one traversal over the data, lowered with
-  thread-privatized bins on CPU and parallel atomics/privatization on GPU.
-* **Ordered multi-state carries and pairwise tile folds:** `Fold.carries`
-  tracks multiple scalar accumulators in one reduction pass while preserving
-  chunk order (so leftmost ties in `argmin` or non-commutative compositions in
-  `parakeet.fold` stay exact). `pairwise fold tiling` fuses a pairwise score
-  producer directly into an ordered fold over bounded tiles on both CPU and
-  GPU; eliminating the full `N × M` distance matrix in both broadcasting NumPy
-  and nested-map 1-NN.
+Sliding-window masks (`(j <= i) & (i - j <= W)`) automatically drop from
+`O(N²)` to `O(N · W)` work. For runtime boolean mask arrays, GPU threadblocks
+cooperatively check whether any entry in the tile is true and skip empty tiles
+before loading values.
 
 ---
 
-## Inspecting rewrites with `parakeet.show_rewrite`
+## Law 6: Privatized scatter & ordered multi-state carries
 
-Call [`parakeet.show_rewrite`](api.md) on any function to see which laws
-fired, which tiled plans were selected, and the operator IR before and after
-the middle-end passes:
+Two patterns dominate outside dense linear algebra: accumulating into shared
+bins (`np.bincount`, `par.scatter_add`) and folding structured state (`argmin`,
+Welford variance, `par.fold`).
 
-```python
-import numpy as np
-import parakeet as par
+* **Keyed histogram fusion:** sibling `IndexScatter` statements sharing an index
+  array (e.g. GBDT gradient/Hessian histograms or 6-channel BAM pileups) merge
+  into one traversal, lowered with thread-private bins on CPU and parallel
+  atomics on GPU.
+* **Ordered pairwise tile folds:** `Fold.carries` tracks multiple scalar fields
+  in one pass while preserving chunk order. `pairwise fold tiling` fuses a
+  pairwise score producer directly into an ordered fold over L1 / shared-memory
+  tiles, eliminating `O(Q · R)` distance matrices in both broadcasting NumPy and
+  nested-map 1-NN:
 
+![Exact 1-NN tiled pairwise fold preserves first-index tie semantics in 8 KiB L1 / 16 KiB SRAM](assets/diag-pairwise-1nn.svg)
 
-@par.jit
-def causal_attention(q, k, v):
-  causal = par.imap(lambda i, j: i >= j, (q.shape[0], k.shape[0]))
-  s = np.where(causal, (q @ k.T) * np.float32(0.125), np.float32(-1e9))
-  e = np.exp(s - np.max(s, axis=-1, keepdims=True))
-  return (e / np.sum(e, axis=-1, keepdims=True)) @ v
+---
 
-
-q = np.zeros((128, 64), np.float32)
-print(par.show_rewrite(causal_attention, q, q, q).summary())
-```
-
-```text
-Parakeet Algebraic Rewrite Report for `causal_attention`
-  Laws triggered : Law 1: Rescaled Semiring Monoid Tile Fusion, Law 5: Affine Tile-Interval Mask Pruning
-  Monoidal plans : flash_monoid
-  Operators      : IndexMap 5 -> 1 | IndexTile 1 | IndexScatter 0 -> 0 | Carry folds 0
-```
-
-See the [Kernel gallery](gallery.md) for runnable examples and timings across
-all six laws.
+**Next:** [Rewrite rules catalog](rewrites.md) lists every fusion, tiling, and
+differentiation rule and compares Parakeet 1.x with the 2013–2014 theses. See
+also the [Kernel gallery](gallery.md) for runnable examples across all six laws.

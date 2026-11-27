@@ -1,143 +1,128 @@
 # Backends and GPUs
 
-Every backend runs the same compiled *host program* (C). They differ in how the
-parallel loops inside it are executed.
+Every backend runs the same compiled host C program; backends differ only in
+how parallel loops execute.
 
 | `backend` | Parallel loops run on | Notes |
 |---|---|---|
-| `"auto"` | the best multi-core strategy found | default; same as `"multicore"` |
-| `"c"` | the calling thread | no threads at all; also compiles without parallel loop overhead |
+| `"auto"` | Best available multi-core CPU strategy | Default (same as `"multicore"`) |
+| `"c"` | Calling thread (sequential) | Zero threading overhead |
 | `"threads"` | Parakeet's persistent thread pool | POSIX; fork-safe; no extra runtime library |
 | `"gcd"` | Grand Central Dispatch | macOS |
-| `"openmp"` | the compiler's OpenMP runtime | needs `libgomp`/`libomp` (macOS: `brew install libomp`) |
-| `"metal"` / `"mps"` | the Apple GPU | `pip install "parakeet[metal]"` |
-| `"cuda"` | an NVIDIA GPU | `pip install "parakeet[cuda12]"` (CuPy) |
-| `"python"` | - | runs the original function uncompiled |
+| `"openmp"` | Compiler's OpenMP runtime | Requires `libgomp` / `libomp` (`brew install libomp` on macOS) |
+| `"metal"` / `"mps"` | Apple GPU | `pip install "parakeet[metal]"` |
+| `"cuda"` | NVIDIA GPU | `pip install "parakeet[cuda12]"` (CuPy) |
+| `"gpu"` | Auto-selects `"metal"` on macOS, `"cuda"` elsewhere | Portable GPU shorthand |
+| `"python"` | Uncompiled Python | Runs the original function for debugging |
+
+Check what works on your machine at any time:
 
 ```python
 parakeet.available_backends()
 # {'python': 'ok', 'c': 'ok', 'threads': 'ok', 'gcd': 'ok', 'openmp': 'ok', 'metal': 'ok',
-#  'cuda': 'unavailable: the CUDA backend needs CuPy, which is not installed. Install ...'}
+#  'cuda': 'unavailable: the CUDA backend needs CuPy, which is not installed. ...'}
 ```
 
-A backend that cannot work fails **when you select it**, with a message saying
-what is missing and how to install it; not later with a linker error.
+Unavailable backends fail immediately when selected with install instructions—never
+later with a linker error.
 
-## Multi-core
+## Multi-core CPU
 
-Array expressions, `map`/`allpairs`/`imap`, comprehensions, `parfor` and
-reductions over recognised associative operations are split into chunks that
-run on `parakeet.config.num_threads` threads (default: all cores). Only the
-outermost data-parallel operation is parallelised; anything nested inside it
-runs sequentially within each thread.
-
-Small loops are not worth a thread hand-off: loops with a cheap body run on the
-calling thread unless they have at least `2 * config.parallel_grain` iterations
-(default 8192 per chunk). Loops whose body contains loops of its own are always
-split.
-
-Compiled functions release the GIL and are safe to call from several Python
-threads at once. With `multiprocessing`, prefer the `spawn` start method when
-using `"openmp"` or `"gcd"` (those runtimes do not survive `fork`); the default
-thread pool does.
+* **Outermost parallelism:** `map`, `allpairs`, `imap`, `parfor`, array
+  expressions, comprehensions, and associative reductions split across
+  `config.num_threads` threads (default: all cores). Nested parallel ops run
+  sequentially inside each worker.
+* **Grain threshold:** Cheap loops run on the calling thread unless they have at
+  least `2 * config.parallel_grain` iterations (default `8,192` per chunk).
+  Loops containing inner loops always split.
+* **Threads & processes:** Compiled functions release the GIL and are safe to
+  call concurrently from Python threads. With `multiprocessing`, use `"threads"`
+  (fork-safe) or set start method `"spawn"` when using `"openmp"` or `"gcd"`.
 
 ## Apple GPUs (Metal)
 
 ```python
-@jit(backend="metal")
+@par.jit(backend="metal")
 def blur_energy(img):
   return (img[1:-1, 1:-1] * 4 - img[:-2, 1:-1] - img[2:, 1:-1] - img[1:-1, :-2] - img[1:-1, 2:]) ** 2
 ```
 
-Each eligible parallel loop is also compiled to a Metal compute kernel; the host
-program hands loops of at least `config.device_threshold` iterations (default
-32768) to the GPU and runs smaller ones on the CPU.
+Eligible parallel loops compile to Metal Shading Language (MSL) compute kernels,
+using Apple Silicon's `simdgroup_matrix` FP32 hardware units automatically on
+tiled contractions.
 
-!!! warning "Apple GPUs have no float64"
-    Metal does not support double precision. A loop that touches `float64` data
-    runs on the CPU thread pool instead, and Parakeet emits a `FallbackWarning`
-    saying so. Pass `float32` arrays and `np.float32` scalars to stay on the GPU
-    (a Python `float` argument is a double; `x * 2.0` with a *literal* is fine).
+!!! warning "Apple GPUs have no hardware `float64`"
+    Loops touching `float64` data fall back to the CPU thread pool with a
+    `FallbackWarning`. Pass `float32` arrays and `np.float32` scalars to stay on
+    Metal (Python float literals like `x * 2.0` preserve `float32` via NEP 50).
 
-Other reasons a loop stays on the CPU: it allocates temporary arrays per
-iteration, or it uses a function Metal lacks (`lgamma`, `erfc`). The warning
-always names the reason. Control this with `config.device_fallback`:
-`"warn"` (default), `"silent"`, or `"error"` to refuse instead.
-
-Runtime errors inside kernels (out-of-bounds indices, failed assertions) are
-reported as normal Python exceptions.
+Loops also stay on CPU if they allocate dynamic arrays per iteration or call
+functions Metal lacks (`lgamma`, `erfc`). Control fallback behavior with
+`config.device_fallback`: `"warn"` (default), `"silent"`, or `"error"`. Runtime
+errors inside GPU kernels (`IndexError`, `AssertionError`) still raise normal
+Python exceptions.
 
 ## NVIDIA GPUs (CUDA)
 
 ```python
-@jit(backend="cuda")
+@par.jit(backend="cuda")
 def distances(X, C):
-  return parakeet.allpairs(lambda a, b: np.sum((a - b) ** 2), X, C)
+  return par.allpairs(lambda a, b: np.sum((a - b) ** 2), X, C)
 ```
 
-Kernels are compiled at run time by CuPy's `RawKernel` (NVRTC), so only the
-NVIDIA driver and a CuPy wheel matching your CUDA version are needed. All dtypes
-including `float64` are supported. The same per-loop fallback rules apply.
+Kernels compile at runtime via CuPy's `RawKernel` (NVRTC), so only an NVIDIA
+driver and matching CuPy wheel are required (no standalone `nvcc` install). All
+dtypes including `float64` are supported. Enable TF32 Tensor Cores (`nvcuda::wmma`)
+on `sm_80+` GPUs with `par.config.tensor_cores = True` (or
+`PARAKEET_TENSOR_CORES=1`).
 
-!!! note "Validation status"
-    CI has no NVIDIA hardware, so there the CUDA code generator runs against a
-    *simulator* (`PARAKEET_CUDA_SIMULATE=1`) that compiles the generated kernels
-    as C++ and executes their thread grid on the CPU.
+*(TPUs are not supported: TPUs require XLA whole-program static-shape graphs,
+whereas Parakeet generates scalar C/MSL/CUDA kernels.)*
 
-    The [benchmark suite](release-benchmarks.md) ran on physical NVIDIA L4 and A10 GPUs with strict device dispatch. Earlier checks on an A100 (Google Colab, CuPy with CUDA 13, Python 3.13) and Tesla T4 covered the whole
-    test suite with every parallel loop forced onto the GPU (688 tests,
-    including the tiled products, the gradient tests and arrays kept on the
-    device between loops),
-    the examples and the benchmarks all passed. That check is run on demand,
-    not by CI:
+??? note "CI simulator and GPU test validation"
+    In CI (no NVIDIA hardware), `PARAKEET_CUDA_SIMULATE=1` compiles generated
+    CUDA kernels as host C++ and executes their thread grids on CPU.
+
+    Full physical-GPU runs (L4, A10, A100, T4) validate the test suite,
+    examples, and [benchmarks](release-benchmarks.md) with strict device
+    dispatch. To run tests on your own GPU:
+
+    ```bash
+    PARAKEET_TEST_BACKENDS=cuda PARAKEET_DEVICE_THRESHOLD=1 pytest
+    ```
+
+    Or launch on Colab via `tools/colab_job.py`:
 
     ```bash
     pip install runplz google-colab-cli
-    runplz colab tools/colab_job.py          # T4; PK_COLAB_GPU=A100 for others
+    runplz colab tools/colab_job.py   # T4; set PK_COLAB_GPU=A100 for A100
     ```
 
-    To push your own test suite through a GPU set `PARAKEET_TEST_BACKENDS=cuda`
-    (the backends used by `parakeet.testing.expect` and `check`) and
-    `PARAKEET_DEVICE_THRESHOLD=1` (so small arrays go to the device too).
+## Device residency and data movement
 
-### What about TPUs?
+Within a single `@par.jit` call, **arrays stay on the GPU across consecutive
+kernels**:
 
-No. A TPU only runs programs compiled by XLA, which wants whole-array operations
-with static shapes; Parakeet generates scalar loops in C-like kernel languages.
-Parakeet's CPU backends do work on a Colab TPU host (24 x86 cores), which is all
-`PK_COLAB_TPU=v5e1 runplz colab tools/colab_job.py` checks.
+1. The first GPU kernel touching an input uploads it; outputs allocated by the
+   compiled function are created directly on the device (and on Apple Silicon
+   unified memory, Metal shares buffers with zero copies).
+2. Later GPU kernels reuse resident buffers without copying back to the host.
+3. Temporary device buffers freed before the host touches them are never
+   downloaded.
+4. Only host-side loops, CPU fallbacks, BLAS calls, or returning to Python pull
+   modified buffers back to host memory.
 
-## How data moves
+**Dispatch threshold:** A parallel loop goes to the GPU when it has at least
+`1,024` elements and `elements × estimated_inner_iters >= config.device_threshold`
+(default `32,768`). Tiny loops or low-parallelism outer loops stay on CPU where
+launch overhead would dominate.
 
-Arrays belong to the host, but **within one call they stay on the device**.
+**Reusing inputs across calls:** Wrap arrays with `par.to_device` to avoid
+re-uploading inputs on every call, and call `par.to_host` when Python needs the
+result:
 
-* The first GPU loop that uses an array puts it on the device. A buffer the
-  host allocated and has not written to yet (the output of the loop, usually)
-  is created there directly: nothing is copied. On Metal, arrays allocated by
-  compiled code are shared with the GPU without copying at all.
-* Later loops find the array already there. What a loop wrote stays on the
-  device; it is not copied back after every loop.
-* Host code that reads or writes array memory itself (an explicit Python
-  loop, a loop that fell back to the CPU, a call into the BLAS) first asks for
-  everything the device has changed. So does the end of the call.
-* A temporary that is freed before anyone on the host looked at it is never
-  copied back.
-
-A chain of array operations on a GPU therefore costs one upload of its inputs
-and one download of its result, however many loops it has. Mixing GPU loops
-with scalar host loops over the same arrays works, and gives the same answers,
-but pays for a download and an upload each time the two alternate.
-
-**Which loops go to the device.** A loop is sent when its number of elements
-times the estimated inner iterations per element reaches
-`config.device_threshold`, and it has at least 1024 elements. A loop over
-5,000 rows that each need a 10,000-step inner loop goes; a loop over 20,000
-cheap elements stays on the CPU, where the launch would cost more than the
-work; so does a loop over 32 features however long each one's scan is,
-because a device runs one (slow) thread per element and 32 of them are no
-match for a few CPU cores.
-
-Use `parakeet.to_device(x, backend="cuda")` or `backend="metal"` to reuse
-resident array inputs across calls. Pass the resulting device arrays to a
-compiled function and call `parakeet.to_host(result)` when Python needs the
-data. Operations which run on the host can still require transfers.
+```python
+x_dev = par.to_device(x, backend="cuda")
+y_dev = my_kernel(x_dev)
+y_np = par.to_host(y_dev)
+```

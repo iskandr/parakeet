@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 290" width="680" height="290" role="img" aria-label="Law 4 chunkwise state-space duality turns an O(T) serial recurrence into parallel 4-step chunks">
+<defs>
+  <marker id="arr" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+    <path d="M 1 1.5 L 9 5 L 1 8.5 z" fill="#64748b"/>
+  </marker>
+  <marker id="arr-green" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+    <path d="M 1 1.5 L 9 5 L 1 8.5 z" fill="#245744"/>
+  </marker>
+  <marker id="arr-blue" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+    <path d="M 1 1.5 L 9 5 L 1 8.5 z" fill="#176083"/>
+  </marker>
+  <marker id="arr-red" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+    <path d="M 1 1.5 L 9 5 L 1 8.5 z" fill="#dc2626"/>
+  </marker>
+  <pattern id="hatch" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+    <line x1="0" y1="0" x2="0" y2="7" stroke="#cbd5e1" stroke-width="1.5"/>
+  </pattern>
+</defs>
+<rect x="0.5" y="0.5" width="679" height="289" rx="10" fill="#ffffff" stroke="#cbd5e1"/>
+<text x="20" y="28" font-family="'Source Sans 3', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15.5" font-weight="700" fill="#0f172a">Law 4: Chunkwise State-Space Duality</text>
+<text x="20" y="46" font-family="'Source Sans 3', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#475569">Rewrites a serial O(T) recurrence into 64× shorter inter-chunk scan + parallel matmuls (C = 64).</text>
+<rect x="20.0" y="62.0" width="640.0" height="62.0" rx="7" fill="#fef2f2" stroke="#fca5a5" stroke-width="1.2"/>
+<text x="34.0" y="80.0" text-anchor="start" font-family="'Source Sans 3', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" font-weight="700" fill="#991b1b">Before: Serial for-loop  (O(T) depth · 1 core)</text>
+<text x="644.0" y="80.0" text-anchor="end" font-family="'IBM Plex Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10.2" font-weight="600" fill="#991b1b">S = a[t]·S + k[t] ⊗ v[t]</text>
+<rect x="34.0" y="90.0" width="76.0" height="24.0" rx="12.0" fill="#ffffff" stroke="#fca5a5" stroke-width="1.0"/>
+<text x="72.0" y="105.3" text-anchor="middle" font-family="'IBM Plex Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9.8" font-weight="600" fill="#991b1b">t = 0</text>
+<line x1="110.0" y1="102.0" x2="138.0" y2="102.0" stroke="#dc2626" stroke-width="1.4" marker-end="url(#arr-red)"/>
+<rect x="140.0" y="90.0" width="76.0" height="24.0" rx="12.0" fill="#ffffff" stroke="#fca5a5" stroke-width="1.0"/>
+<text x="178.0" y="105.3" text-anchor="middle" font-family="'IBM Plex Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9.8" font-weight="600" fill="#991b1b">t = 1</text>
+<line x1="216.0" y1="102.0" x2="244.0" y2="102.0" stroke="#dc2626" stroke-width="1.4" marker-end="url(#arr-red)"/>
+<rect x="246.0" y="90.0" width="76.0" height="24.0" rx="12.0" fill="#ffffff" stroke="#fca5a5" stroke-width="1.0"/>
+<text x="284.0" y="105.3" text-anchor="middle" font-family="'IBM Plex Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9.8" font-weight="600" fill="#991b1b">t = 2</text>
+<line x1="322.0" y1="102.0" x2="350.0" y2="102.0" stroke="#dc2626" stroke-width="1.4" marker-end="url(#arr-red)"/>
+<rect x="352.0" y="90.0" width="76.0" height="24.0" rx="12.0" fill="#ffffff" stroke="#fca5a5" stroke-width="1.0"/>
+<text x="390.0" y="105.3" text-anchor="middle" font-family="'IBM Plex Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9.8" font-weight="600" fill="#991b1b">t = 3</text>
+<line x1="428.0" y1="102.0" x2="456.0" y2="102.0" stroke="#dc2626" stroke-width="1.4" marker-end="url(#arr-red)"/>
+<rect x="458.0" y="90.0" width="76.0" height="24.0" rx="12.0" fill="#ffffff" stroke="#fca5a5" stroke-width="1.0"/>
+<text x="496.0" y="105.3" text-anchor="middle" font-family="'IBM Plex Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9.8" font-weight="600" fill="#991b1b">…</text>
+<line x1="534.0" y1="102.0" x2="562.0" y2="102.0" stroke="#dc2626" stroke-width="1.4" marker-end="url(#arr-red)"/>
+<rect x="564.0" y="90.0" width="76.0" height="24.0" rx="12.0" fill="#ffffff" stroke="#fca5a5" stroke-width="1.0"/>
+<text x="602.0" y="105.3" text-anchor="middle" font-family="'IBM Plex Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9.8" font-weight="600" fill="#991b1b">t = T−1</text>
+<line x1="340.0" y1="124.0" x2="340.0" y2="144.0" stroke="#245744" stroke-width="2.0" marker-end="url(#arr-green)"/>
+<rect x="20.0" y="148.0" width="640.0" height="126.0" rx="7" fill="#edf4ef" stroke="#86c5a8" stroke-width="1.2"/>
+<text x="34.0" y="168.0" text-anchor="start" font-family="'Source Sans 3', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" font-weight="700" fill="#245744">After: Parallel 4-Step Chunkwise Scan  (C = 64 · division-free · Tensor Core ready)</text>
+<rect x="34.0" y="180.0" width="142.0" height="80.0" rx="6" fill="#ffffff" stroke="#86c5a8" stroke-width="1.2"/>
+<text x="105.0" y="197.0" text-anchor="middle" font-family="'Source Sans 3', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="9.5" font-weight="700" fill="#245744">Step 1 · Parallel</text>
+<text x="105.0" y="213.0" text-anchor="middle" font-family="'Source Sans 3', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10.8" font-weight="700" fill="#0f172a">Intra-chunk matmul</text>
+<text x="105.0" y="231.0" text-anchor="middle" font-family="'IBM Plex Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9.2" font-weight="500" fill="#475569">Y_intra = (Q@Kᵀ·L)@V</text>
+<text x="105.0" y="249.0" text-anchor="middle" font-family="'Source Sans 3', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="9.5" font-weight="500" fill="#64748b">All T/C chunks at once</text>
+<rect x="190.0" y="180.0" width="142.0" height="80.0" rx="6" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.2"/>
+<text x="261.0" y="197.0" text-anchor="middle" font-family="'Source Sans 3', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="9.5" font-weight="700" fill="#176083">Step 2 · Parallel</text>
+<text x="261.0" y="213.0" text-anchor="middle" font-family="'Source Sans 3', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10.8" font-weight="700" fill="#0f172a">Chunk summaries</text>
+<text x="261.0" y="231.0" text-anchor="middle" font-family="'IBM Plex Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9.2" font-weight="500" fill="#475569">B[c] = K_s[c]ᵀ @ V[c]</text>
+<text x="261.0" y="249.0" text-anchor="middle" font-family="'Source Sans 3', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="9.5" font-weight="500" fill="#64748b">One matmul per chunk</text>
+<rect x="346.0" y="180.0" width="142.0" height="80.0" rx="6" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.2"/>
+<text x="417.0" y="197.0" text-anchor="middle" font-family="'Source Sans 3', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="9.5" font-weight="700" fill="#92400e">Step 3 · 64× Shorter</text>
+<text x="417.0" y="213.0" text-anchor="middle" font-family="'Source Sans 3', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10.8" font-weight="700" fill="#0f172a">Inter-chunk scan</text>
+<text x="417.0" y="231.0" text-anchor="middle" font-family="'IBM Plex Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9.2" font-weight="500" fill="#475569">S[c+1] = A·S[c] + B[c]</text>
+<text x="417.0" y="249.0" text-anchor="middle" font-family="'Source Sans 3', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="9.5" font-weight="500" fill="#64748b">Tiny T/64 recurrence</text>
+<rect x="502.0" y="180.0" width="144.0" height="80.0" rx="6" fill="#ffffff" stroke="#86c5a8" stroke-width="1.2"/>
+<text x="574.0" y="197.0" text-anchor="middle" font-family="'Source Sans 3', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="9.5" font-weight="700" fill="#245744">Step 4 · Parallel</text>
+<text x="574.0" y="213.0" text-anchor="middle" font-family="'Source Sans 3', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10.8" font-weight="700" fill="#0f172a">Off-diag readout</text>
+<text x="574.0" y="231.0" text-anchor="middle" font-family="'IBM Plex Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9.2" font-weight="500" fill="#475569">Y = Y_intra + Q@S[c]</text>
+<text x="574.0" y="249.0" text-anchor="middle" font-family="'Source Sans 3', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="9.5" font-weight="500" fill="#64748b">Flows into WMMA/SIMD</text>
+<line x1="176.0" y1="220.0" x2="188.0" y2="220.0" stroke="#245744" stroke-width="1.4" marker-end="url(#arr-green)"/>
+<line x1="332.0" y1="220.0" x2="344.0" y2="220.0" stroke="#245744" stroke-width="1.4" marker-end="url(#arr-green)"/>
+<line x1="488.0" y1="220.0" x2="500.0" y2="220.0" stroke="#245744" stroke-width="1.4" marker-end="url(#arr-green)"/>
+</svg>
