@@ -61,6 +61,12 @@ typedef CUresult (*fn_cuMemcpyHtoDAsync)(CUdeviceptr dstDevice, const void* srcH
 typedef CUresult (*fn_cuMemcpyDtoH)(void* dstHost, CUdeviceptr srcDevice, size_t ByteCount);
 typedef CUresult (*fn_cuStreamSynchronize)(CUstream hStream);
 typedef CUresult (*fn_cuCtxGetCurrent)(CUcontext* pctx);
+typedef void* CUmodule;
+typedef CUresult (*fn_cuModuleLoadDataEx)(
+    CUmodule* module, const void* image,
+    unsigned int numOptions, int* options, void** optionValues);
+typedef CUresult (*fn_cuModuleGetFunction)(CUfunction* hfunc, CUmodule hmod, const char* name);
+typedef CUresult (*fn_cuModuleUnload)(CUmodule hmod);
 
 typedef int32_t (*pk_py_fallback_fn)(int32_t kernel, void* ctx, int64_t total, int64_t nchunks);
 
@@ -123,6 +129,9 @@ typedef struct {
   fn_cuCtxGetCurrent ctx_get_current;
   CUresult (*ctx_push)(CUcontext);
   CUresult (*ctx_pop)(CUcontext*);
+  fn_cuModuleLoadDataEx mod_load_ex;
+  fn_cuModuleGetFunction mod_get_fn;
+  fn_cuModuleUnload mod_unload;
   pk_py_fallback_fn default_fallback;
   int32_t ready;
 } pk_cu_drv;
@@ -366,6 +375,9 @@ PK_EXPORT int32_t pk_cu_init(void) {
   g_drv.ctx_get_current = (fn_cuCtxGetCurrent)dlsym(lib, "cuCtxGetCurrent");
   g_drv.ctx_push = dlsym(lib, "cuCtxPushCurrent_v2");
   g_drv.ctx_pop = dlsym(lib, "cuCtxPopCurrent_v2");
+  g_drv.mod_load_ex = (fn_cuModuleLoadDataEx)dlsym(lib, "cuModuleLoadDataEx");
+  g_drv.mod_get_fn = (fn_cuModuleGetFunction)dlsym(lib, "cuModuleGetFunction");
+  g_drv.mod_unload = (fn_cuModuleUnload)dlsym(lib, "cuModuleUnload");
   if (!g_drv.ctx_get_current || !g_drv.ctx_push || !g_drv.ctx_pop || !g_drv.launch || !g_drv.mem_alloc || !g_drv.mem_free || !g_drv.memset_async || !g_drv.htod_async || !g_drv.dtoh) {
     pthread_mutex_unlock(&g_init_mu);
     return 2;
@@ -793,6 +805,30 @@ PK_EXPORT int32_t pk_cu_dispatch(int32_t kernel, void* ctx, int64_t total, int64
   rt->launches++;
   return 0;
 }
+
+PK_EXPORT int32_t pk_cu_load_module(const void* image, void** out_mod, char* err_buf, int32_t err_cap) {
+  if (!g_drv.ready || !g_drv.mod_load_ex) return -1;
+  if (err_buf && err_cap > 0) err_buf[0] = '\0';
+  int opts[2] = { 5, 6 }; /* CU_JIT_ERROR_LOG_BUFFER, CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES */
+  void* vals[2] = { (void*)err_buf, (void*)(uintptr_t)(err_cap > 0 ? err_cap : 0) };
+  CUmodule mod = NULL;
+  CUresult rc = g_drv.mod_load_ex(&mod, image, (err_buf && err_cap > 0) ? 2u : 0u, opts, vals);
+  if (out_mod) *out_mod = mod;
+  return (int32_t)rc;
+}
+
+PK_EXPORT int32_t pk_cu_get_function(void* mod, const char* name, void** out_fn) {
+  if (!g_drv.ready || !g_drv.mod_get_fn || !mod) return -1;
+  CUfunction fn = NULL;
+  CUresult rc = g_drv.mod_get_fn(&fn, (CUmodule)mod, name);
+  if (out_fn) *out_fn = fn;
+  return (int32_t)rc;
+}
+
+PK_EXPORT int32_t pk_cu_unload_module(void* mod) {
+  if (!g_drv.ready || !g_drv.mod_unload || !mod) return -1;
+  return (int32_t)g_drv.mod_unload((CUmodule)mod);
+}
 """
 
 
@@ -903,11 +939,43 @@ class NativeCudaRuntime:
       ctypes.POINTER(ctypes.c_int32),
       ctypes.POINTER(ctypes.c_int32),
     ]
+    lib.pk_cu_load_module.restype = ctypes.c_int32
+    lib.pk_cu_load_module.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_void_p), ctypes.c_char_p, ctypes.c_int32]
+    lib.pk_cu_get_function.restype = ctypes.c_int32
+    lib.pk_cu_get_function.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.POINTER(ctypes.c_void_p)]
+    lib.pk_cu_unload_module.restype = ctypes.c_int32
+    lib.pk_cu_unload_module.argtypes = [ctypes.c_void_p]
     self.lib = lib
     self.dispatch_address = ctypes.cast(lib.pk_cu_dispatch, ctypes.c_void_p).value or 0
 
   def make_owner(self, dptr: int, cap: int, ctx, generation: int) -> _CBlockOwner:
     return _CBlockOwner(self.lib.pk_cu_pool_free_block, dptr, cap, ctx, generation)
+
+  def load_ptx_module(self, ptx_bytes: bytes, func_names: list[str]) -> tuple[int, dict[str, int]]:
+    """Load a null-terminated PTX/CUBIN image via ``cuModuleLoadDataEx`` and resolve ``CUfunction`` handles."""
+    buf = ctypes.create_string_buffer(ptx_bytes)
+    mod = ctypes.c_void_p(0)
+    err_buf = ctypes.create_string_buffer(4096)
+    rc = self.lib.pk_cu_load_module(ctypes.cast(buf, ctypes.c_void_p), ctypes.byref(mod), err_buf, len(err_buf))
+    if rc != 0 or not mod.value:
+      msg = err_buf.value.decode("utf-8", errors="replace").strip()
+      raise RuntimeError(f"cuModuleLoadDataEx failed (rc={rc}): {msg or 'no JIT log'}")
+    funcs: dict[str, int] = {}
+    try:
+      for name in func_names:
+        fn = ctypes.c_void_p(0)
+        frc = self.lib.pk_cu_get_function(mod, name.encode("utf-8"), ctypes.byref(fn))
+        if frc != 0 or not fn.value:
+          raise RuntimeError(f"cuModuleGetFunction({name!r}) failed (rc={frc})")
+        funcs[name] = int(fn.value)
+    except Exception:
+      self.lib.pk_cu_unload_module(mod)
+      raise
+    return int(mod.value), funcs
+
+  def unload_module(self, mod_handle: int) -> None:
+    if mod_handle:
+      self.lib.pk_cu_unload_module(ctypes.c_void_p(mod_handle))
 
 
 def try_load_native_cuda_rt() -> NativeCudaRuntime | None:

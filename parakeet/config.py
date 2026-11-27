@@ -100,6 +100,10 @@ class Config:
   #: Use TF32 Tensor Cores (nvcuda::wmma) for float32 matmul on CUDA sm_80+ GPUs.
   #: (Apple Metal float32 simdgroup_matrix is full IEEE FP32 and enabled automatically.)
   tensor_cores: bool = field(default_factory=lambda: _env_bool("PARAKEET_TENSOR_CORES", False))
+  #: CUDA kernel compiler: "ptx" (direct PTX 7.8 + NVRTC fallback), "nvrtc", or "nvcc".
+  cuda_compiler: str = field(default_factory=lambda: os.environ.get("PARAKEET_CUDA_COMPILER", "ptx"))
+  #: Legacy boolean toggle for direct PTX (equivalent to cuda_compiler="ptx"/"nvrtc").
+  cuda_ptx: bool = field(default_factory=lambda: _env_bool("PARAKEET_CUDA_PTX", True))
   #: Specialize tiled/GPU schedules on finite shape buckets & power-of-2
   #: divisibility (on demand, guarded at call time without recompiling
   #: unrelated dimensions or large aligned shapes).
@@ -127,6 +131,8 @@ class Config:
       value = normalize_backend(value)
     if name == "device_fallback" and value not in ("warn", "silent", "error"):
       raise ValueError("device_fallback must be 'warn', 'silent' or 'error'")
+    if name == "cuda_compiler" and value not in ("ptx", "nvrtc", "nvcc"):
+      raise ValueError("cuda_compiler must be 'ptx', 'nvrtc' or 'nvcc'")
     if name == "num_threads":
       value = max(1, int(value))
     if name == "skip_transforms":
