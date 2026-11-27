@@ -22,8 +22,10 @@ A common source of confusion when reading compiler IR is the `Index` prefix
 
 * **What you write in Python** operates on *values and arrays*: standard NumPy
   (`np.sum`, `np.cumsum`, `x[x > 0]`, `a @ b`) or Parakeet's data-parallel
-  operators (`par.map`, `par.reduce`, `par.fold`, `par.scan`, `par.flatmap`,
-  `par.scatter_add`, `par.wavefront`).
+  operators ([`par.map`](operators.md#map), [`par.reduce`](operators.md#reduce),
+  [`par.fold`](operators.md#fold), [`par.scan`](operators.md#scan),
+  [`par.flatmap`](operators.md#flatmap), [`par.scatter_add`](operators.md#scatter_add),
+  [`par.wavefront`](operators.md#wavefront)).
 * **What the compiler builds internally** operates on *N-D index spaces*
   `(0..N₀-1, 0..N₁-1, ...)` so that arrays of different shapes, slices,
   broadcasts, and transposed views all share one uniform representation. Every
@@ -32,12 +34,12 @@ A common source of confusion when reading compiler IR is the `Index` prefix
 
 | What you write in Python | What it lowers to in the IR | Why |
 |---|---|---|
-| `np.tanh(x) + 1`, `[f(xi) for xi in x]`, `par.map`, `par.imap`, `par.allpairs` | [`IndexMap`](#map) | Independent per-coordinate computation |
-| `np.sum`, `np.argmin`, `par.reduce`, `par.fold`, `par.ireduce` | [`IndexReduce`](#reduce-and-fold) | Associative or ordered fold (with optional multi-field carries) |
-| `np.cumsum`, `par.scan`, affine/bilinear `for` loops | [`IndexScan`](#scan) | Running prefix accumulation or associative recurrence |
-| `x[x > 0]`, `par.filter`, `par.flatmap`, `par.filter_pairs` | [`IndexFilter` / `IndexExpand`](#filter-and-expand) | Stream compaction (1-to-0/1) and ragged expansion (1-to-K) |
-| `np.bincount`, `np.add.at`, `out[idx[i]] += v`, `par.scatter_add` | [`IndexScatter`](#scatter) | Associative accumulation into shared bins |
-| `par.wavefront`, `par.soft_align` | [`IndexWavefront`](#wavefront) | Anti-diagonal and banded 2D dynamic programming |
+| `np.tanh(x) + 1`, `[f(xi) for xi in x]`, [`par.map`](operators.md#map), [`par.imap`](operators.md#imap), [`par.allpairs`](operators.md#allpairs) | [`IndexMap`](#map) | Independent per-coordinate computation |
+| `np.sum`, `np.argmin`, [`par.reduce`](operators.md#reduce), [`par.fold`](operators.md#fold), [`par.ireduce`](operators.md#ireduce) | [`IndexReduce`](#reduce-and-fold) | Associative or ordered fold (with optional multi-field carries) |
+| `np.cumsum`, [`par.scan`](operators.md#scan), affine/bilinear `for` loops | [`IndexScan`](#scan) | Running prefix accumulation or associative recurrence |
+| `x[x > 0]`, [`par.filter`](operators.md#filter), [`par.flatmap`](operators.md#flatmap), [`par.filter_pairs`](operators.md#filter_pairs) | [`IndexFilter` / `IndexExpand`](#filter-and-expand) | Stream compaction (1-to-0/1) and ragged expansion (1-to-K) |
+| `np.bincount`, `np.add.at`, `out[idx[i]] += v`, [`par.scatter_add`](operators.md#scatter_add) | [`IndexScatter`](#scatter) | Associative accumulation into shared bins |
+| [`par.wavefront`](operators.md#wavefront), [`par.soft_align`](operators.md#soft_align) | [`IndexWavefront`](#wavefront) | Anti-diagonal and banded 2D dynamic programming |
 | Emitted by the optimizer for matmul, `einsum`, attention, 1-NN | [`IndexTile`](#tile) | Cache, register, and GPU shared-memory staging |
 
 ---
@@ -50,7 +52,8 @@ A common source of confusion when reading compiler IR is the `Index` prefix
 `(i₀, i₁, ...)` of an N-D index space, writing into one or more output arrays.
 
 **What you write:** Element-wise NumPy expressions, broadcasting, array
-comprehensions, `par.map`, `par.allpairs`, or `par.imap`.
+comprehensions, [`par.map`](operators.md#map), [`par.allpairs`](operators.md#allpairs),
+or [`par.imap`](operators.md#imap).
 
 ```python
 # All three lower to the same single IndexMap:
@@ -79,15 +82,15 @@ coordinate inversion for slices and transposes. See
 **What it expresses:** Combining values across a reduction index space into one
 or more scalar accumulators.
 
-**Clearing up `par.reduce` vs. `par.fold` vs. `par.ireduce`:**
+**Clearing up [`par.reduce`](operators.md#reduce) vs. [`par.fold`](operators.md#fold) vs. [`par.ireduce`](operators.md#ireduce):**
 
-* **`np.sum` / `np.max` / `np.argmin` / `par.reduce(op, x)`** reduce a single
+* **`np.sum` / `np.max` / `np.argmin` / [`par.reduce(op, x)`](operators.md#reduce)** reduce a single
   value with a binary combiner (`np.add`, `np.maximum`, or a custom function).
-* **`par.fold(lift, merge, x, init)`** reduces structured multi-field state
+* **[`par.fold(lift, merge, x, init)`](operators.md#fold)** reduces structured multi-field state
   (such as `(best_val, best_idx)` or Welford `(count, mean, m2)`) while
   preserving exact left-to-right chunk merge order for ties and non-commutative
   merges.
-* **`par.ireduce(fn, shape, combine=np.add)`** reduces directly over an index
+* **[`par.ireduce(fn, shape, combine=np.add)`](operators.md#ireduce)** reduces directly over an index
   space without constructing an input array first.
 * Internally, all of them become one **`IndexReduce`** statement holding one or
   more `Fold` clauses (with optional `Carry` fields for multi-state folds like
@@ -124,7 +127,8 @@ merging, CPU L1 reduction interchange (`np.sum(X, axis=0)`), and
 **What it expresses:** Prefix accumulation where element `t` depends on all
 preceding elements `0..t`.
 
-**What you write:** `np.cumsum`, `np.cumprod`, `par.scan(op, x, init=..., emit=...)`,
+**What you write:** `np.cumsum`, `np.cumprod`,
+[`par.scan(op, x, init=..., emit=...)`](operators.md#scan),
 or plain Python `for t in range(T):` loops expressing affine (`s = a[t]*s + b[t]`)
 or bilinear matrix-state recurrences (`S = a[t]*S + outer(k[t], v[t])`).
 
@@ -150,8 +154,11 @@ for affine IIR filters and Mamba-2 bilinear recurrences.
 * **`IndexExpand`** (1-to-K ragged expansion) runs a two-pass count, prefix-sum
   offsets, and parallel emit into a flat `RaggedArray` buffer.
 
-**What you write:** Boolean masking `x[x > 0]`, `np.nonzero`, `par.filter`,
-`par.filter_reduce`, `par.flatmap`, and `par.filter_pairs`.
+**What you write:** Boolean masking `x[x > 0]`, `np.nonzero`,
+[`par.filter`](operators.md#filter),
+[`par.filter_reduce`](operators.md#filter_reduce),
+[`par.flatmap`](operators.md#flatmap), and
+[`par.filter_pairs`](operators.md#filter_pairs).
 
 ```python
 positives = x[x > 0.0]  # IndexFilter
@@ -173,7 +180,7 @@ shared output bins indexed by runtime keys.
 
 **What you write:** `np.bincount`, `np.add.at`, canonical `for i: out[idx[i]] += v[i]`
 loops, filtered comprehensions like `[np.sum(v[idx == b]) for b in range(n)]`,
-or `par.scatter_add`.
+or [`par.scatter_add`](operators.md#scatter_add).
 
 ```python
 grad_hist = np.bincount(bin_ids, weights=grads, minlength=256)
@@ -194,7 +201,9 @@ bins on CPU and parallel atomics/privatization on GPU. Under `par.grad`,
 depends on `(i - 1, j)`, `(i, j - 1)`, and `(i - 1, j - 1)`, executed along
 parallel anti-diagonals (with optional diagonal banding).
 
-**What you write:** `par.wavefront` (or `par.batched_wavefront` / `par.soft_align`
+**What you write:** [`par.wavefront`](operators.md#wavefront) (or
+[`par.batched_wavefront`](operators.md#batched_wavefront) /
+[`par.soft_align`](operators.md#soft_align)
 for differentiable soft-min sequence alignment).
 
 ```python

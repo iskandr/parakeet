@@ -60,6 +60,13 @@
 .pk-example pre > code { background: var(--md-default-bg-color); font-size: .67rem; }
 .pk-example p:last-child { margin-bottom: 0; }
 .md-typeset table:not([class]) { font-variant-numeric: tabular-nums; }
+.md-typeset img[src$=".svg"] {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  margin: 1rem 0 1.25rem;
+}
 
 .pk-prim-grid {
   display: grid;
