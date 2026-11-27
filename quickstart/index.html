@@ -16,7 +16,7 @@
         <link rel="prev" href="..">
       
       
-        <link rel="next" href="../gallery/">
+        <link rel="next" href="../language/">
       
       
         
@@ -268,6 +268,36 @@
   
     
     
+      
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../language/" class="md-tabs__link">
+          
+  
+  
+  Guide
+
+        </a>
+      </li>
+    
+  
+
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
       <li class="md-tabs__item">
         <a href="../gallery/" class="md-tabs__link">
           
@@ -308,27 +338,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../philosophy/" class="md-tabs__link">
-          
-  
-  
-  Guide
-
-        </a>
-      </li>
-    
-  
-
-      
-        
-  
-  
-  
-  
-    
-    
-      <li class="md-tabs__item">
-        <a href="../supported/" class="md-tabs__link">
+        <a href="../api/" class="md-tabs__link">
           
   
   
@@ -479,10 +489,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#requirements" class="md-nav__link">
+  <a href="#requirements-and-install" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Requirements
+        Requirements and install
       
     </span>
   </a>
@@ -501,10 +511,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#loops-comprehensions-helpers" class="md-nav__link">
+  <a href="#loops-comprehensions-and-helpers" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Loops, comprehensions, helpers
+        Loops, comprehensions, and helpers
       
     </span>
   </a>
@@ -534,21 +544,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#looking-inside" class="md-nav__link">
+  <a href="#errors-and-debugging" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Looking inside
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#when-something-is-not-supported" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        When something is not supported
+        Errors and debugging
       
     </span>
   </a>
@@ -604,7 +603,7 @@
   <span class="md-ellipsis">
     
   
-    Gallery
+    Guide
   
 
     
@@ -617,6 +616,493 @@
         
         <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_1" id="__nav_3_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Using Parakeet
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Using Parakeet
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../language/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The compiled language
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operators/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Data-parallel operators
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../autodiff/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Automatic differentiation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../backends/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backends and GPUs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../performance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Performance and tuning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../debugging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Errors and debugging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_2" id="__nav_3_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How Parakeet optimizes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How Parakeet optimizes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../primitives/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operators & compilation walkthrough
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algebra/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Algebraic laws
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rewrites/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rewrite rules catalog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../internals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Compiler architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../philosophy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design, boundaries, and history
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Gallery
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -764,373 +1250,6 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
-        
-          
-          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
-            
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Guide
-  
-
-    
-  </span>
-  
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    Guide
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../philosophy/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Ideas, history, and boundaries
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../language/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    The compiled language
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../backends/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Backends and GPUs
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../primitives/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Algebraic primitives & walkthrough
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../operators/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Data-parallel operators
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../autodiff/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Gradients
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../algebra/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Algebraic laws
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../rewrites/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Rewrite rules and optimizations
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../debugging/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Errors and debugging
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../performance/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Performance
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../internals/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Compiler architecture
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
-    
-    
-    
-    
-      
-      
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--nested">
-      
-        
-        
         <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
         
           
@@ -1170,14 +1289,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../supported/" class="md-nav__link">
+      <a href="../api/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Supported functions
+    API
   
 
     
@@ -1198,14 +1317,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../api/" class="md-nav__link">
+      <a href="../supported/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    API
+    Supported functions
   
 
     
@@ -1337,10 +1456,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#requirements" class="md-nav__link">
+  <a href="#requirements-and-install" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Requirements
+        Requirements and install
       
     </span>
   </a>
@@ -1359,10 +1478,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#loops-comprehensions-helpers" class="md-nav__link">
+  <a href="#loops-comprehensions-and-helpers" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Loops, comprehensions, helpers
+        Loops, comprehensions, and helpers
       
     </span>
   </a>
@@ -1392,21 +1511,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#looking-inside" class="md-nav__link">
+  <a href="#errors-and-debugging" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Looking inside
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#when-something-is-not-supported" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        When something is not supported
+        Errors and debugging
       
     </span>
   </a>
@@ -1445,19 +1553,21 @@
 
 
 <h1 id="getting-started">Getting started<a class="headerlink" href="#getting-started" title="Permanent link">&para;</a></h1>
-<h2 id="requirements">Requirements<a class="headerlink" href="#requirements" title="Permanent link">&para;</a></h2>
+<h2 id="requirements-and-install">Requirements and install<a class="headerlink" href="#requirements-and-install" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Python 3.11 or newer and NumPy 2.</li>
-<li>A C compiler: the Xcode command line tools on macOS (<code>xcode-select --install</code>),
-  <code>gcc</code> or <code>clang</code> on Linux, MinGW-w64 <code>gcc</code> or LLVM <code>clang</code> on Windows.</li>
+<li>Python 3.11+ and NumPy 2</li>
+<li>A system C compiler: Xcode command line tools on macOS
+  (<code>xcode-select --install</code>), <code>gcc</code> or <code>clang</code> on Linux, MinGW-w64 or LLVM on
+  Windows</li>
 </ul>
-<p>Install Parakeet in your environment (or <code>python -m pip install .</code> in a local checkout):</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pip<span class="w"> </span>install<span class="w"> </span>parakeet
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">"import parakeet; print(parakeet.available_backends())"</span>
 </code></pre></div>
-<p><code>available_backends()</code> reports, for every backend, either <code>"ok"</code> or the reason
-it cannot be used on this machine and how to fix it.</p>
+<p><code>available_backends()</code> reports <code>"ok"</code> for each usable backend or explains what
+is missing and how to install it. For GPUs, install <code>parakeet[metal]</code> on Apple
+Silicon or <code>parakeet[cuda12]</code> with an NVIDIA GPU.</p>
 <h2 id="your-first-compiled-function">Your first compiled function<a class="headerlink" href="#your-first-compiled-function" title="Permanent link">&para;</a></h2>
+<p>Decorate any numerical function with <code>@par.jit</code>:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">parakeet</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">par</span>
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
@@ -1468,21 +1578,20 @@ it cannot be used on this machine and how to fix it.</p>
 <a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>
 <a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>
 <a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="n">x</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">rand</span><span class="p">(</span><span class="mi">1_000_000</span><span class="p">)</span>
-<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="n">rms</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>  <span class="c1"># first call: compiles for (float64 array, 1-d), then runs</span>
-<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="n">rms</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>  <span class="c1"># later calls: straight into native code</span>
-<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="n">rms</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">))</span>  <span class="c1"># a new specialization, compiled on demand</span>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="n">rms</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>  <span class="c1"># first call: compiles for (float64, 1-d), then runs</span>
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="n">rms</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>  <span class="c1"># later calls: straight into cached native code</span>
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="n">rms</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">))</span>  <span class="c1"># compiles a separate float32 specialization</span>
 </code></pre></div>
-<p>Compilation takes a few hundred milliseconds per specialization (most of it in
-the C compiler) and is cached on disk, so a second run of your program starts
-fast.</p>
-<p><code>par.jit</code> also works without decorator syntax, including on lambdas and NumPy
-functions:</p>
+<p>Compilation takes a few hundred milliseconds per specialization (mostly in the
+C compiler) and is cached on disk across runs. <code>par.jit</code> also wraps lambdas or
+plain functions directly, and <code>par.run(fn, *args)</code> compiles and calls in one
+step:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">fast_rms</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">jit</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">x</span> <span class="o">*</span> <span class="n">x</span><span class="p">)))</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">par</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">rms</span><span class="o">.</span><span class="n">fn</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>  <span class="c1"># compile-and-call in one step</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">par</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">rms</span><span class="o">.</span><span class="n">fn</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>
 </code></pre></div>
-<h2 id="loops-comprehensions-helpers">Loops, comprehensions, helpers<a class="headerlink" href="#loops-comprehensions-helpers" title="Permanent link">&para;</a></h2>
-<p>Anything in the <a href="../language/">supported subset</a> can be mixed freely. Helper
-functions are inlined automatically; they do not need their own <code>@par.jit</code>.</p>
+<h2 id="loops-comprehensions-and-helpers">Loops, comprehensions, and helpers<a class="headerlink" href="#loops-comprehensions-and-helpers" title="Permanent link">&para;</a></h2>
+<p>Anything in the <a href="../language/">compiled language</a> mixes freely. Helper functions
+are inlined automatically—they do not need <code>@par.jit</code>:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">sqr_dist</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>  <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">((</span><span class="n">a</span> <span class="o">-</span> <span class="n">b</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span>
 <a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
@@ -1491,69 +1600,58 @@ functions are inlined automatically; they do not need their own <code>@par.jit</
 <a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="k">def</span><span class="w"> </span><span class="nf">nearest</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">centroids</span><span class="p">):</span>
 <a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>  <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">np</span><span class="o">.</span><span class="n">argmin</span><span class="p">([</span><span class="n">sqr_dist</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">c</span><span class="p">)</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">centroids</span><span class="p">])</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">X</span><span class="p">])</span>
 </code></pre></div>
-<p>You can also call Parakeet's data-parallel operators directly (<code>par.map</code>,
-<code>par.reduce</code>, <code>par.scan</code>, <code>par.allpairs</code>, <code>par.scatter_add</code>, <code>par.fold</code>) when
-you want to apply a Python function over slices or pairs in parallel. See
-<a href="../operators/">Data-parallel operators</a>.</p>
+<p>When you want explicit data-parallel control over slices, pairs, scans, or
+histograms, use <a href="../operators/#map"><code>par.map</code></a>, <a href="../operators/#reduce"><code>par.reduce</code></a>,
+<a href="../operators/#fold"><code>par.fold</code></a>, <a href="../operators/#scan"><code>par.scan</code></a>,
+<a href="../operators/#allpairs"><code>par.allpairs</code></a>, or
+<a href="../operators/#scatter_add"><code>par.scatter_add</code></a>.</p>
 <h2 id="gradients-in-one-line">Gradients in one line<a class="headerlink" href="#gradients-in-one-line" title="Permanent link">&para;</a></h2>
-<p>Wrap any scalar-valued function with <code>par.grad</code> or <code>par.value_and_grad</code>.
-The forward and backward passes compile together into one native function:</p>
+<p>Wrap any scalar-valued function with <code>par.grad</code> or <code>par.value_and_grad</code>. The
+forward and backward passes compile together into one native function:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">mse_loss</span><span class="p">(</span><span class="n">w</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
 <a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>  <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">((</span><span class="n">np</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">x</span> <span class="o">@</span> <span class="n">w</span><span class="p">)</span> <span class="o">-</span> <span class="n">y</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span>
 <a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
 <a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>
 <a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="n">loss_val</span><span class="p">,</span> <span class="n">dw</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">value_and_grad</span><span class="p">(</span><span class="n">mse_loss</span><span class="p">)(</span><span class="n">w</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
 </code></pre></div>
-<p>See <a href="../autodiff/">Gradients</a> for nested parameter tuples, <code>NamedTuple</code>s,
-dataclasses, and training loops.</p>
+<p>See <a href="../autodiff/">Automatic differentiation</a> for nested tuples, <code>@dataclass</code>
+parameters, <code>par.jvp</code>, <code>par.hvp</code>, and custom rules.</p>
 <h2 id="picking-a-backend">Picking a backend<a class="headerlink" href="#picking-a-backend" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nd">@par</span><span class="o">.</span><span class="n">jit</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">"metal"</span><span class="p">)</span>  <span class="c1"># per function</span>
+<p>By default (<code>backend="auto"</code>), Parakeet parallelizes across all CPU cores.
+Switch backends per function, per call, globally, or for a block:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nd">@par</span><span class="o">.</span><span class="n">jit</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">"metal"</span><span class="p">)</span>  <span class="c1"># per function ("cuda", "gpu", "c", "threads", ...)</span>
 <a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">f</span><span class="p">(</span><span class="n">x</span><span class="p">):</span> <span class="o">...</span>
 <a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
 <a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>
-<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="n">f</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">_backend</span><span class="o">=</span><span class="s2">"c"</span><span class="p">)</span>  <span class="c1"># per call</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="n">f</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">_backend</span><span class="o">=</span><span class="s2">"c"</span><span class="p">)</span>  <span class="c1"># single call</span>
 <a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="n">par</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">backend</span> <span class="o">=</span> <span class="s2">"threads"</span>  <span class="c1"># process-wide</span>
-<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="k">with</span> <span class="n">par</span><span class="o">.</span><span class="n">options</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">"c"</span><span class="p">,</span> <span class="n">num_threads</span><span class="o">=</span><span class="mi">1</span><span class="p">):</span>  <span class="c1"># temporarily</span>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="k">with</span> <span class="n">par</span><span class="o">.</span><span class="n">options</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">"c"</span><span class="p">,</span> <span class="n">num_threads</span><span class="o">=</span><span class="mi">1</span><span class="p">):</span>  <span class="c1"># scoped block</span>
 <a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>  <span class="n">f</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
 </code></pre></div>
-<p>See <a href="../backends/">Backends and GPUs</a> for multi-core tuning, Metal, CUDA, and
-keeping arrays resident on a GPU with <code>parakeet.to_device</code>.</p>
-<h2 id="looking-inside">Looking inside<a class="headerlink" href="#looking-inside" title="Permanent link">&para;</a></h2>
-<p>Inspect what Parakeet fused and what native code it generated at any time:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nb">print</span><span class="p">(</span><span class="n">par</span><span class="o">.</span><span class="n">show_rewrite</span><span class="p">(</span><span class="n">rms</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span><span class="o">.</span><span class="n">summary</span><span class="p">())</span>  <span class="c1"># algebraic laws and operator counts</span>
-<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>
-<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">spec</span> <span class="o">=</span> <span class="n">rms</span><span class="o">.</span><span class="n">specialize</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>  <span class="c1"># compile without running</span>
-<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="nb">print</span><span class="p">(</span><span class="n">spec</span><span class="o">.</span><span class="n">source</span><span class="p">)</span>  <span class="c1"># generated C</span>
+<p>See <a href="../backends/">Backends and GPUs</a> for Metal, CUDA, and keeping arrays
+resident on device with <code>par.to_device</code>.</p>
+<h2 id="errors-and-debugging">Errors and debugging<a class="headerlink" href="#errors-and-debugging" title="Permanent link">&para;</a></h2>
+<p>Anything outside the supported subset fails at compile time with your exact
+source line:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>parakeet.errors.UnsupportedError: numpy.fft.fft is not supported in compiled code
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>  File "demo.py", line 6, in spectrum
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>    return np.fft.fft(x)
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>           ^^^^^^^^^^^^^
 </code></pre></div>
-<p>For <code>rms(x)</code>, <code>x * x</code> fuses directly into the chunked parallel reduction with no
-temporary array:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Pseudocode of the fused parallel reduction for rms(x):</span>
-<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">partials</span> <span class="o">=</span> <span class="n">parallel_map_chunks</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="k">lambda</span> <span class="n">chunk</span><span class="p">:</span> <span class="nb">sum</span><span class="p">(</span><span class="n">xi</span> <span class="o">*</span> <span class="n">xi</span> <span class="k">for</span> <span class="n">xi</span> <span class="ow">in</span> <span class="n">chunk</span><span class="p">))</span>
-<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="k">return</span> <span class="n">sqrt</span><span class="p">(</span><span class="nb">sum</span><span class="p">(</span><span class="n">partials</span><span class="p">)</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">))</span>
-</code></pre></div>
-<p>To inspect the raw typed compiler IR (<code>spec.operators</code> and lowered <code>spec.ir</code>),
-see <a href="../internals/#lowered-ir">Compiler architecture: Lowered IR</a>.</p>
-<h2 id="when-something-is-not-supported">When something is not supported<a class="headerlink" href="#when-something-is-not-supported" title="Permanent link">&para;</a></h2>
-<p>You get a <code>CompileError</code> pointing at your code, not a crash:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>parakeet.errors.UnsupportedError: numpy.fft.fft is not supported in compiled code
-<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>  File "demo.py", line 6, in spectrum
-<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>    return np.fft.fft(x)
-<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>           ^^^^^^^^^^^^^
-</code></pre></div>
-<p>Run the function uncompiled at any time with <code>backend="python"</code> to separate a
-bug in your code from a limitation of the compiler. More in
-<a href="../debugging/">Errors and debugging</a>.</p>
+<p>Run any function uncompiled with <code>f(x, _backend="python")</code> to check whether an
+issue is in your algorithm or the compiler. To inspect the generated C or GPU
+kernels, call <code>rms.specialize(x).source</code> (see
+<a href="../debugging/">Errors and debugging</a>).</p>
 <h2 id="where-to-go-next">Where to go next<a class="headerlink" href="#where-to-go-next" title="Permanent link">&para;</a></h2>
 <ul>
-<li><a href="../gallery/">Kernel gallery</a>: runnable examples ranging from nearest-neighbor
-  search and tree splits to attention, state-space recurrences, and classic
-  numerical kernels.</li>
-<li><a href="../language/">The compiled language</a>: exact types, statements, and where
-  Parakeet differs from CPython.</li>
-<li><a href="../philosophy/">Ideas, history, and boundaries</a>: design principles, project
-  history, and current limits.</li>
-<li><a href="../performance/">Performance</a> and <a href="../release-benchmarks/">Release benchmarks</a>:
-  when Parakeet wins, when it doesn't, and measured numbers on CPU and GPU.</li>
+<li><a href="../language/">The compiled language</a> — supported types, control flow, and
+  differences from CPython.</li>
+<li><a href="../operators/">Data-parallel operators</a> — <code>map</code>, <code>fold</code>, <code>scan</code>, <code>scatter_add</code>,
+  and <code>wavefront</code>.</li>
+<li><a href="../gallery/">Kernel gallery</a> — runnable examples from nearest-neighbor search
+  to attention and nanoGPT.</li>
+<li><a href="../primitives/">Operators &amp; compilation walkthrough</a> — how Parakeet fuses and
+  tiles your code under the hood.</li>
 </ul>
 
 

@@ -13,10 +13,10 @@
         <link rel="canonical" href="https://rubinsteyn.com/parakeet/primitives/">
       
       
-        <link rel="prev" href="../backends/">
+        <link rel="prev" href="../debugging/">
       
       
-        <link rel="next" href="../operators/">
+        <link rel="next" href="../algebra/">
       
       
         
@@ -27,7 +27,7 @@
     
     
       
-        <title>Algebraic primitives & walkthrough - Parakeet</title>
+        <title>Operators & compilation walkthrough - Parakeet</title>
       
     
     
@@ -82,7 +82,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#algebraic-primitives-compilation-walkthrough" class="md-skip">
+        <a href="#operators-compilation-walkthrough" class="md-skip">
           Skip to content
         </a>
       
@@ -116,7 +116,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Algebraic primitives & walkthrough
+              Operators & compilation walkthrough
             
           </span>
         </div>
@@ -263,6 +263,40 @@
   
   
   
+    
+  
+  
+    
+    
+      
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../language/" class="md-tabs__link">
+          
+  
+  
+  Guide
+
+        </a>
+      </li>
+    
+  
+
+    
+  
+
+      
+        
+  
+  
+  
   
     
     
@@ -302,33 +336,11 @@
   
   
   
-    
-  
-  
-    
-    
-      <li class="md-tabs__item md-tabs__item--active">
-        <a href="../philosophy/" class="md-tabs__link">
-          
-  
-  
-  Guide
-
-        </a>
-      </li>
-    
-  
-
-      
-        
-  
-  
-  
   
     
     
       <li class="md-tabs__item">
-        <a href="../supported/" class="md-tabs__link">
+        <a href="../api/" class="md-tabs__link">
           
   
   
@@ -443,6 +455,747 @@
       
   
   
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_1" id="__nav_3_1_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Using Parakeet
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Using Parakeet
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../language/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The compiled language
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operators/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Data-parallel operators
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../autodiff/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Automatic differentiation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../backends/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backends and GPUs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../performance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Performance and tuning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../debugging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Errors and debugging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3_2" id="__nav_3_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How Parakeet optimizes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How Parakeet optimizes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operators & compilation walkthrough
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operators & compilation walkthrough
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#why-compile-through-an-operator-algebra" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why compile through an operator algebra?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-the-index-prefix-means" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What does the Index prefix mean?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#from-python-and-par-to-the-seven-primitives" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        From Python and par.* to the seven primitives
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="From Python and par.* to the seven primitives">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-seven-primitives-in-brief" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The seven primitives in brief
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The seven primitives in brief">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#map" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Map (IndexMap)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#reduce-and-fold" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reduce and Fold (IndexReduce)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scan (IndexScan)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#filter-and-expand" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Filter and Expand (IndexFilter, IndexExpand)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scatter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scatter (IndexScatter)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#wavefront" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Wavefront (IndexWavefront)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tile" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tile (IndexTile)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#worked-end-to-end-compilation-walkthroughs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Worked compilation walkthroughs
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Worked compilation walkthroughs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#walkthrough-attention" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Causal self-attention (O(T²) NumPy → O(T) tiled kernel)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#walkthrough-1nn" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Exact 1-NN (broadcasting NumPy → tiled pairwise fold)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#walkthrough-filter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Boolean masking → zero-allocation FilterReduce
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#inspecting-your-own-functions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Inspecting your own functions
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algebra/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Algebraic laws
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rewrites/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rewrite rules catalog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../internals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Compiler architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../philosophy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design, boundaries, and history
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
   
   
     
@@ -459,10 +1212,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
         
           
-          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
             
   
   
@@ -480,8 +1233,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -613,641 +1366,6 @@
       
   
   
-    
-  
-  
-  
-    
-    
-    
-    
-      
-        
-        
-      
-      
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
-        
-          
-          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
-            
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Guide
-  
-
-    
-  </span>
-  
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_5">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    Guide
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../philosophy/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Ideas, history, and boundaries
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../language/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    The compiled language
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../backends/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Backends and GPUs
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-    
-  
-  
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Algebraic primitives & walkthrough
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Algebraic primitives & walkthrough
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#python-api-vs-internal-index-names" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Python API vs. internal Index* names
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#the-seven-primitives" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        The seven primitives
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="The seven primitives">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#map" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Map (IndexMap)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#reduce-and-fold" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Reduce and Fold (IndexReduce)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#scan" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Scan (IndexScan)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#filter-and-expand" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Filter and Expand (IndexFilter, IndexExpand)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#scatter" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Scatter (IndexScatter)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#wavefront" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Wavefront (IndexWavefront)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#tile" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Tile (IndexTile)
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#worked-end-to-end-compilation-walkthroughs" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Worked end-to-end compilation walkthroughs
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Worked end-to-end compilation walkthroughs">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#walkthrough-attention" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Walkthrough 1: Causal self-attention (O(T²) NumPy to O(T) tiled kernel)
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Walkthrough 1: Causal self-attention (O(T²) NumPy to O(T) tiled kernel)">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#step-1-after-elaboration-delayed-array-fusion" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Step 1: After elaboration (delayed-array fusion)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#step-2-after-normalize-invariant-row-reduction-hoisting" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Step 2: After normalize (invariant row-reduction hoisting)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#step-3-after-monoidal-tiling-law-1-law-5" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Step 3: After monoidal tiling (Law 1 + Law 5)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#step-4-rewrite-report-code-generation" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Step 4: Rewrite report &amp; code generation
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#walkthrough-1nn" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Walkthrough 2: Exact 1-NN (broadcasting NumPy to tiled pairwise fold)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#walkthrough-filter" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Walkthrough 3: Boolean masking to zero-allocation FilterReduce
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#inspecting-rewrites-on-your-own-functions" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Inspecting rewrites on your own functions
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../operators/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Data-parallel operators
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../autodiff/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Gradients
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../algebra/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Algebraic laws
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../rewrites/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Rewrite rules and optimizations
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../debugging/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Errors and debugging
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../performance/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Performance
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../internals/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Compiler architecture
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
-    </li>
-  
-
-    
-      
-      
-  
-  
   
   
     
@@ -1303,14 +1421,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../supported/" class="md-nav__link">
+      <a href="../api/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Supported functions
+    API
   
 
     
@@ -1331,14 +1449,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../api/" class="md-nav__link">
+      <a href="../supported/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    API
+    Supported functions
   
 
     
@@ -1470,10 +1588,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#python-api-vs-internal-index-names" class="md-nav__link">
+  <a href="#why-compile-through-an-operator-algebra" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Python API vs. internal Index* names
+        Why compile through an operator algebra?
       
     </span>
   </a>
@@ -1481,15 +1599,38 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#the-seven-primitives" class="md-nav__link">
+  <a href="#what-the-index-prefix-means" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The seven primitives
+        What does the Index prefix mean?
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="The seven primitives">
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#from-python-and-par-to-the-seven-primitives" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        From Python and par.* to the seven primitives
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="From Python and par.* to the seven primitives">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-seven-primitives-in-brief" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The seven primitives in brief
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The seven primitives in brief">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -1573,77 +1714,32 @@
     </nav>
   
 </li>
+        
+      </ul>
+    </nav>
+  
+</li>
       
         <li class="md-nav__item">
   <a href="#worked-end-to-end-compilation-walkthroughs" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Worked end-to-end compilation walkthroughs
+        Worked compilation walkthroughs
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Worked end-to-end compilation walkthroughs">
+    <nav class="md-nav" aria-label="Worked compilation walkthroughs">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
   <a href="#walkthrough-attention" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Walkthrough 1: Causal self-attention (O(T²) NumPy to O(T) tiled kernel)
+        1. Causal self-attention (O(T²) NumPy → O(T) tiled kernel)
       
     </span>
   </a>
-  
-    <nav class="md-nav" aria-label="Walkthrough 1: Causal self-attention (O(T²) NumPy to O(T) tiled kernel)">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#step-1-after-elaboration-delayed-array-fusion" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Step 1: After elaboration (delayed-array fusion)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#step-2-after-normalize-invariant-row-reduction-hoisting" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Step 2: After normalize (invariant row-reduction hoisting)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#step-3-after-monoidal-tiling-law-1-law-5" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Step 3: After monoidal tiling (Law 1 + Law 5)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#step-4-rewrite-report-code-generation" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Step 4: Rewrite report &amp; code generation
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
         
@@ -1651,7 +1747,7 @@
   <a href="#walkthrough-1nn" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Walkthrough 2: Exact 1-NN (broadcasting NumPy to tiled pairwise fold)
+        2. Exact 1-NN (broadcasting NumPy → tiled pairwise fold)
       
     </span>
   </a>
@@ -1662,7 +1758,7 @@
   <a href="#walkthrough-filter" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Walkthrough 3: Boolean masking to zero-allocation FilterReduce
+        3. Boolean masking → zero-allocation FilterReduce
       
     </span>
   </a>
@@ -1675,10 +1771,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#inspecting-rewrites-on-your-own-functions" class="md-nav__link">
+  <a href="#inspecting-your-own-functions" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Inspecting rewrites on your own functions
+        Inspecting your own functions
       
     </span>
   </a>
@@ -1705,376 +1801,307 @@
   
 
 
-<h1 id="algebraic-primitives-compilation-walkthrough">Algebraic primitives &amp; compilation walkthrough<a class="headerlink" href="#algebraic-primitives-compilation-walkthrough" title="Permanent link">&para;</a></h1>
-<p>Inside <code>@par.jit</code>, Parakeet lowers NumPy expressions, comprehensions, and
-<code>par.*</code> calls onto <strong>seven composable index-space operators</strong>. General
-algebraic passes fuse and tile those operators before lowering them to CPU
-threads, Apple Metal, or NVIDIA CUDA.</p>
-<pre class="mermaid"><code>flowchart LR
-  PY["Python / NumPy / par.*"] --&gt; ELAB["Elaborator&lt;br/&gt;(delayed arrays + AD tape)"]
-  ELAB --&gt; IR["Operator Algebra&lt;br/&gt;(7 index primitives)"]
-  IR --&gt; OPT["Middle-End Rewrites&lt;br/&gt;(fusion, tiling, Laws 1-6)"]
-  OPT --&gt; LOW["Lowering &amp; Codegen&lt;br/&gt;(C / OpenMP / CUDA / Metal)"]</code></pre>
-<h2 id="python-api-vs-internal-index-names">Python API vs. internal <code>Index*</code> names<a class="headerlink" href="#python-api-vs-internal-index-names" title="Permanent link">&para;</a></h2>
-<p>In compiler output (<code>par.show_rewrite</code>, <code>spec.operators</code>), each internal
-operator carries an <code>Index</code> prefix (<code>IndexMap</code>, <code>IndexReduce</code>, ...).</p>
+<h1 id="operators-compilation-walkthrough">Operators &amp; compilation walkthrough<a class="headerlink" href="#operators-compilation-walkthrough" title="Permanent link">&para;</a></h1>
+<h2 id="why-compile-through-an-operator-algebra">Why compile through an operator algebra?<a class="headerlink" href="#why-compile-through-an-operator-algebra" title="Permanent link">&para;</a></h2>
+<p>NumPy is fast on any single operation because each call drops into compiled C
+or Fortran. The bottleneck shows up when you <strong>compose</strong> operations:</p>
 <ul>
-<li><strong>In Python</strong>, you write array-oriented NumPy (<code>np.sum</code>, <code>x[x &gt; 0]</code>, <code>a @ b</code>)
-  or Parakeet operators (<a href="../operators/#map"><code>par.map</code></a>,
-  <a href="../operators/#reduce"><code>par.reduce</code></a>, <a href="../operators/#fold"><code>par.fold</code></a>,
-  <a href="../operators/#scan"><code>par.scan</code></a>, <a href="../operators/#flatmap"><code>par.flatmap</code></a>,
-  <a href="../operators/#scatter_add"><code>par.scatter_add</code></a>,
-  <a href="../operators/#wavefront"><code>par.wavefront</code></a>).</li>
-<li><strong>In the IR</strong>, every operator iterates over an explicit N-D coordinate grid
-  <code>(0..N₀-1, 0..N₁-1, ...)</code> so broadcasts, slices, and transposes share one
-  uniform representation.</li>
+<li><strong>Streaming expressions allocate and re-read memory.</strong> A one-line formula
+  like <code>np.tanh(x * a) + b</code> makes three sweeps over RAM and allocates two
+  temporary arrays. A four-line attention function allocates three <code>O(T²)</code>
+  matrices.</li>
+<li><strong>Custom algorithms fall back to Python.</strong> Anything that does not fit a
+  single NumPy ufunc (pairwise distances, custom folds, banded DP, tree splits)
+  either explodes memory with broadcasting or drops into a slow CPython loop.</li>
 </ul>
+<p>Traditional compilers lower array code straight into nested C <code>for</code>-loops and
+then try to <em>re-discover</em> parallelism, associativity, and cache reuse through
+fragile loop-nest dependence analysis. Following the NYU Parakeet theses
+(<a href="https://cs.nyu.edu/media/publications/rubinsteyn_alex.pdf">Rubinsteyn 2014</a>,
+<a href="https://cs.nyu.edu/media/publications/eric_h.pdf">Hielscher 2013</a>), Parakeet
+does the opposite: <strong>it keeps array programs in algebraic operator form until
+the final lowering step.</strong> Because independence, associativity, and data reuse
+stay explicit in the IR, fusion, cache/GPU tiling, and differentiation become
+small, sound algebraic rewrites.</p>
+<hr />
+<h2 id="what-the-index-prefix-means">What does the <code>Index</code> prefix mean?<a class="headerlink" href="#what-the-index-prefix-means" title="Permanent link">&para;</a></h2>
+<p>In compiler output (<code>par.show_rewrite</code>, <code>spec.operators</code>), internal primitives
+carry an <code>Index</code> prefix: <code>IndexMap</code>, <code>IndexReduce</code>, <code>IndexScan</code>, <code>IndexFilter</code>,
+<code>IndexExpand</code>, <code>IndexScatter</code>, <code>IndexWavefront</code>, and <code>IndexTile</code>.</p>
+<p>Why not just <code>Map</code> and <code>Reduce</code>?</p>
+<p>At the Python surface, operators are <strong>array-driven</strong>: <code>par.map(f, X)</code> iterates
+over elements of <code>X</code>, <code>par.allpairs(f, X, Y)</code> takes pairs of slices,
+<code>X[:, None] - Y[None, :]</code> broadcasts shapes, <code>X.T</code> permutes axes, and <code>X[::2]</code>
+strides. If the optimizer worked directly on array-driven nodes, it would need
+separate fusion and tiling rules for every combination (<code>Map ∘ Transpose</code>,
+<code>Reduce ∘ Broadcast</code>, <code>Reduce ∘ AllPairs</code>, <code>Map ∘ Slice</code>, …).</p>
+<p>Instead, elaboration <strong>indexifies</strong> every array expression into a
+<strong>coordinate-driven</strong> operator:</p>
+<ul>
+<li>An <code>Index*</code> node takes <strong>no input arrays of its own</strong>—only a rectangular
+  integer coordinate box <code>shape = (N₀, N₁, …)</code> and a body parameterized by
+  integer coordinates <code>(i, j, …)</code> that explicitly indexes whatever arrays it
+  needs (<code>A[i, k]</code>, <code>B[k, j]</code>).</li>
+<li><strong>Broadcasting, transposes, slices, views, comprehensions, and <code>allpairs</code>
+  vanish into simple index expressions</strong> before any middle-end pass runs.</li>
+</ul>
+<p><img alt="Indexification collapses diverse array-driven Python and NumPy operations into coordinate-driven IndexMap and IndexReduce primitives" src="../assets/diag-indexification.svg" /></p>
+<p>That single normalization is why one fusion pass (<code>IndexMap</code> into <code>IndexReduce</code>)
+automatically handles <code>np.sum(x * x)</code>, <code>np.sum(x.T[::2])</code>, <code>a @ b.T</code>,
+<code>np.einsum('ij,jk-&gt;ik', a, b)</code>, and <code>np.argmin(np.sum((x[:, None] - y[None, :])**2, axis=2), axis=1)</code>
+without a single special case for broadcasting or transposes.</p>
+<hr />
+<h2 id="from-python-and-par-to-the-seven-primitives">From Python and <code>par.*</code> to the seven primitives<a class="headerlink" href="#from-python-and-par-to-the-seven-primitives" title="Permanent link">&para;</a></h2>
+<p>Everything you write in NumPy, Python, or <code>par.*</code> lowers into <strong>six source
+primitives</strong>, and the locality optimizer adds a <strong>seventh (<code>IndexTile</code>)</strong> when
+blocking reductions for CPU cache or GPU shared memory:</p>
 <table>
 <thead>
 <tr>
-<th>What you write in Python</th>
-<th>Internal IR node</th>
-<th>Role</th>
+<th>Internal primitive</th>
+<th>Surface NumPy / Python idioms</th>
+<th><code>par.*</code> operators that reduce here</th>
+<th>What it captures</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><code>np.tanh(x) + 1</code>, <code>[f(xi) for xi in x]</code>, <a href="../operators/#map"><code>par.map</code></a>, <a href="../operators/#imap"><code>par.imap</code></a>, <a href="../operators/#allpairs"><code>par.allpairs</code></a></td>
-<td><a href="#map"><code>IndexMap</code></a></td>
-<td>Independent per-coordinate computation</td>
+<td><strong><a href="#map"><code>IndexMap</code></a></strong></td>
+<td>Element-wise ufuncs, broadcasting, slices/views materialized, <code>np.where</code>, comprehensions, <code>@</code> / <code>einsum</code> outer grid</td>
+<td><code>par.map</code>, <code>par.each</code>, <code>par.imap</code>, <code>par.allpairs</code>, <code>par.outer_map</code>, <code>par.parfor</code>, <code>par.pmap1</code>/<code>pmap2</code></td>
+<td>Independent work at every coordinate <code>(i, j, …)</code></td>
 </tr>
 <tr>
-<td><code>np.sum</code>, <code>np.argmin</code>, <a href="../operators/#reduce"><code>par.reduce</code></a>, <a href="../operators/#fold"><code>par.fold</code></a>, <a href="../operators/#ireduce"><code>par.ireduce</code></a></td>
-<td><a href="#reduce-and-fold"><code>IndexReduce</code></a></td>
-<td>Associative or ordered fold (with optional multi-field carries)</td>
+<td><strong><a href="#reduce-and-fold"><code>IndexReduce</code></a></strong></td>
+<td><code>np.sum</code>, <code>prod</code>, <code>min</code>, <code>max</code>, <code>mean</code>, <code>var</code>, <code>std</code>, <code>all</code>, <code>any</code>, <code>argmin</code>, <code>argmax</code>, inner dot of <code>@</code> / <code>einsum</code></td>
+<td><code>par.reduce</code>, <code>par.ireduce</code>, <code>par.fold</code>, <code>par.topk_fold</code></td>
+<td>Associative reduction or ordered multi-field (<code>Carry</code>) fold</td>
 </tr>
 <tr>
-<td><code>np.cumsum</code>, <a href="../operators/#scan"><code>par.scan</code></a>, affine/bilinear <code>for</code> loops</td>
-<td><a href="#scan"><code>IndexScan</code></a></td>
-<td>Running prefix accumulation or associative recurrence</td>
+<td><strong><a href="#scan"><code>IndexScan</code></a></strong></td>
+<td><code>np.cumsum</code>, <code>np.cumprod</code>, affine/bilinear <code>for t in range(T):</code> loops</td>
+<td><code>par.scan</code></td>
+<td>Running prefix accumulation where step <code>t</code> depends on <code>0..t</code></td>
 </tr>
 <tr>
-<td><code>x[x &gt; 0]</code>, <a href="../operators/#filter"><code>par.filter</code></a>, <a href="../operators/#flatmap"><code>par.flatmap</code></a>, <a href="../operators/#filter_pairs"><code>par.filter_pairs</code></a></td>
-<td><a href="#filter-and-expand"><code>IndexFilter</code> / <code>IndexExpand</code></a></td>
-<td>Stream compaction (1-to-0/1) and ragged expansion (1-to-K)</td>
+<td><strong><a href="#filter-and-expand"><code>IndexFilter</code></a></strong></td>
+<td>Boolean masking <code>x[mask]</code>, <code>np.nonzero</code>, <code>np.flatnonzero</code></td>
+<td><code>par.filter</code>, <code>par.filter_reduce</code> (with <code>IndexReduce</code>), <code>par.split_bytes</code></td>
+<td>1-to-0/1 stream compaction by predicate</td>
 </tr>
 <tr>
-<td><code>np.bincount</code>, <code>np.add.at</code>, <code>out[idx[i]] += v</code>, <a href="../operators/#scatter_add"><code>par.scatter_add</code></a></td>
-<td><a href="#scatter"><code>IndexScatter</code></a></td>
-<td>Associative accumulation into shared bins</td>
+<td><strong><a href="#filter-and-expand"><code>IndexExpand</code></a></strong></td>
+<td>Variable-length emission into <code>RaggedArray</code></td>
+<td><code>par.flatmap</code>, <code>par.filter_pairs</code></td>
+<td>Two-pass 1-to-K ragged compaction (count → prefix sum → emit)</td>
 </tr>
 <tr>
-<td><a href="../operators/#wavefront"><code>par.wavefront</code></a>, <a href="../operators/#soft_align"><code>par.soft_align</code></a></td>
-<td><a href="#wavefront"><code>IndexWavefront</code></a></td>
-<td>Anti-diagonal and banded 2D dynamic programming</td>
+<td><strong><a href="#scatter"><code>IndexScatter</code></a></strong></td>
+<td><code>np.bincount</code>, <code>np.add.at</code>, canonical <code>for i: out[idx[i]] += v</code>, inverted <code>[np.sum(v[idx == b]) for b in range(n)]</code></td>
+<td><code>par.scatter_add</code>, <code>par.segmented_histogram2d</code></td>
+<td>Associative accumulation into shared output bins</td>
 </tr>
 <tr>
-<td>Emitted automatically for matmul, <code>einsum</code>, attention, 1-NN</td>
-<td><a href="#tile"><code>IndexTile</code></a></td>
-<td>Cache, register, and GPU shared-memory staging</td>
+<td><strong><a href="#wavefront"><code>IndexWavefront</code></a></strong></td>
+<td>Anti-diagonal and banded 2D DP recurrences</td>
+<td><code>par.wavefront</code>, <code>par.batched_wavefront</code>, <code>par.soft_align</code></td>
+<td>Cell <code>(i, j)</code> depends on <code>(i−1, j)</code>, <code>(i, j−1)</code>, <code>(i−1, j−1)</code></td>
+</tr>
+<tr>
+<td><strong><a href="#tile"><code>IndexTile</code></a></strong> <em>(optimizer-emitted)</em></td>
+<td>Emitted automatically from <code>IndexMap</code> wrapping <code>IndexReduce</code> (<code>@</code>, <code>einsum</code>, 1-NN, attention, RBF)</td>
+<td><em>(Never written directly)</em></td>
+<td>Blocked execution with staged L1/L2 cache, register, or GPU SRAM tiles</td>
 </tr>
 </tbody>
 </table>
+<h3 id="the-seven-primitives-in-brief">The seven primitives in brief<a class="headerlink" href="#the-seven-primitives-in-brief" title="Permanent link">&para;</a></h3>
+<h4 id="map">Map (<code>IndexMap</code>)<a class="headerlink" href="#map" title="Permanent link">&para;</a></h4>
+<p>Evaluates a pure body independently at every coordinate of an N-D box. Because
+iterations are independent, vertical chains collapse (<code>np.tanh(x * a) + b</code>),
+sibling maps merge (<code>sin(x), cos(x)</code>), and nested maps flatten into one
+multi-dimensional grid for CPU threads and GPUs.</p>
+<h4 id="reduce-and-fold">Reduce and Fold (<code>IndexReduce</code>)<a class="headerlink" href="#reduce-and-fold" title="Permanent link">&para;</a></h4>
+<p>Combines values across a reduction box into one or more scalar accumulators.
+Associative combiners (<code>+</code>, <code>*</code>, <code>min</code>, <code>max</code>, bitwise ops) split across
+threads and SIMD lanes. Structured state—like <code>(best_val, best_idx)</code> in
+<code>argmin</code> or Welford variance in <code>par.fold</code>—attaches as <code>Carry</code> fields that
+merge in strict left-to-right order so ties and NaNs stay exact.</p>
+<h4 id="scan">Scan (<code>IndexScan</code>)<a class="headerlink" href="#scan" title="Permanent link">&para;</a></h4>
+<p>Computes running prefixes (<code>np.cumsum</code>, <code>par.scan</code>) via a 3-stage parallel
+chunk scan. Consumer maps fuse directly into the scan's <code>emit</code> block
+(<code>np.cumsum(x) * 2 + 1</code> in one pass), and plain Python affine/bilinear <code>for</code>
+loops rewrite via <a href="../algebra/#law-4-chunkwise-state-space-duality">Law 4 chunkwise duality</a>.</p>
+<h4 id="filter-and-expand">Filter and Expand (<code>IndexFilter</code>, <code>IndexExpand</code>)<a class="headerlink" href="#filter-and-expand" title="Permanent link">&para;</a></h4>
+<p>Compacts sparse or variable-length outputs without serial locks. Chained
+filters merge (<code>x[p][q]</code> → <code>p and q</code>), and <code>IndexFilter</code> followed by
+<code>IndexReduce</code> collapses into a zero-allocation guarded loop (<code>np.sum(x[x &gt; 0])</code>).</p>
+<h4 id="scatter">Scatter (<code>IndexScatter</code>)<a class="headerlink" href="#scatter" title="Permanent link">&para;</a></h4>
+<p>Accumulates associatively into indexed bins. Sibling histograms sharing an
+index array merge into a single pass, lower to thread-privatized bins on CPU
+and atomics on GPU, and differentiate to a gather (<code>g[idx]</code>) under <code>par.grad</code>.</p>
+<h4 id="wavefront">Wavefront (<code>IndexWavefront</code>)<a class="headerlink" href="#wavefront" title="Permanent link">&para;</a></h4>
+<p>Schedules 2D dynamic programming along parallel anti-diagonals in <code>O(M)</code>
+rolling memory, never allocating the full <code>M × N</code> DP table.</p>
+<h4 id="tile">Tile (<code>IndexTile</code>)<a class="headerlink" href="#tile" title="Permanent link">&para;</a></h4>
+<p>Following <a href="https://cs.nyu.edu/media/publications/eric_h.pdf">Hielscher (2013)</a>,
+middle-end locality passes rewrite <code>IndexMap</code> wrapping <code>IndexReduce</code> into
+nested <code>IndexTile</code> operators with explicit <code>TileStage</code> buffers—driving CPU
+L1/L2 cache blocking, <code>2×4</code> register jamming, GPU <code>__shared__</code> /
+<code>threadgroup</code> memory, Metal <code>simdgroup_matrix</code>, and CUDA TF32 WMMA from one
+representation.</p>
+<p><img alt="Vertical, filter-reduce, and sibling fusion collapse memory passes" src="../assets/diag-fusion.svg" /></p>
 <hr />
-<h2 id="the-seven-primitives">The seven primitives<a class="headerlink" href="#the-seven-primitives" title="Permanent link">&para;</a></h2>
-<h3 id="map">Map (<code>IndexMap</code>)<a class="headerlink" href="#map" title="Permanent link">&para;</a></h3>
-<p>Independent evaluation of a pure body across an N-D coordinate grid. Element-wise
-NumPy, broadcasting, comprehensions, <a href="../operators/#map"><code>par.map</code></a>,
-<a href="../operators/#allpairs"><code>par.allpairs</code></a>, and <a href="../operators/#imap"><code>par.imap</code></a> all
-lower here:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># All three lower to the same fused Map:</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">x</span> <span class="o">*</span> <span class="mf">0.5</span><span class="p">)</span> <span class="o">+</span> <span class="mf">0.3</span>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">np</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">xi</span> <span class="o">*</span> <span class="mf">0.5</span><span class="p">)</span> <span class="o">+</span> <span class="mf">0.3</span> <span class="k">for</span> <span class="n">xi</span> <span class="ow">in</span> <span class="n">x</span><span class="p">])</span>
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">y</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">imap</span><span class="p">(</span><span class="k">lambda</span> <span class="n">i</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="mf">0.5</span><span class="p">)</span> <span class="o">+</span> <span class="mf">0.3</span><span class="p">,</span> <span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>
-<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="c1"># Algebraic form (pseudocode):</span>
-<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="c1"># parallel for i in range(len(x)):</span>
-<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="c1">#     y[i] = tanh(x[i] * 0.5) + 0.3</span>
-</code></pre></div>
-<p><strong>Key rewrites:</strong> vertical producer-consumer fusion (including slices,
-transposes, and stencils), sibling map fusion (<code>sin(x), cos(x)</code> in one pass),
-and nested map flattening. See <a href="../rewrites/#fusion">Fusion rules</a>.</p>
-<hr />
-<h3 id="reduce-and-fold">Reduce and Fold (<code>IndexReduce</code>)<a class="headerlink" href="#reduce-and-fold" title="Permanent link">&para;</a></h3>
-<p>Combines values across a reduction axis into one or more scalar accumulators.</p>
-<p><strong>Choosing between <a href="../operators/#reduce"><code>par.reduce</code></a>,
-<a href="../operators/#fold"><code>par.fold</code></a>, and <a href="../operators/#ireduce"><code>par.ireduce</code></a>:</strong></p>
-<ul>
-<li><strong><code>np.sum</code> / <code>np.max</code> / <code>np.argmin</code> / <a href="../operators/#reduce"><code>par.reduce(op, x)</code></a>:</strong>
-  single-value reduction with a binary combiner (<code>np.add</code>, <code>np.maximum</code>, or a
-  custom function).</li>
-<li><strong><a href="../operators/#fold"><code>par.fold(lift, merge, x, init)</code></a>:</strong> structured
-  multi-field reduction such as <code>(best_val, best_idx)</code> or Welford
-  <code>(count, mean, m2)</code>, preserving left-to-right merge order for ties and
-  non-commutative merges.</li>
-<li><strong><a href="../operators/#ireduce"><code>par.ireduce(fn, shape, combine=np.add)</code></a>:</strong> reduces
-  directly over an index grid without building an input array first.</li>
-</ul>
-<p>All three lower to <code>IndexReduce</code> (with <code>Carry</code> fields for multi-state folds):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">total</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>  <span class="c1"># single associative fold (add)</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">idx</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">argmin</span><span class="p">(</span><span class="n">scores</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>  <span class="c1"># fold(min) carrying winning index</span>
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">best</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">fold</span><span class="p">(</span>  <span class="c1"># explicit multi-field fold</span>
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>  <span class="k">lambda</span> <span class="n">v</span><span class="p">,</span> <span class="n">i</span><span class="p">:</span> <span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">i</span><span class="p">),</span>
-<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>  <span class="k">lambda</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">a</span> <span class="k">if</span> <span class="n">a</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="n">b</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">else</span> <span class="n">b</span><span class="p">,</span>
-<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>  <span class="n">scores</span><span class="p">,</span>
-<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>  <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
-<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>  <span class="n">indexed</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="p">)</span>
-</code></pre></div>
-<p><strong>Key rewrites:</strong> chunked parallel reduction, sibling reduction fusion
-(<code>x.min(), x.max()</code> in one pass), online <code>logsumexp</code>, CPU L1 reduction
-interchange (<code>np.sum(X, axis=0)</code>), and
-<a href="../algebra/#law-1-rescaled-semiring-monoids">Law 1 monoidal tiling</a>.</p>
-<hr />
-<h3 id="scan">Scan (<code>IndexScan</code>)<a class="headerlink" href="#scan" title="Permanent link">&para;</a></h3>
-<p>Prefix accumulation where element <code>t</code> depends on <code>0..t</code>. Covers <code>np.cumsum</code>,
-<code>np.cumprod</code>, <a href="../operators/#scan"><code>par.scan</code></a>, and plain <code>for t in range(T):</code>
-loops expressing affine (<code>s = a[t] * s + b[t]</code>) or bilinear matrix-state
-recurrences (<code>S = a[t] * S + outer(k[t], v[t])</code>):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">prefix</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">cumsum</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>  <span class="c1"># 3-stage parallel prefix scan</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">ema</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">scan</span><span class="p">(</span><span class="k">lambda</span> <span class="n">acc</span><span class="p">,</span> <span class="n">v</span><span class="p">:</span> <span class="mf">0.9</span> <span class="o">*</span> <span class="n">acc</span> <span class="o">+</span> <span class="mf">0.1</span> <span class="o">*</span> <span class="n">v</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>  <span class="c1"># custom combiner</span>
-</code></pre></div>
-<p><strong>Key rewrites:</strong> consumer map fusion into the scan's <code>emit</code> stage
-(<code>np.cumsum(x) * 2.0 + 1.0</code> runs in one pass) and
-<a href="../algebra/#law-4-chunkwise-state-space-duality">Law 4 chunkwise state-space duality</a>
-for affine IIR filters and Mamba-2 recurrences.</p>
-<hr />
-<h3 id="filter-and-expand">Filter and Expand (<code>IndexFilter</code>, <code>IndexExpand</code>)<a class="headerlink" href="#filter-and-expand" title="Permanent link">&para;</a></h3>
-<p>Data-dependent output compaction:</p>
-<ul>
-<li><strong><code>IndexFilter</code></strong> (1-to-0/1): keeps indices matching a predicate
-  (<code>x[x &gt; 0]</code>, <code>np.nonzero</code>, <a href="../operators/#filter"><code>par.filter</code></a>).</li>
-<li><strong><code>IndexExpand</code></strong> (1-to-K): two-pass count, prefix sum, and parallel emit into
-  a <code>RaggedArray</code> (<a href="../operators/#flatmap"><code>par.flatmap</code></a>,
-  <a href="../operators/#filter_pairs"><code>par.filter_pairs</code></a>).</li>
-</ul>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">positives</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="n">x</span> <span class="o">&gt;</span> <span class="mf">0.0</span><span class="p">]</span>  <span class="c1"># IndexFilter</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">pos_total</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="n">x</span> <span class="o">&gt;</span> <span class="mf">0.0</span><span class="p">])</span>  <span class="c1"># Filter + Reduce -&gt; 0-alloc FilterReduce</span>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">cigar_ops</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">flatmap</span><span class="p">(</span><span class="k">lambda</span> <span class="n">op</span><span class="p">,</span> <span class="n">n</span><span class="p">:</span> <span class="n">n</span><span class="p">,</span> <span class="k">lambda</span> <span class="n">op</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">k</span><span class="p">:</span> <span class="n">op</span><span class="p">,</span> <span class="n">ops</span><span class="p">,</span> <span class="n">lengths</span><span class="p">)</span>  <span class="c1"># IndexExpand</span>
-</code></pre></div>
-<p><strong>Key rewrites:</strong> <code>x[p][q]</code> merges into one short-circuiting predicate <code>p and q</code>,
-and <code>np.sum(x[x &gt; 0])</code> eliminates the index array completely
-(<a href="#walkthrough-filter">Walkthrough 3</a>).</p>
-<hr />
-<h3 id="scatter">Scatter (<code>IndexScatter</code>)<a class="headerlink" href="#scatter" title="Permanent link">&para;</a></h3>
-<p>Associative accumulation (<code>add</code>, <code>mul</code>, <code>min</code>, <code>max</code>) into shared output bins:
-<code>np.bincount</code>, <code>np.add.at</code>, <code>for i: out[idx[i]] += v[i]</code>, filtered
-comprehensions <code>[np.sum(v[idx == b]) for b in range(n)]</code>, and
-<a href="../operators/#scatter_add"><code>par.scatter_add</code></a>.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">grad_hist</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">bincount</span><span class="p">(</span><span class="n">bin_ids</span><span class="p">,</span> <span class="n">weights</span><span class="o">=</span><span class="n">grads</span><span class="p">,</span> <span class="n">minlength</span><span class="o">=</span><span class="mi">256</span><span class="p">)</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">hess_hist</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">bincount</span><span class="p">(</span><span class="n">bin_ids</span><span class="p">,</span> <span class="n">weights</span><span class="o">=</span><span class="n">hess</span><span class="p">,</span> <span class="n">minlength</span><span class="o">=</span><span class="mi">256</span><span class="p">)</span>
-</code></pre></div>
-<p><strong>Key rewrites:</strong> sibling histograms with the same <code>bin_ids</code> fuse into one
-pass, lowered with thread-private bins on CPU and atomics on GPU. Under
-<code>par.grad</code>, <code>IndexScatter(add)</code> differentiates to a gather (<code>g[idx]</code>). See
-<a href="../algebra/#law-6-privatized-scatter-multi-state-carries">Law 6</a>.</p>
-<hr />
-<h3 id="wavefront">Wavefront (<code>IndexWavefront</code>)<a class="headerlink" href="#wavefront" title="Permanent link">&para;</a></h3>
-<p>2D dynamic programming where cell <code>(i, j)</code> depends on <code>(i - 1, j)</code>, <code>(i, j - 1)</code>,
-and <code>(i - 1, j - 1)</code>, scheduled along parallel anti-diagonals in <code>O(M)</code> rolling
-memory (<a href="../operators/#wavefront"><code>par.wavefront</code></a>,
-<a href="../operators/#batched_wavefront"><code>par.batched_wavefront</code></a>,
-<a href="../operators/#soft_align"><code>par.soft_align</code></a>).</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">scores</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">wavefront</span><span class="p">(</span>
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>  <span class="k">lambda</span> <span class="n">top</span><span class="p">,</span> <span class="n">left</span><span class="p">,</span> <span class="n">diag</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">:</span> <span class="nb">max</span><span class="p">(</span><span class="n">diag</span> <span class="o">+</span> <span class="n">match</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">),</span> <span class="n">top</span> <span class="o">-</span> <span class="mf">2.0</span><span class="p">,</span> <span class="n">left</span> <span class="o">-</span> <span class="mf">2.0</span><span class="p">),</span>
-<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>  <span class="p">(</span><span class="n">m</span><span class="p">,</span> <span class="n">n</span><span class="p">),</span>
-<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>  <span class="n">init_top</span><span class="o">=...</span><span class="p">,</span>
-<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>  <span class="n">init_left</span><span class="o">=...</span><span class="p">,</span>
-<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>  <span class="n">init_corner</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span>
-<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="p">)</span>
-</code></pre></div>
-<hr />
-<h3 id="tile">Tile (<code>IndexTile</code>)<a class="headerlink" href="#tile" title="Permanent link">&para;</a></h3>
-<p>Blocked execution with staged local buffers (<code>TileStage</code>) for CPU L1/L2 cache,
-register micro-tiles, or GPU shared memory (<code>__shared__</code> / <code>threadgroup</code>). You
-never write <code>IndexTile</code> directly; middle-end passes emit it automatically from
-ordinary matmuls, <code>einsum</code>, 1-NN, and attention based on the target's
-<code>TargetProfile</code>.</p>
-<hr />
-<h2 id="worked-end-to-end-compilation-walkthroughs">Worked end-to-end compilation walkthroughs<a class="headerlink" href="#worked-end-to-end-compilation-walkthroughs" title="Permanent link">&para;</a></h2>
-<p>The stages below show each compiler rewrite in readable Python pseudocode so the
-algebraic structure stays clear. To see the raw low-level SSA/loop IR that the
-compiler lowers to before C/CUDA/Metal emission, see
-<a href="../internals/#lowered-ir">Compiler architecture: Lowered IR</a>.</p>
-<h3 id="walkthrough-attention">Walkthrough 1: Causal self-attention (<code>O(T²)</code> NumPy to <code>O(T)</code> tiled kernel)<a class="headerlink" href="#walkthrough-attention" title="Permanent link">&para;</a></h3>
+<h2 id="worked-end-to-end-compilation-walkthroughs">Worked compilation walkthroughs<a class="headerlink" href="#worked-end-to-end-compilation-walkthroughs" title="Permanent link">&para;</a></h2>
+<p>Each walkthrough below starts from ordinary Python/NumPy and shows the exact
+compiled schedule Parakeet produces. (To inspect raw SSA loop IR, see
+<a href="../internals/#lowered-ir">Compiler architecture: Lowered IR</a>.)</p>
+<h3 id="walkthrough-attention">1. Causal self-attention (<code>O(T²)</code> NumPy → <code>O(T)</code> tiled kernel)<a class="headerlink" href="#walkthrough-attention" title="Permanent link">&para;</a></h3>
 <p>Start from four lines of ordinary NumPy:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
-<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">parakeet</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">par</span>
-<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
-<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>
-<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="nd">@par</span><span class="o">.</span><span class="n">jit</span>
-<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="k">def</span><span class="w"> </span><span class="nf">causal_attention</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span><span class="p">):</span>
-<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>  <span class="n">causal</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">imap</span><span class="p">(</span><span class="k">lambda</span> <span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">:</span> <span class="n">i</span> <span class="o">&gt;=</span> <span class="n">j</span><span class="p">,</span> <span class="p">(</span><span class="n">q</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">k</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]))</span>
-<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>  <span class="n">s</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">causal</span><span class="p">,</span> <span class="p">(</span><span class="n">q</span> <span class="o">@</span> <span class="n">k</span><span class="o">.</span><span class="n">T</span><span class="p">)</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">(</span><span class="mf">0.125</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">(</span><span class="o">-</span><span class="mf">1e9</span><span class="p">))</span>
-<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>  <span class="n">e</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="n">s</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">,</span> <span class="n">keepdims</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
-<a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>  <span class="k">return</span> <span class="p">(</span><span class="n">e</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">e</span><span class="p">,</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">,</span> <span class="n">keepdims</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span> <span class="o">@</span> <span class="n">v</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nd">@par</span><span class="o">.</span><span class="n">jit</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">causal_attention</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span><span class="p">):</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>  <span class="n">causal</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">imap</span><span class="p">(</span><span class="k">lambda</span> <span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">:</span> <span class="n">i</span> <span class="o">&gt;=</span> <span class="n">j</span><span class="p">,</span> <span class="p">(</span><span class="n">q</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">k</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]))</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>  <span class="n">s</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">causal</span><span class="p">,</span> <span class="p">(</span><span class="n">q</span> <span class="o">@</span> <span class="n">k</span><span class="o">.</span><span class="n">T</span><span class="p">)</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">(</span><span class="mf">0.125</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">(</span><span class="o">-</span><span class="mf">1e9</span><span class="p">))</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>  <span class="n">e</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="n">s</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">,</span> <span class="n">keepdims</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>  <span class="k">return</span> <span class="p">(</span><span class="n">e</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">e</span><span class="p">,</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">,</span> <span class="n">keepdims</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span> <span class="o">@</span> <span class="n">v</span>
 </code></pre></div>
-<pre class="mermaid"><code>flowchart TD
-  S0["Step 0: High-level NumPy&lt;br/&gt;causal, Q@K.T, where, max, exp, sum, div, @V"] --&gt; S1
-  S1["Step 1: Elaborated operators&lt;br/&gt;causal + scale + where fuse into Q@K.T;&lt;br/&gt;3 O(T^2) arrays remain (scores, exp_s, weights)"] --&gt; S2
-  S2["Step 2: normalize&lt;br/&gt;Hoists row max &amp; row sum out of column loops&lt;br/&gt;(cuts O(T^3) to O(T^2), exposes softmax chain)"] --&gt; S3
-  S3["Step 3: monoidal tiling (Law 1 + Law 5)&lt;br/&gt;Online (m, l, o) monoid drops all 3 O(T^2) arrays;&lt;br/&gt;1 tiled kernel with upper-triangle block skipping"] --&gt; S4
-  S4["Step 4: Lowering &amp; codegen&lt;br/&gt;1 parallel kernel (SIMD C / CUDA shared-mem / Metal)"]</code></pre>
-<h4 id="step-1-after-elaboration-delayed-array-fusion">Step 1: After elaboration (delayed-array fusion)<a class="headerlink" href="#step-1-after-elaboration-delayed-array-fusion" title="Permanent link">&para;</a></h4>
-<p>Delayed arrays fuse <code>causal</code>, <code>* 0.125</code>, and <code>np.where</code> straight into the
-<code>Q @ K.T</code> scores pass, so no <code>T × T</code> boolean mask is ever allocated. Three
-<code>O(T²)</code> float buffers still remain:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Pseudocode after elaboration (3 O(T^2) buffers allocated)</span>
-<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">scores</span> <span class="o">=</span> <span class="n">empty</span><span class="p">((</span><span class="n">T</span><span class="p">,</span> <span class="n">T</span><span class="p">),</span> <span class="n">float32</span><span class="p">)</span>
-<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="n">parallel</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">T</span><span class="p">),</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">T</span><span class="p">):</span>
-<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>    <span class="n">dot</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">q</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">d</span><span class="p">]</span> <span class="o">*</span> <span class="n">k</span><span class="p">[</span><span class="n">j</span><span class="p">,</span> <span class="n">d</span><span class="p">]</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">D</span><span class="p">))</span>
-<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>    <span class="n">scores</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="n">dot</span> <span class="o">*</span> <span class="mf">0.125</span> <span class="k">if</span> <span class="n">i</span> <span class="o">&gt;=</span> <span class="n">j</span> <span class="k">else</span> <span class="o">-</span><span class="mf">1e9</span>
-<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>
-<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="n">exp_s</span> <span class="o">=</span> <span class="n">empty</span><span class="p">((</span><span class="n">T</span><span class="p">,</span> <span class="n">T</span><span class="p">),</span> <span class="n">float32</span><span class="p">)</span>
-<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="n">parallel</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">T</span><span class="p">),</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">T</span><span class="p">):</span>
-<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>    <span class="n">row_max</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">scores</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">c</span><span class="p">]</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">T</span><span class="p">))</span>
-<a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>    <span class="n">exp_s</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="n">exp</span><span class="p">(</span><span class="n">scores</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">-</span> <span class="n">row_max</span><span class="p">)</span>
-<a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a>
-<a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="n">weights</span> <span class="o">=</span> <span class="n">empty</span><span class="p">((</span><span class="n">T</span><span class="p">,</span> <span class="n">T</span><span class="p">),</span> <span class="n">float32</span><span class="p">)</span>
-<a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="n">parallel</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">T</span><span class="p">),</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">T</span><span class="p">):</span>
-<a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a>    <span class="n">row_sum</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">exp_s</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">c</span><span class="p">]</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">T</span><span class="p">))</span>
-<a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a>    <span class="n">weights</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="n">exp_s</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">/</span> <span class="n">row_sum</span>
-<a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a>
-<a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a><span class="n">out</span> <span class="o">=</span> <span class="n">empty</span><span class="p">((</span><span class="n">T</span><span class="p">,</span> <span class="n">D</span><span class="p">),</span> <span class="n">float32</span><span class="p">)</span>
-<a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a><span class="n">parallel</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">T</span><span class="p">),</span> <span class="n">d</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">D</span><span class="p">):</span>
-<a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a>    <span class="n">out</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">d</span><span class="p">]</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">weights</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">*</span> <span class="n">v</span><span class="p">[</span><span class="n">j</span><span class="p">,</span> <span class="n">d</span><span class="p">]</span> <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">T</span><span class="p">))</span>
-</code></pre></div>
-<h4 id="step-2-after-normalize-invariant-row-reduction-hoisting">Step 2: After <code>normalize</code> (invariant row-reduction hoisting)<a class="headerlink" href="#step-2-after-normalize-invariant-row-reduction-hoisting" title="Permanent link">&para;</a></h4>
-<p><code>row_max</code> and <code>row_sum</code> depend only on <code>i</code>, not <code>j</code>. <code>normalize</code> splits the
-2D maps so each reduction runs once per row instead of <code>T</code> times:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Pseudocode after normalize (row reductions hoisted out of j)</span>
-<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="n">parallel</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">T</span><span class="p">):</span>
-<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>    <span class="n">row_max</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">scores</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">c</span><span class="p">]</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">T</span><span class="p">))</span>
-<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>    <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">T</span><span class="p">):</span>
-<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>        <span class="n">exp_s</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="n">exp</span><span class="p">(</span><span class="n">scores</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">-</span> <span class="n">row_max</span><span class="p">)</span>
-<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>
-<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="n">parallel</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">T</span><span class="p">):</span>
-<a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>    <span class="n">row_sum</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">exp_s</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">c</span><span class="p">]</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">T</span><span class="p">))</span>
-<a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a>    <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">T</span><span class="p">):</span>
-<a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a>        <span class="n">weights</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="n">exp_s</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">/</span> <span class="n">row_sum</span>
-</code></pre></div>
-<h4 id="step-3-after-monoidal-tiling-law-1-law-5">Step 3: After <code>monoidal tiling</code> (Law 1 + Law 5)<a class="headerlink" href="#step-3-after-monoidal-tiling-law-1-law-5" title="Permanent link">&para;</a></h4>
-<p><code>monoidal tiling</code> matches the chain <code>Q @ K.T -&gt; select(i &gt;= j) -&gt; max -&gt; exp -&gt; sum -&gt; div -&gt; @ V</code>
-as an associative rescaled monoid <code>(m, l, o)</code>. All three <code>O(T²)</code> buffers
-(<code>scores</code>, <code>exp_s</code>, <code>weights</code>) disappear, leaving one tiled pass over blocks of
-<code>K</code> and <code>V</code>. <strong>Law 5 (<code>TileInterval</code>)</strong> proves blocks strictly above the
-diagonal (<code>j0 &gt; i0 + BM - 1</code>) are all masked out and skips loading them:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Pseudocode after monoidal tiling (ONLY the O(T * D) output is allocated)</span>
-<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">out</span> <span class="o">=</span> <span class="n">empty</span><span class="p">((</span><span class="n">T</span><span class="p">,</span> <span class="n">D</span><span class="p">),</span> <span class="n">float32</span><span class="p">)</span>
-<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>
-<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="n">parallel</span> <span class="k">for</span> <span class="n">i0</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">T</span><span class="p">,</span> <span class="n">BM</span><span class="p">):</span>                      <span class="c1"># query tile (one threadblock on GPU)</span>
-<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>    <span class="n">Q_tile</span> <span class="o">=</span> <span class="n">stage</span><span class="p">(</span><span class="n">q</span><span class="p">[</span><span class="n">i0</span> <span class="p">:</span> <span class="n">i0</span> <span class="o">+</span> <span class="n">BM</span><span class="p">,</span> <span class="p">:])</span>                   <span class="c1"># staged in cache / shared memory</span>
-<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>    <span class="n">m</span><span class="p">,</span> <span class="n">l</span><span class="p">,</span> <span class="n">o</span> <span class="o">=</span> <span class="n">fill</span><span class="p">(</span><span class="o">-</span><span class="n">inf</span><span class="p">),</span> <span class="n">fill</span><span class="p">(</span><span class="mf">0.0</span><span class="p">),</span> <span class="n">zeros</span><span class="p">((</span><span class="n">BM</span><span class="p">,</span> <span class="n">D</span><span class="p">))</span>
-<a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a>
-<a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a>    <span class="k">for</span> <span class="n">j0</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">T</span><span class="p">,</span> <span class="n">BN</span><span class="p">):</span>                           <span class="c1"># key/value tile</span>
-<a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a>        <span class="k">if</span> <span class="n">j0</span> <span class="o">&gt;</span> <span class="n">i0</span> <span class="o">+</span> <span class="n">BM</span> <span class="o">-</span> <span class="mi">1</span><span class="p">:</span>                             <span class="c1"># Law 5: strictly upper-triangular -&gt; skip</span>
-<a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a>            <span class="k">continue</span>
-<a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a>        <span class="n">K_tile</span> <span class="o">=</span> <span class="n">stage</span><span class="p">(</span><span class="n">k</span><span class="p">[</span><span class="n">j0</span> <span class="p">:</span> <span class="n">j0</span> <span class="o">+</span> <span class="n">BN</span><span class="p">,</span> <span class="p">:])</span>
-<a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a>        <span class="n">V_tile</span> <span class="o">=</span> <span class="n">stage</span><span class="p">(</span><span class="n">v</span><span class="p">[</span><span class="n">j0</span> <span class="p">:</span> <span class="n">j0</span> <span class="o">+</span> <span class="n">BN</span><span class="p">,</span> <span class="p">:])</span>
-<a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a>        <span class="n">full_tile</span> <span class="o">=</span> <span class="p">(</span><span class="n">j0</span> <span class="o">+</span> <span class="n">BN</span> <span class="o">-</span> <span class="mi">1</span> <span class="o">&lt;=</span> <span class="n">i0</span><span class="p">)</span>                  <span class="c1"># interior tile -&gt; no per-element mask</span>
-<a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a>
-<a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a>        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">BM</span><span class="p">):</span>
-<a id="__codelineno-9-16" name="__codelineno-9-16" href="#__codelineno-9-16"></a>            <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">BN</span><span class="p">):</span>
-<a id="__codelineno-9-17" name="__codelineno-9-17" href="#__codelineno-9-17"></a>                <span class="n">s</span> <span class="o">=</span> <span class="n">dot</span><span class="p">(</span><span class="n">Q_tile</span><span class="p">[</span><span class="n">r</span><span class="p">],</span> <span class="n">K_tile</span><span class="p">[</span><span class="n">c</span><span class="p">])</span> <span class="o">*</span> <span class="mf">0.125</span>
-<a id="__codelineno-9-18" name="__codelineno-9-18" href="#__codelineno-9-18"></a>                <span class="k">if</span> <span class="ow">not</span> <span class="n">full_tile</span> <span class="ow">and</span> <span class="p">(</span><span class="n">i0</span> <span class="o">+</span> <span class="n">r</span> <span class="o">&lt;</span> <span class="n">j0</span> <span class="o">+</span> <span class="n">c</span><span class="p">):</span>
-<a id="__codelineno-9-19" name="__codelineno-9-19" href="#__codelineno-9-19"></a>                    <span class="n">s</span> <span class="o">=</span> <span class="o">-</span><span class="mf">1e9</span>
-<a id="__codelineno-9-20" name="__codelineno-9-20" href="#__codelineno-9-20"></a>                <span class="n">m_new</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">m</span><span class="p">[</span><span class="n">r</span><span class="p">],</span> <span class="n">s</span><span class="p">)</span>
-<a id="__codelineno-9-21" name="__codelineno-9-21" href="#__codelineno-9-21"></a>                <span class="n">alpha</span> <span class="o">=</span> <span class="n">exp</span><span class="p">(</span><span class="n">m</span><span class="p">[</span><span class="n">r</span><span class="p">]</span> <span class="o">-</span> <span class="n">m_new</span><span class="p">)</span>
-<a id="__codelineno-9-22" name="__codelineno-9-22" href="#__codelineno-9-22"></a>                <span class="n">beta</span>  <span class="o">=</span> <span class="n">exp</span><span class="p">(</span><span class="n">s</span> <span class="o">-</span> <span class="n">m_new</span><span class="p">)</span>
-<a id="__codelineno-9-23" name="__codelineno-9-23" href="#__codelineno-9-23"></a>                <span class="n">l</span><span class="p">[</span><span class="n">r</span><span class="p">]</span>  <span class="o">=</span> <span class="n">l</span><span class="p">[</span><span class="n">r</span><span class="p">]</span> <span class="o">*</span> <span class="n">alpha</span> <span class="o">+</span> <span class="n">beta</span>
-<a id="__codelineno-9-24" name="__codelineno-9-24" href="#__codelineno-9-24"></a>                <span class="n">o</span><span class="p">[</span><span class="n">r</span><span class="p">]</span>  <span class="o">=</span> <span class="n">o</span><span class="p">[</span><span class="n">r</span><span class="p">]</span> <span class="o">*</span> <span class="n">alpha</span> <span class="o">+</span> <span class="n">beta</span> <span class="o">*</span> <span class="n">V_tile</span><span class="p">[</span><span class="n">c</span><span class="p">]</span>
-<a id="__codelineno-9-25" name="__codelineno-9-25" href="#__codelineno-9-25"></a>                <span class="n">m</span><span class="p">[</span><span class="n">r</span><span class="p">]</span>  <span class="o">=</span> <span class="n">m_new</span>
-<a id="__codelineno-9-26" name="__codelineno-9-26" href="#__codelineno-9-26"></a>
-<a id="__codelineno-9-27" name="__codelineno-9-27" href="#__codelineno-9-27"></a>    <span class="n">out</span><span class="p">[</span><span class="n">i0</span> <span class="p">:</span> <span class="n">i0</span> <span class="o">+</span> <span class="n">BM</span><span class="p">,</span> <span class="p">:]</span> <span class="o">=</span> <span class="n">o</span> <span class="o">/</span> <span class="n">l</span><span class="p">[:,</span> <span class="kc">None</span><span class="p">]</span>
-</code></pre></div>
-<h4 id="step-4-rewrite-report-code-generation">Step 4: Rewrite report &amp; code generation<a class="headerlink" href="#step-4-rewrite-report-code-generation" title="Permanent link">&para;</a></h4>
-<p>Lowering turns that single <code>IndexTile</code> into one parallel kernel (SIMD C loops on
-CPU; shared-memory CUDA or Metal threadblocks on GPU):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>Parakeet Algebraic Rewrite Report for `causal_attention`
-<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>  Laws triggered : Law 1: Rescaled Semiring Monoid Tile Fusion, Law 5: Affine Tile-Interval Mask Pruning
-<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>  Monoidal plans : flash_monoid
-<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>  Operators      : IndexMap 5 -&gt; 1 | IndexTile 1 | IndexScatter 0 -&gt; 0 | Carry folds 0
-</code></pre></div>
-<hr />
-<h3 id="walkthrough-1nn">Walkthrough 2: Exact 1-NN (broadcasting NumPy to tiled pairwise fold)<a class="headerlink" href="#walkthrough-1nn" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="nd">@par</span><span class="o">.</span><span class="n">jit</span>
-<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">nearest</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
-<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>  <span class="n">delta</span> <span class="o">=</span> <span class="n">x</span><span class="p">[:,</span> <span class="kc">None</span><span class="p">,</span> <span class="p">:]</span> <span class="o">-</span> <span class="n">y</span><span class="p">[</span><span class="kc">None</span><span class="p">,</span> <span class="p">:,</span> <span class="p">:]</span>
-<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>  <span class="n">d2</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">delta</span> <span class="o">**</span> <span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">(</span><span class="mi">2</span><span class="p">),</span> <span class="n">axis</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
-<a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>  <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">argmin</span><span class="p">(</span><span class="n">d2</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
-</code></pre></div>
+<p><img alt="Causal attention compiled from 3 O(T^2) buffers to 1 tiled kernel with Law 5 block skipping" src="../assets/diag-attention-tiling.svg" /></p>
+<p>Three general passes transform this function:</p>
 <ol>
-<li><strong>After elaboration:</strong> delayed arrays fuse <code>delta</code> and <code>d2</code> directly into
-   <code>argmin</code>, eliminating both the <code>(Q, R, D)</code> difference tensor and the
-   <code>(Q, R)</code> distance matrix:
-   <div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Pseudocode after elaboration (0 intermediate allocations)</span>
-<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="n">out</span> <span class="o">=</span> <span class="n">empty</span><span class="p">(</span><span class="n">Q</span><span class="p">,</span> <span class="n">int64</span><span class="p">)</span>
-<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="n">parallel</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">Q</span><span class="p">):</span>
-<a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>    <span class="n">best_d</span><span class="p">,</span> <span class="n">best_j</span> <span class="o">=</span> <span class="o">+</span><span class="n">inf</span><span class="p">,</span> <span class="mi">0</span>
-<a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>    <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">R</span><span class="p">):</span>
-<a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a>        <span class="n">d2</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">((</span><span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">d</span><span class="p">]</span> <span class="o">-</span> <span class="n">y</span><span class="p">[</span><span class="n">j</span><span class="p">,</span> <span class="n">d</span><span class="p">])</span> <span class="o">**</span> <span class="mi">2</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">D</span><span class="p">))</span>
-<a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a>        <span class="k">if</span> <span class="n">d2</span> <span class="o">&lt;</span> <span class="n">best_d</span><span class="p">:</span>
-<a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a>            <span class="n">best_d</span><span class="p">,</span> <span class="n">best_j</span> <span class="o">=</span> <span class="n">d2</span><span class="p">,</span> <span class="n">j</span>
-<a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a>    <span class="n">out</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">best_j</span>
-</code></pre></div></li>
-<li><strong>After <code>pairwise fold tiling</code> (Law 6):</strong> tiles queries by <code>16</code> and
-   references by <code>128</code>, evaluates a <code>16 × 128</code> L1-resident score block (<code>8 KiB</code>)
-   with <code>2 × 4</code> register micro-tiles, folds each row inside the tile, and merges
-   tile winners in left-to-right reference order so ties and NaNs keep NumPy's
-   exact first-index rule:
-   <div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Pseudocode after pairwise fold tiling (CPU schedule)</span>
-<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="n">out</span> <span class="o">=</span> <span class="n">empty</span><span class="p">(</span><span class="n">Q</span><span class="p">,</span> <span class="n">int64</span><span class="p">)</span>
-<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="n">parallel</span> <span class="k">for</span> <span class="n">q0</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">Q</span><span class="p">,</span> <span class="mi">16</span><span class="p">):</span>
-<a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>    <span class="n">row_best</span><span class="p">,</span> <span class="n">row_arg</span> <span class="o">=</span> <span class="n">fill</span><span class="p">(</span><span class="o">+</span><span class="n">inf</span><span class="p">),</span> <span class="n">zeros</span><span class="p">(</span><span class="mi">16</span><span class="p">,</span> <span class="n">int64</span><span class="p">)</span>
-<a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>    <span class="k">for</span> <span class="n">r0</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">R</span><span class="p">,</span> <span class="mi">128</span><span class="p">):</span>                          <span class="c1"># ordered in reference index</span>
-<a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a>        <span class="n">score_tile</span> <span class="o">=</span> <span class="n">compute_2x4_microtiles</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="n">q0</span><span class="p">:</span><span class="n">q0</span><span class="o">+</span><span class="mi">16</span><span class="p">],</span> <span class="n">y</span><span class="p">[</span><span class="n">r0</span><span class="p">:</span><span class="n">r0</span><span class="o">+</span><span class="mi">128</span><span class="p">])</span>  <span class="c1"># 8 KiB in L1</span>
-<a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a>        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">16</span><span class="p">):</span>
-<a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a>            <span class="n">tile_best</span><span class="p">,</span> <span class="n">tile_arg</span> <span class="o">=</span> <span class="n">argmin_with_offset</span><span class="p">(</span><span class="n">score_tile</span><span class="p">[</span><span class="n">r</span><span class="p">],</span> <span class="n">offset</span><span class="o">=</span><span class="n">r0</span><span class="p">)</span>
-<a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a>            <span class="k">if</span> <span class="n">tile_best</span> <span class="o">&lt;</span> <span class="n">row_best</span><span class="p">[</span><span class="n">r</span><span class="p">]:</span>
-<a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a>                <span class="n">row_best</span><span class="p">[</span><span class="n">r</span><span class="p">],</span> <span class="n">row_arg</span><span class="p">[</span><span class="n">r</span><span class="p">]</span> <span class="o">=</span> <span class="n">tile_best</span><span class="p">,</span> <span class="n">tile_arg</span>
-<a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a>    <span class="n">out</span><span class="p">[</span><span class="n">q0</span> <span class="p">:</span> <span class="n">q0</span> <span class="o">+</span> <span class="mi">16</span><span class="p">]</span> <span class="o">=</span> <span class="n">row_arg</span>
-</code></pre></div></li>
-<li><strong>On CUDA / Metal:</strong> the same pass emits a 2-stage schedule. Stage 1 computes
-   <code>16 KiB</code> shared-memory score tiles and writes only <code>O(Q · #tiles)</code> partial
-   winners; Stage 2 merges partial winners in reference order.</li>
+<li><strong>Indexification &amp; delayed fusion</strong> fold <code>causal</code>, <code>* 0.125</code>, and <code>np.where</code>
+   directly into <code>Q @ K.T</code> (so no <code>T × T</code> boolean mask is ever allocated),
+   leaving three <code>O(T²)</code> float buffers (<code>scores</code>, <code>exp_s</code>, <code>weights</code>).</li>
+<li><strong><code>normalize</code></strong> hoists <code>row_max</code> and <code>row_sum</code> out of the column loop so
+   each row reduction runs once instead of <code>T</code> times.</li>
+<li><strong><code>monoidal tiling</code> (Law 1 + Law 5)</strong> recognizes the softmax-weighted
+   contraction as an associative rescaled monoid <code>(m, l, o)</code> and drops all three
+   <code>O(T²)</code> buffers. <code>TileInterval</code> (Law 5) proves upper-triangular tiles
+   (<code>j0 &gt; i0 + BM - 1</code>) are fully masked and skips loading them, while interior
+   tiles run branchless.</li>
 </ol>
-<hr />
-<h3 id="walkthrough-filter">Walkthrough 3: Boolean masking to zero-allocation <code>FilterReduce</code><a class="headerlink" href="#walkthrough-filter" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="nd">@par</span><span class="o">.</span><span class="n">jit</span>
-<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">pos_sum</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
-<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>  <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="n">x</span> <span class="o">&gt;</span> <span class="mf">0.0</span><span class="p">])</span>
+<div class="pk-xform">
+<div class="pk-xform-col pk-xform-col--before">
+<div class="pk-xform-title">Naive execution <span class="pk-xform-badge">4 passes · 3 × O(T²) buffers</span></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">scores</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="n">T</span><span class="p">,</span> <span class="n">T</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">T</span><span class="p">):</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>  <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">T</span><span class="p">):</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>    <span class="n">dot</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">q</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">d</span><span class="p">]</span> <span class="o">*</span> <span class="n">k</span><span class="p">[</span><span class="n">j</span><span class="p">,</span> <span class="n">d</span><span class="p">]</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">D</span><span class="p">))</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    <span class="n">scores</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="n">dot</span> <span class="o">*</span> <span class="mf">0.125</span> <span class="k">if</span> <span class="n">i</span> <span class="o">&gt;=</span> <span class="n">j</span> <span class="k">else</span> <span class="o">-</span><span class="mf">1e9</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="n">exp_s</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="n">T</span><span class="p">,</span> <span class="n">T</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">T</span><span class="p">):</span>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>  <span class="n">row_max</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">scores</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="p">:])</span>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>  <span class="n">exp_s</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="p">:]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="n">scores</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="p">:]</span> <span class="o">-</span> <span class="n">row_max</span><span class="p">)</span>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="n">weights</span> <span class="o">=</span> <span class="n">exp_s</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">exp_s</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">keepdims</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="n">out</span> <span class="o">=</span> <span class="n">weights</span> <span class="o">@</span> <span class="n">v</span>
 </code></pre></div>
-<ol>
-<li><strong>After elaboration:</strong> two passes (compact surviving indices into <code>kept</code>,
-   then gather and sum):
-   <div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># Pseudocode before filter fusion (allocates `kept`)</span>
-<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="n">kept</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">N</span><span class="p">)</span> <span class="k">if</span> <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mf">0.0</span><span class="p">]</span>
-<a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="n">total</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">kept</span><span class="p">)</span>
-</code></pre></div></li>
-<li><strong>After <code>filter fusion</code>:</strong> because <code>kept</code> has no other consumer and <code>add</code>
-   has identity <code>0.0</code>, both passes collapse into one guarded parallel reduction
-   with zero allocation and no gather bounds check:
-   <div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Pseudocode after filter fusion (0 allocations)</span>
-<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="n">total</span> <span class="o">=</span> <span class="n">parallel_sum</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">N</span><span class="p">)</span> <span class="k">if</span> <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mf">0.0</span><span class="p">)</span>
-</code></pre></div></li>
-</ol>
-<hr />
-<h2 id="inspecting-rewrites-on-your-own-functions">Inspecting rewrites on your own functions<a class="headerlink" href="#inspecting-rewrites-on-your-own-functions" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">parakeet</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">par</span>
-<a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>
-<a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="c1"># 1. Summary of laws triggered and operator counts</span>
-<a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="nb">print</span><span class="p">(</span><span class="n">par</span><span class="o">.</span><span class="n">show_rewrite</span><span class="p">(</span><span class="n">causal_attention</span><span class="p">,</span> <span class="n">q</span><span class="p">,</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span><span class="p">)</span><span class="o">.</span><span class="n">summary</span><span class="p">())</span>
-<a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a>
-<a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="c1"># 2. Generated C, CUDA, or Metal source</span>
-<a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a><span class="n">spec</span> <span class="o">=</span> <span class="n">causal_attention</span><span class="o">.</span><span class="n">specialize</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span><span class="p">)</span>
-<a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a><span class="nb">print</span><span class="p">(</span><span class="n">spec</span><span class="o">.</span><span class="n">source</span><span class="p">)</span>  <span class="c1"># host C</span>
-<a id="__codelineno-17-9" name="__codelineno-17-9" href="#__codelineno-17-9"></a><span class="nb">print</span><span class="p">(</span><span class="n">spec</span><span class="o">.</span><span class="n">kernels</span><span class="p">)</span>  <span class="c1"># GPU kernels (cuda or metal)</span>
+</div>
+<div class="pk-xform-col pk-xform-col--after">
+<div class="pk-xform-title">Compiled schedule (Law 1 + Law 5) <span class="pk-xform-badge">1 pass · 0 O(T²) buffers</span></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">out</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="n">T</span><span class="p">,</span> <span class="n">D</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="k">for</span> <span class="n">i0</span> <span class="ow">in</span> <span class="n">parallel_range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">T</span><span class="p">,</span> <span class="n">BM</span><span class="p">):</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>  <span class="n">Q_tile</span> <span class="o">=</span> <span class="n">stage</span><span class="p">(</span><span class="n">q</span><span class="p">[</span><span class="n">i0</span> <span class="p">:</span> <span class="n">i0</span> <span class="o">+</span> <span class="n">BM</span><span class="p">])</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>  <span class="n">m</span><span class="p">,</span> <span class="n">l</span><span class="p">,</span> <span class="n">o</span> <span class="o">=</span> <span class="n">fill</span><span class="p">(</span><span class="o">-</span><span class="n">inf</span><span class="p">),</span> <span class="n">fill</span><span class="p">(</span><span class="mf">0.0</span><span class="p">),</span> <span class="n">zeros</span><span class="p">((</span><span class="n">BM</span><span class="p">,</span> <span class="n">D</span><span class="p">))</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>  <span class="k">for</span> <span class="n">j0</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">T</span><span class="p">,</span> <span class="n">BN</span><span class="p">):</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>    <span class="k">if</span> <span class="n">j0</span> <span class="o">&gt;</span> <span class="n">i0</span> <span class="o">+</span> <span class="n">BM</span> <span class="o">-</span> <span class="mi">1</span><span class="p">:</span>  <span class="c1"># Law 5: skip upper triangle</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>      <span class="k">continue</span>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>    <span class="n">K_tile</span> <span class="o">=</span> <span class="n">stage</span><span class="p">(</span><span class="n">k</span><span class="p">[</span><span class="n">j0</span> <span class="p">:</span> <span class="n">j0</span> <span class="o">+</span> <span class="n">BN</span><span class="p">])</span>
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>    <span class="n">V_tile</span> <span class="o">=</span> <span class="n">stage</span><span class="p">(</span><span class="n">v</span><span class="p">[</span><span class="n">j0</span> <span class="p">:</span> <span class="n">j0</span> <span class="o">+</span> <span class="n">BN</span><span class="p">])</span>
+<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>    <span class="n">full</span> <span class="o">=</span> <span class="n">j0</span> <span class="o">+</span> <span class="n">BN</span> <span class="o">-</span> <span class="mi">1</span> <span class="o">&lt;=</span> <span class="n">i0</span>  <span class="c1"># interior -&gt; branchless</span>
+<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>    <span class="n">m</span><span class="p">,</span> <span class="n">l</span><span class="p">,</span> <span class="n">o</span> <span class="o">=</span> <span class="n">monoid_step</span><span class="p">(</span><span class="n">m</span><span class="p">,</span> <span class="n">l</span><span class="p">,</span> <span class="n">o</span><span class="p">,</span> <span class="n">Q_tile</span><span class="p">,</span> <span class="n">K_tile</span><span class="p">,</span> <span class="n">V_tile</span><span class="p">,</span> <span class="n">full</span><span class="p">)</span>
+<a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>
+<a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>  <span class="n">out</span><span class="p">[</span><span class="n">i0</span> <span class="p">:</span> <span class="n">i0</span> <span class="o">+</span> <span class="n">BM</span><span class="p">]</span> <span class="o">=</span> <span class="n">o</span> <span class="o">/</span> <span class="n">l</span><span class="p">[:,</span> <span class="kc">None</span><span class="p">]</span>
 </code></pre></div>
-<p>For inspecting raw pass-by-pass IR (<code>spec.operators</code>, <code>spec.ir</code>,
-<code>fn.trace_passes</code>), see <a href="../internals/#lowered-ir">Compiler architecture: Lowered IR</a>.
-For the mathematical identities behind Laws 1 through 6, see
-<a href="../algebra/">Algebraic laws</a>, and for the full pass catalog see
-<a href="../rewrites/">Rewrite rules and optimizations</a>.</p>
+</div>
+</div>
+<p>Verify what fired with <code>par.show_rewrite(causal_attention, q, k, v).summary()</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>Parakeet Algebraic Rewrite Report for `causal_attention`
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>  Laws triggered : Law 1: Rescaled Semiring Monoid Tile Fusion, Law 5: Affine Tile-Interval Mask Pruning
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>  Monoidal plans : flash_monoid
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>  Operators      : IndexMap 5 -&gt; 1 | IndexTile 1 | IndexScatter 0 -&gt; 0 | Carry folds 0
+</code></pre></div>
+<hr />
+<h3 id="walkthrough-1nn">2. Exact 1-NN (broadcasting NumPy → tiled pairwise fold)<a class="headerlink" href="#walkthrough-1nn" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nd">@par</span><span class="o">.</span><span class="n">jit</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">nearest</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>  <span class="n">delta</span> <span class="o">=</span> <span class="n">x</span><span class="p">[:,</span> <span class="kc">None</span><span class="p">,</span> <span class="p">:]</span> <span class="o">-</span> <span class="n">y</span><span class="p">[</span><span class="kc">None</span><span class="p">,</span> <span class="p">:,</span> <span class="p">:]</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>  <span class="n">d2</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">delta</span> <span class="o">**</span> <span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">(</span><span class="mi">2</span><span class="p">),</span> <span class="n">axis</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>  <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">argmin</span><span class="p">(</span><span class="n">d2</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+</code></pre></div>
+<p><img alt="Exact 1-NN streams 16x128 score tiles in L1/SRAM with left-to-right ordered carry merge" src="../assets/diag-pairwise-1nn.svg" /></p>
+<p>Indexification turns the 3D broadcast <code>delta</code> and squared sum <code>d2</code> directly
+into index expressions inside <code>argmin</code>—eliminating both the <code>(Q, R, D)</code>
+difference tensor and <code>(Q, R)</code> distance matrix. <strong>Law 6 (<code>pairwise fold tiling</code>)</strong>
+then blocks the search into <code>16 × 128</code> L1/SRAM score tiles merged strictly
+left-to-right so ties and NaNs keep NumPy's exact first-index rule:</p>
+<div class="pk-xform">
+<div class="pk-xform-col pk-xform-col--before">
+<div class="pk-xform-title">Naive NumPy <span class="pk-xform-badge">O(Q · R · D) + O(Q · R) RAM</span></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">delta</span> <span class="o">=</span> <span class="n">x</span><span class="p">[:,</span> <span class="kc">None</span><span class="p">,</span> <span class="p">:]</span> <span class="o">-</span> <span class="n">y</span><span class="p">[</span><span class="kc">None</span><span class="p">,</span> <span class="p">:,</span> <span class="p">:]</span>  <span class="c1"># (Q, R, D)</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">d2</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">delta</span><span class="o">**</span><span class="mi">2</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>  <span class="c1"># (Q, R): 64 MiB</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="n">out</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">argmin</span><span class="p">(</span><span class="n">d2</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>  <span class="c1"># (Q,)</span>
+</code></pre></div>
+</div>
+<div class="pk-xform-col pk-xform-col--after">
+<div class="pk-xform-title">Parakeet Tiled Fold <span class="pk-xform-badge">8 KiB L1 / 16 KiB SRAM</span></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">out</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span><span class="n">Q</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">)</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="k">for</span> <span class="n">q0</span> <span class="ow">in</span> <span class="n">parallel_range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">Q</span><span class="p">,</span> <span class="mi">16</span><span class="p">):</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>  <span class="n">best_d</span><span class="p">,</span> <span class="n">best_j</span> <span class="o">=</span> <span class="n">fill</span><span class="p">(</span><span class="o">+</span><span class="n">inf</span><span class="p">),</span> <span class="n">zeros</span><span class="p">(</span><span class="mi">16</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">)</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>  <span class="k">for</span> <span class="n">r0</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">R</span><span class="p">,</span> <span class="mi">128</span><span class="p">):</span>  <span class="c1"># ordered in r0</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>    <span class="n">tile</span> <span class="o">=</span> <span class="n">microtile_2x4</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="n">q0</span> <span class="p">:</span> <span class="n">q0</span> <span class="o">+</span> <span class="mi">16</span><span class="p">],</span> <span class="n">y</span><span class="p">[</span><span class="n">r0</span> <span class="p">:</span> <span class="n">r0</span> <span class="o">+</span> <span class="mi">128</span><span class="p">])</span>
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>    <span class="n">best_d</span><span class="p">,</span> <span class="n">best_j</span> <span class="o">=</span> <span class="n">merge_ordered</span><span class="p">(</span><span class="n">best_d</span><span class="p">,</span> <span class="n">best_j</span><span class="p">,</span> <span class="n">tile</span><span class="p">,</span> <span class="n">r0</span><span class="p">)</span>
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>  <span class="n">out</span><span class="p">[</span><span class="n">q0</span> <span class="p">:</span> <span class="n">q0</span> <span class="o">+</span> <span class="mi">16</span><span class="p">]</span> <span class="o">=</span> <span class="n">best_j</span>
+</code></pre></div>
+</div>
+</div>
+<p>On CUDA and Metal, the same pass emits a 2-stage schedule: Stage 1 computes
+<code>16 KiB</code> shared-memory tiles and writes <code>O(Q · #tiles)</code> partial winners; Stage 2
+merges partial winners in global reference order.</p>
+<hr />
+<h3 id="walkthrough-filter">3. Boolean masking → zero-allocation <code>FilterReduce</code><a class="headerlink" href="#walkthrough-filter" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nd">@par</span><span class="o">.</span><span class="n">jit</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">pos_sum</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>  <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="n">x</span> <span class="o">&gt;</span> <span class="mf">0.0</span><span class="p">])</span>
+</code></pre></div>
+<p>Because the compacted index array has no other consumer and <code>add</code> has identity
+<code>0.0</code>, <strong><code>filter fusion</code></strong> collapses <code>IndexFilter</code> + <code>IndexReduce</code> into a single
+guarded parallel reduction with zero allocation and no gather bounds check:</p>
+<div class="pk-xform">
+<div class="pk-xform-col pk-xform-col--before">
+<div class="pk-xform-title">Before filter fusion <span class="pk-xform-badge">2 passes · index alloc</span></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="n">kept</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">N</span><span class="p">)</span> <span class="k">if</span> <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mf">0.0</span><span class="p">]</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="n">total</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">kept</span><span class="p">)</span>
+</code></pre></div>
+</div>
+<div class="pk-xform-col pk-xform-col--after">
+<div class="pk-xform-title">After filter fusion <span class="pk-xform-badge">1 pass · 0 allocations</span></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="n">partials</span> <span class="o">=</span> <span class="n">parallel_chunks</span><span class="p">(</span><span class="n">N</span><span class="p">)</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="k">for</span> <span class="n">chunk</span> <span class="ow">in</span> <span class="n">partials</span><span class="p">:</span>
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>  <span class="n">acc</span> <span class="o">=</span> <span class="mf">0.0</span>
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>  <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">chunk</span><span class="p">:</span>
+<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>    <span class="k">if</span> <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mf">0.0</span><span class="p">:</span>
+<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>      <span class="n">acc</span> <span class="o">+=</span> <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+<a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="n">total</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">partials</span><span class="p">)</span>
+</code></pre></div>
+</div>
+</div>
+<hr />
+<h2 id="inspecting-your-own-functions">Inspecting your own functions<a class="headerlink" href="#inspecting-your-own-functions" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">parakeet</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">par</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="c1"># 1. Summary of algebraic laws triggered and operator counts</span>
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="nb">print</span><span class="p">(</span><span class="n">par</span><span class="o">.</span><span class="n">show_rewrite</span><span class="p">(</span><span class="n">causal_attention</span><span class="p">,</span> <span class="n">q</span><span class="p">,</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span><span class="p">)</span><span class="o">.</span><span class="n">summary</span><span class="p">())</span>
+<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>
+<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="c1"># 2. Generated C and GPU kernel source</span>
+<a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="n">spec</span> <span class="o">=</span> <span class="n">causal_attention</span><span class="o">.</span><span class="n">specialize</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span><span class="p">)</span>
+<a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="nb">print</span><span class="p">(</span><span class="n">spec</span><span class="o">.</span><span class="n">source</span><span class="p">)</span>  <span class="c1"># host C</span>
+<a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="nb">print</span><span class="p">(</span><span class="n">spec</span><span class="o">.</span><span class="n">kernels</span><span class="p">)</span>  <span class="c1"># CUDA or Metal kernels</span>
+</code></pre></div>
+<p><strong>Next:</strong> <a href="../algebra/">Algebraic laws</a> explains the six mathematical identities
+that eliminate <code>O(N²)</code> memory, parallelize <code>O(T)</code> recurrences, and rematerialize
+gradients without quadratic tapes.</p>
 
 
 

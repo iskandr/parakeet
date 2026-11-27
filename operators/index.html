@@ -13,7 +13,7 @@
         <link rel="canonical" href="https://rubinsteyn.com/parakeet/operators/">
       
       
-        <link rel="prev" href="../primitives/">
+        <link rel="prev" href="../language/">
       
       
         <link rel="next" href="../autodiff/">
@@ -263,6 +263,40 @@
   
   
   
+    
+  
+  
+    
+    
+      
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../language/" class="md-tabs__link">
+          
+  
+  
+  Guide
+
+        </a>
+      </li>
+    
+  
+
+    
+  
+
+      
+        
+  
+  
+  
   
     
     
@@ -302,33 +336,11 @@
   
   
   
-    
-  
-  
-    
-    
-      <li class="md-tabs__item md-tabs__item--active">
-        <a href="../philosophy/" class="md-tabs__link">
-          
-  
-  
-  Guide
-
-        </a>
-      </li>
-    
-  
-
-      
-        
-  
-  
-  
   
     
     
       <li class="md-tabs__item">
-        <a href="../supported/" class="md-tabs__link">
+        <a href="../api/" class="md-tabs__link">
           
   
   
@@ -443,6 +455,875 @@
       
   
   
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_1" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3_1" id="__nav_3_1_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Using Parakeet
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_1_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Using Parakeet
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../language/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The compiled language
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Data-parallel operators
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Data-parallel operators
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#choosing-an-operator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Choosing an operator
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#operator-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mapping and indexing
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Mapping and indexing">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#map" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        par.map(f, *args, axis=0)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#imap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        par.imap(f, shape)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#allpairs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        par.allpairs(f, x, y, axis=0)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#outer_map" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        par.outer_map(f, *args)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#parfor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        par.parfor(f, shape)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reductions-and-structured-folds" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reductions and structured folds
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Reductions and structured folds">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#reduce" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        par.reduce(f, *args, init=None, axis=None, map=None)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ireduce" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        par.ireduce(f, shape, init=None, combine=np.add)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fold" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        par.fold(lift, merge, x, init=None, *, axis=None, indexed=False, emit=None)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#prefix-scans" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prefix scans
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Prefix scans">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        par.scan(f, *args, init=None, axis=0, map=None, emit=None)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#filtering-and-ragged-expansion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Filtering and ragged expansion
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Filtering and ragged expansion">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#filter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        par.filter(pred, *args, map=None)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#filter_reduce" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        par.filter_reduce(f, pred, *args, map=None, init=None, axis=None)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#flatmap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        par.flatmap(count_fn, emit_fn, *xs)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#filter_pairs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        par.filter_pairs(pred, x, y, emit=None)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#histograms-and-scatter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Histograms and scatter
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Histograms and scatter">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scatter_add" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        par.scatter_add(n, idx, vals, where=None)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2d-dynamic-programming" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2D dynamic programming
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2D dynamic programming">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#wavefront" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        par.wavefront(step_fn, shape, init_top, init_left, *, init_corner=None, band=None, track_max=False)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#batched_wavefront" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        par.batched_wavefront(...)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#soft_align" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        par.soft_align(scores, gamma=1.0, gap=-1.0, band=None)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#specialized-data-scratch-helpers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Specialized data &amp; scratch helpers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#semantics-notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Semantics notes
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../autodiff/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Automatic differentiation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../backends/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backends and GPUs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../performance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Performance and tuning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../debugging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Errors and debugging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_2" id="__nav_3_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How Parakeet optimizes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How Parakeet optimizes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../primitives/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operators & compilation walkthrough
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algebra/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Algebraic laws
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rewrites/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rewrite rules catalog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../internals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Compiler architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../philosophy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design, boundaries, and history
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
   
   
     
@@ -459,10 +1340,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
         
           
-          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
             
   
   
@@ -480,8 +1361,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -613,673 +1494,6 @@
       
   
   
-    
-  
-  
-  
-    
-    
-    
-    
-      
-        
-        
-      
-      
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
-        
-          
-          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
-            
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Guide
-  
-
-    
-  </span>
-  
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_5">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    Guide
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../philosophy/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Ideas, history, and boundaries
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../language/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    The compiled language
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../backends/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Backends and GPUs
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../primitives/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Algebraic primitives & walkthrough
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-    
-  
-  
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Data-parallel operators
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Data-parallel operators
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#operator-reference" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Operator reference
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Operator reference">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#map" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        par.map(f, *args, axis=0)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#allpairs" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        par.allpairs(f, x, y, axis=0)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#outer_map" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        par.outer_map(f, *args)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#reduce" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        par.reduce(f, *args, init=None, axis=None, map=None)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#fold" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        par.fold(lift, merge, x, init=None, *, axis=None, indexed=False, emit=None)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#scan" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        par.scan(f, *args, init=None, axis=0, map=None, emit=None)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#imap" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        par.imap(f, shape)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#ireduce" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        par.ireduce(f, shape, init=None, combine=np.add)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#parfor" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        par.parfor(f, shape)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#filter" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        par.filter(pred, *args, map=None)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#filter_reduce" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        par.filter_reduce(f, pred, *args, map=None, init=None, axis=None)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#flatmap" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        par.flatmap(count_fn, emit_fn, *xs)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#filter_pairs" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        par.filter_pairs(pred, x, y, emit=None)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#scatter_add" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        par.scatter_add(n, idx, vals, where=None)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#wavefront" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        par.wavefront(step_fn, shape, init_top, init_left, *, init_corner=None, band=None, track_max=False)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#batched_wavefront" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        par.batched_wavefront(...)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#soft_align" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        par.soft_align(scores, gamma=1.0, gap=-1.0, band=None)
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#functions-that-return-arrays" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Functions that return arrays
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#parallelism-and-associativity" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Parallelism and associativity
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#primitive-combiner-functions" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Primitive combiner functions
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#structured-reductions-and-tiled-pairwise-folds" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Structured reductions and tiled pairwise folds
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../autodiff/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Gradients
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../algebra/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Algebraic laws
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../rewrites/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Rewrite rules and optimizations
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../debugging/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Errors and debugging
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../performance/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Performance
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../internals/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Compiler architecture
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
-    </li>
-  
-
-    
-      
-      
-  
-  
   
   
     
@@ -1335,14 +1549,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../supported/" class="md-nav__link">
+      <a href="../api/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Supported functions
+    API
   
 
     
@@ -1363,14 +1577,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../api/" class="md-nav__link">
+      <a href="../supported/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    API
+    Supported functions
   
 
     
@@ -1502,15 +1716,26 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#operator-reference" class="md-nav__link">
+  <a href="#choosing-an-operator" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Operator reference
+        Choosing an operator
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Operator reference">
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#operator-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mapping and indexing
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Mapping and indexing">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -1518,6 +1743,17 @@
     <span class="md-ellipsis">
       
         par.map(f, *args, axis=0)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#imap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        par.imap(f, shape)
       
     </span>
   </a>
@@ -1547,43 +1783,38 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#parfor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        par.parfor(f, shape)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reductions-and-structured-folds" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reductions and structured folds
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Reductions and structured folds">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
   <a href="#reduce" class="md-nav__link">
     <span class="md-ellipsis">
       
         par.reduce(f, *args, init=None, axis=None, map=None)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#fold" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        par.fold(lift, merge, x, init=None, *, axis=None, indexed=False, emit=None)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#scan" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        par.scan(f, *args, init=None, axis=0, map=None, emit=None)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#imap" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        par.imap(f, shape)
       
     </span>
   </a>
@@ -1602,15 +1833,60 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#parfor" class="md-nav__link">
+  <a href="#fold" class="md-nav__link">
     <span class="md-ellipsis">
       
-        par.parfor(f, shape)
+        par.fold(lift, merge, x, init=None, *, axis=None, indexed=False, emit=None)
       
     </span>
   </a>
   
 </li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#prefix-scans" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prefix scans
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Prefix scans">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        par.scan(f, *args, init=None, axis=0, map=None, emit=None)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#filtering-and-ragged-expansion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Filtering and ragged expansion
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Filtering and ragged expansion">
+      <ul class="md-nav__list">
         
           <li class="md-nav__item">
   <a href="#filter" class="md-nav__link">
@@ -1656,6 +1932,23 @@
   
 </li>
         
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#histograms-and-scatter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Histograms and scatter
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Histograms and scatter">
+      <ul class="md-nav__list">
+        
           <li class="md-nav__item">
   <a href="#scatter_add" class="md-nav__link">
     <span class="md-ellipsis">
@@ -1666,6 +1959,23 @@
   </a>
   
 </li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2d-dynamic-programming" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2D dynamic programming
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2D dynamic programming">
+      <ul class="md-nav__list">
         
           <li class="md-nav__item">
   <a href="#wavefront" class="md-nav__link">
@@ -1706,10 +2016,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#functions-that-return-arrays" class="md-nav__link">
+  <a href="#specialized-data-scratch-helpers" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Functions that return arrays
+        Specialized data &amp; scratch helpers
       
     </span>
   </a>
@@ -1717,32 +2027,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#parallelism-and-associativity" class="md-nav__link">
+  <a href="#semantics-notes" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Parallelism and associativity
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#primitive-combiner-functions" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Primitive combiner functions
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#structured-reductions-and-tiled-pairwise-folds" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Structured reductions and tiled pairwise folds
+        Semantics notes
       
     </span>
   </a>
@@ -1770,266 +2058,225 @@
 
 
 <h1 id="data-parallel-operators">Data-parallel operators<a class="headerlink" href="#data-parallel-operators" title="Permanent link">&para;</a></h1>
-<p>Parakeet exposes one unified operator surface on the top-level <code>parakeet</code>
-module. Every operator below works <strong>both</strong> inside <code>@parakeet.jit</code> (where it
-fuses into surrounding NumPy code) <strong>and</strong> directly from ordinary Python
-(automatically JIT-compiling any callable arguments):</p>
+<p>Parakeet exposes one unified set of data-parallel operators on the top-level
+<code>parakeet</code> module. Every operator works <strong>both</strong> inside <code>@par.jit</code> (fusing with
+surrounding NumPy code) <strong>and</strong> directly from ordinary Python (automatically
+compiling callable arguments):</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">parakeet</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">par</span>
 </code></pre></div>
+<h2 id="choosing-an-operator">Choosing an operator<a class="headerlink" href="#choosing-an-operator" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
 <tr>
-<th>Operator</th>
-<th>Meaning</th>
+<th>Goal</th>
+<th>Operator(s)</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><a href="#map"><code>par.map(f, x, y, ..., axis=0)</code></a></td>
-<td><code>f</code> applied to corresponding slices along <code>axis</code>; <code>axis=None</code> applies it to every scalar element</td>
+<td>Transform slices or elements in parallel</td>
+<td><a href="#map"><code>par.map</code></a>, <a href="#imap"><code>par.imap</code></a></td>
 </tr>
 <tr>
-<td><a href="#allpairs"><code>par.allpairs(f, x, y, axis=0)</code></a></td>
-<td><code>result[i, j] = f(x[i], y[j])</code></td>
+<td>Pairwise or Cartesian-product operations</td>
+<td><a href="#allpairs"><code>par.allpairs</code></a>, <a href="#outer_map"><code>par.outer_map</code></a></td>
 </tr>
 <tr>
-<td><a href="#outer_map"><code>par.outer_map(f, x, y, z, ...)</code></a></td>
-<td>the n-ary generalisation of <code>allpairs</code></td>
+<td>Reduce an array or index grid</td>
+<td><a href="#reduce"><code>par.reduce</code></a>, <a href="#ireduce"><code>par.ireduce</code></a>, <a href="#fold"><code>par.fold</code></a></td>
 </tr>
 <tr>
-<td><a href="#reduce"><code>par.reduce(f, x, ..., init=None, axis=None, map=None)</code></a></td>
-<td>fold <code>f</code> over all elements, or over slices along <code>axis</code>; with <code>map=g</code> and several arrays, over <code>g(x[i], y[i], ...)</code></td>
+<td>Running prefix sum or recurrence</td>
+<td><a href="#scan"><code>par.scan</code></a></td>
 </tr>
 <tr>
-<td><a href="#fold"><code>par.fold(lift, merge, x, init=None, *, axis=None, indexed=False, emit=None)</code></a></td>
-<td>associative structured fold over tuple / <code>NamedTuple</code> states (tiles pairwise folds automatically)</td>
+<td>Boolean compaction or 1-to-K ragged expansion</td>
+<td><a href="#filter"><code>par.filter</code></a>, <a href="#filter_reduce"><code>par.filter_reduce</code></a>, <a href="#flatmap"><code>par.flatmap</code></a>, <a href="#filter_pairs"><code>par.filter_pairs</code></a></td>
 </tr>
 <tr>
-<td><a href="#scan"><code>par.scan(f, x, ..., init=None, axis=0, map=None, emit=None)</code></a></td>
-<td>running fold (a generalised <code>cumsum</code>); <code>emit=h</code> gives <code>h</code> of each running value</td>
+<td>Histograms and indexed accumulation</td>
+<td><a href="#scatter_add"><code>par.scatter_add</code></a></td>
 </tr>
 <tr>
-<td><a href="#imap"><code>par.imap(f, shape)</code></a></td>
-<td><code>result[i, j, ...] = f(i, j, ...)</code> for every index of <code>shape</code> (unpacks multi-axis indices automatically; 1-arg tuple <code>lambda ij:</code> also works)</td>
+<td>2D / banded dynamic programming</td>
+<td><a href="#wavefront"><code>par.wavefront</code></a>, <a href="#batched_wavefront"><code>par.batched_wavefront</code></a>, <a href="#soft_align"><code>par.soft_align</code></a></td>
 </tr>
 <tr>
-<td><a href="#ireduce"><code>par.ireduce(f, shape, init=None, combine=np.add)</code></a></td>
-<td>reduce <code>f(i, ...)</code> over every index of <code>shape</code></td>
+<td>Side-effecting parallel loops</td>
+<td><a href="#parfor"><code>par.parfor</code></a></td>
 </tr>
+</tbody>
+</table>
+<p>For differentiation (<code>par.grad</code>, <code>par.jvp</code>, <code>par.hvp</code>), see
+<a href="../autodiff/">Automatic differentiation</a>. To see how all of these operators
+indexify onto Parakeet's internal operator core (and how fusion and tiling fire
+on them), see <a href="../primitives/#what-the-index-prefix-means">Operators &amp; compilation walkthrough</a>.</p>
+<hr />
+<h2 id="operator-reference">Mapping and indexing<a class="headerlink" href="#operator-reference" title="Permanent link">&para;</a></h2>
+<h3 id="map"><code>par.map(f, *args, axis=0)</code><a class="headerlink" href="#map" title="Permanent link">&para;</a></h3>
+<p>Apply <code>f</code> in parallel to corresponding slices along <code>axis</code> (or to every scalar
+element with broadcasting when <code>axis=None</code>). Non-array arguments are passed
+unchanged, and <code>f</code> may return a scalar, tuple, or array (results are stacked).</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">par</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">row</span><span class="p">:</span> <span class="n">row</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">row</span><span class="p">),</span> <span class="n">X</span><span class="p">)</span>  <span class="c1"># normalize each row</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">par</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">a</span> <span class="o">*</span> <span class="n">a</span> <span class="o">+</span> <span class="n">b</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>  <span class="c1"># element-wise with broadcast</span>
+</code></pre></div>
+<h3 id="imap"><code>par.imap(f, shape)</code><a class="headerlink" href="#imap" title="Permanent link">&para;</a></h3>
+<p>Build an array of <code>shape</code> where entry <code>(i, j, ...)</code> is <code>f(i, j, ...)</code>.
+Multi-axis indices unpack automatically when <code>f</code> takes <code>len(shape)</code> arguments
+(a 1-arg tuple <code>lambda ij:</code> also works).</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">par</span><span class="o">.</span><span class="n">imap</span><span class="p">(</span><span class="k">lambda</span> <span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">:</span> <span class="n">i</span> <span class="o">&gt;=</span> <span class="n">j</span><span class="p">,</span> <span class="p">(</span><span class="n">T</span><span class="p">,</span> <span class="n">T</span><span class="p">))</span>  <span class="c1"># causal mask (fuses with zero allocation)</span>
+</code></pre></div>
+<h3 id="allpairs"><code>par.allpairs(f, x, y, axis=0)</code><a class="headerlink" href="#allpairs" title="Permanent link">&para;</a></h3>
+<p>Evaluate <code>f(x[i], y[j])</code> for every pair of slices <code>(i, j)</code> along <code>axis</code>. Fuses
+directly into downstream reductions like <a href="#fold"><code>par.fold</code></a> or <code>np.argmin</code>
+without materializing the <code>N × M</code> matrix.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">par</span><span class="o">.</span><span class="n">allpairs</span><span class="p">(</span><span class="k">lambda</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">((</span><span class="n">a</span> <span class="o">-</span> <span class="n">b</span><span class="p">)</span> <span class="o">**</span> <span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">(</span><span class="mi">2</span><span class="p">)),</span> <span class="n">X</span><span class="p">,</span> <span class="n">C</span><span class="p">)</span>
+</code></pre></div>
+<h3 id="outer_map"><code>par.outer_map(f, *args)</code><a class="headerlink" href="#outer_map" title="Permanent link">&para;</a></h3>
+<p>N-ary generalization of <a href="#allpairs"><code>par.allpairs</code></a> over the Cartesian product
+of the leading axes of two or more arrays.</p>
+<h3 id="parfor"><code>par.parfor(f, shape)</code><a class="headerlink" href="#parfor" title="Permanent link">&para;</a></h3>
+<p>Run <code>f(i, ...)</code> in parallel across <code>shape</code> for its side effects (such as writing
+disjoint slices or using thread-local <code>par.fixed_list</code> scratch). For pure array
+outputs, prefer NumPy expressions, comprehensions, <a href="#map"><code>par.map</code></a>, or
+<a href="#imap"><code>par.imap</code></a>.</p>
+<hr />
+<h2 id="reductions-and-structured-folds">Reductions and structured folds<a class="headerlink" href="#reductions-and-structured-folds" title="Permanent link">&para;</a></h2>
+<h3 id="reduce"><code>par.reduce(f, *args, init=None, axis=None, map=None)</code><a class="headerlink" href="#reduce" title="Permanent link">&para;</a></h3>
+<p>Reduce elements with binary combiner <code>f</code> (such as <code>np.add</code>, <code>np.maximum</code>, or a
+custom function), globally (<code>axis=None</code>) or along <code>axis</code>. Passing <code>map=g</code> fuses
+a map step directly into the reduction.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">par</span><span class="o">.</span><span class="n">reduce</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">maximum</span><span class="p">,</span> <span class="n">X</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>  <span class="c1"># column maxima</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">par</span><span class="o">.</span><span class="n">reduce</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">add</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="nb">map</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">multiply</span><span class="p">)</span>  <span class="c1"># dot product, zero temporaries</span>
+</code></pre></div>
+<h3 id="ireduce"><code>par.ireduce(f, shape, init=None, combine=np.add)</code><a class="headerlink" href="#ireduce" title="Permanent link">&para;</a></h3>
+<p>Reduce <code>f(i, ...)</code> directly over every coordinate of <code>shape</code> using <code>combine</code>,
+without constructing an input array first.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">par</span><span class="o">.</span><span class="n">ireduce</span><span class="p">(</span><span class="k">lambda</span> <span class="n">r</span><span class="p">:</span> <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">r</span><span class="p">]</span> <span class="o">+</span> <span class="n">b</span><span class="p">[</span><span class="n">r</span><span class="p">,</span> <span class="n">j</span><span class="p">],</span> <span class="n">k</span><span class="p">,</span> <span class="n">combine</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">minimum</span><span class="p">)</span>
+</code></pre></div>
+<h3 id="fold"><code>par.fold(lift, merge, x, init=None, *, axis=None, indexed=False, emit=None)</code><a class="headerlink" href="#fold" title="Permanent link">&para;</a></h3>
+<p>Associative structured reduction over multi-field tuple or <code>NamedTuple</code> states:</p>
+<ul>
+<li><code>lift</code> maps each element (or <code>(value, index)</code> when <code>indexed=True</code>) to a state
+  of scalar fields.</li>
+<li><code>merge(left, right)</code> combines two adjacent states <strong>in input order</strong>
+  (preserving exact left-to-right tie and NaN semantics).</li>
+<li><code>emit</code> optionally projects the final state.</li>
+<li><code>init</code> seeds the fold and is returned for empty input (without <code>init</code>, an
+  empty lane raises <code>ValueError</code>).</li>
+</ul>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Exact argmin carrying (best_dist, best_idx) with first-index tie breaking</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">par</span><span class="o">.</span><span class="n">fold</span><span class="p">(</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>  <span class="k">lambda</span> <span class="n">v</span><span class="p">,</span> <span class="n">i</span><span class="p">:</span> <span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">i</span><span class="p">),</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>  <span class="k">lambda</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">a</span> <span class="k">if</span> <span class="n">a</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="n">b</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">else</span> <span class="n">b</span><span class="p">,</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>  <span class="n">scores</span><span class="p">,</span>
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>  <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>  <span class="n">indexed</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>  <span class="n">emit</span><span class="o">=</span><span class="k">lambda</span> <span class="n">state</span><span class="p">:</span> <span class="n">state</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span>
+<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="p">)</span>
+</code></pre></div>
+<p>When composed with <a href="#allpairs"><code>par.allpairs</code></a> (or broadcasting NumPy
+<code>np.argmin(np.sum((x[:, None] - y[None, :]) ** 2, axis=2), axis=1)</code>), Parakeet
+automatically compiles a tiled pairwise fold on both CPU and GPU without
+allocating the <code>Q × R</code> score matrix.</p>
+<hr />
+<h2 id="prefix-scans">Prefix scans<a class="headerlink" href="#prefix-scans" title="Permanent link">&para;</a></h2>
+<h3 id="scan"><code>par.scan(f, *args, init=None, axis=0, map=None, emit=None)</code><a class="headerlink" href="#scan" title="Permanent link">&para;</a></h3>
+<p>Running prefix fold along <code>axis</code> (a generalization of <code>np.cumsum</code> and
+<code>np.cumprod</code>). Associative combiners compile to a 3-stage parallel prefix scan,
+and affine/bilinear recurrences trigger
+<a href="../algebra/#law-4-chunkwise-state-space-duality">Law 4 chunkwise duality</a>.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="n">par</span><span class="o">.</span><span class="n">scan</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">add</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="nb">map</span><span class="o">=</span><span class="k">lambda</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">a</span> <span class="o">-</span> <span class="n">b</span><span class="p">)</span>  <span class="c1"># running sum of differences</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">par</span><span class="o">.</span><span class="n">scan</span><span class="p">(</span><span class="k">lambda</span> <span class="n">acc</span><span class="p">,</span> <span class="n">v</span><span class="p">:</span> <span class="mf">0.9</span> <span class="o">*</span> <span class="n">acc</span> <span class="o">+</span> <span class="mf">0.1</span> <span class="o">*</span> <span class="n">v</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>  <span class="c1"># exponential moving average</span>
+</code></pre></div>
+<hr />
+<h2 id="filtering-and-ragged-expansion">Filtering and ragged expansion<a class="headerlink" href="#filtering-and-ragged-expansion" title="Permanent link">&para;</a></h2>
+<h3 id="filter"><code>par.filter(pred, *args, map=None)</code><a class="headerlink" href="#filter" title="Permanent link">&para;</a></h3>
+<p>Return elements where <code>pred</code> holds (optionally transforming kept elements with
+<code>map</code>). Equivalent to NumPy boolean masking <code>x[pred(x)]</code>.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="n">par</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="k">lambda</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">a</span> <span class="o">&gt;</span> <span class="n">b</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="nb">map</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">add</span><span class="p">)</span>  <span class="c1"># x + y where x &gt; y</span>
+</code></pre></div>
+<h3 id="filter_reduce"><code>par.filter_reduce(f, pred, *args, map=None, init=None, axis=None)</code><a class="headerlink" href="#filter_reduce" title="Permanent link">&para;</a></h3>
+<p>Reduce with <code>f</code> over elements satisfying <code>pred</code>. When <code>init</code> is provided, fuses
+into a single zero-allocation guarded reduction loop (also triggered
+automatically by <code>np.sum(x[x &gt; 0])</code>).</p>
+<h3 id="flatmap"><code>par.flatmap(count_fn, emit_fn, *xs)</code><a class="headerlink" href="#flatmap" title="Permanent link">&para;</a></h3>
+<p>Two-pass 1-to-K ragged expansion returning a <code>RaggedArray(values, offsets)</code>. For
+each index <code>i</code>, <code>count_fn(x0[i], ...)</code> returns the output count <code>c_i &gt;= 0</code>, and
+<code>emit_fn(x0[i], ..., k)</code> emits item <code>k</code> (<code>0 &lt;= k &lt; c_i</code>) in parallel after a
+prefix sum of counts.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Expand run-length-encoded CIGAR operations into a RaggedArray</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">par</span><span class="o">.</span><span class="n">flatmap</span><span class="p">(</span><span class="k">lambda</span> <span class="n">op</span><span class="p">,</span> <span class="n">n</span><span class="p">:</span> <span class="n">n</span><span class="p">,</span> <span class="k">lambda</span> <span class="n">op</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">k</span><span class="p">:</span> <span class="n">op</span><span class="p">,</span> <span class="n">ops</span><span class="p">,</span> <span class="n">lengths</span><span class="p">)</span>
+</code></pre></div>
+<h3 id="filter_pairs"><code>par.filter_pairs(pred, x, y, emit=None)</code><a class="headerlink" href="#filter_pairs" title="Permanent link">&para;</a></h3>
+<p>Compact all pairs <code>(i, j)</code> where <code>pred(x[i], y[j])</code> holds into a <code>RaggedArray</code>
+of matching pairs (or <code>emit(x[i], y[j])</code> payloads) without allocating a dense
+<code>N × M</code> mask.</p>
+<hr />
+<h2 id="histograms-and-scatter">Histograms and scatter<a class="headerlink" href="#histograms-and-scatter" title="Permanent link">&para;</a></h2>
+<h3 id="scatter_add"><code>par.scatter_add(n, idx, vals, where=None)</code><a class="headerlink" href="#scatter_add" title="Permanent link">&para;</a></h3>
+<p>Accumulate <code>vals[i]</code> into output bin <code>idx[i]</code> of length <code>n</code> (optionally guarded
+by <code>where</code>, or passed as a keyed generator <code>((k, v) for ...)</code>). Compiles with
+thread-privatized histograms on CPU, parallel atomics on GPU, sibling fusion for
+shared <code>idx</code>, and an exact gather adjoint under <code>par.grad</code>. Also triggered
+automatically by <code>np.bincount</code>, <code>np.add.at</code>, and canonical <code>out[idx[i]] += v</code>
+loops.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="n">grad_hist</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">scatter_add</span><span class="p">(</span><span class="mi">256</span><span class="p">,</span> <span class="n">bin_ids</span><span class="p">,</span> <span class="n">grads</span><span class="p">)</span>
+</code></pre></div>
+<hr />
+<h2 id="2d-dynamic-programming">2D dynamic programming<a class="headerlink" href="#2d-dynamic-programming" title="Permanent link">&para;</a></h2>
+<h3 id="wavefront"><code>par.wavefront(step_fn, shape, init_top, init_left, *, init_corner=None, band=None, track_max=False)</code><a class="headerlink" href="#wavefront" title="Permanent link">&para;</a></h3>
+<p>Execute a 2D or diagonally banded dynamic programming recurrence along parallel
+anti-diagonals in <code>O(M)</code> rolling memory (never allocating the full <code>M × N</code>
+table). <code>step_fn(top, left, diag, i, j)</code> returns the next scalar or
+tuple/<code>NamedTuple</code> state (e.g. 3-state affine-gap alignment).</p>
+<h3 id="batched_wavefront"><code>par.batched_wavefront(...)</code><a class="headerlink" href="#batched_wavefront" title="Permanent link">&para;</a></h3>
+<p>Run <a href="#wavefront"><code>par.wavefront</code></a> independently across a batch of sequences or
+grids in parallel (one thread/lane per batch item on CPU or GPU).</p>
+<h3 id="soft_align"><code>par.soft_align(scores, gamma=1.0, gap=-1.0, band=None)</code><a class="headerlink" href="#soft_align" title="Permanent link">&para;</a></h3>
+<p>Differentiable soft-maximum global or banded sequence alignment with a
+checkpointed reverse-mode VJP under <code>par.grad</code> / <code>par.value_and_grad</code>.</p>
+<hr />
+<h2 id="specialized-data-scratch-helpers">Specialized data &amp; scratch helpers<a class="headerlink" href="#specialized-data-scratch-helpers" title="Permanent link">&para;</a></h2>
+<p>For ragged workloads, byte parsing, and per-thread scratch inside parallel loops:</p>
+<table>
+<thead>
 <tr>
-<td><a href="#parfor"><code>par.parfor(f, shape)</code></a></td>
-<td>call <code>f(i, ...)</code> for its side effects, in parallel</td>
+<th>Helper</th>
+<th>Purpose</th>
 </tr>
+</thead>
+<tbody>
 <tr>
-<td><a href="#filter"><code>par.filter(pred, x, ..., map=None)</code></a></td>
-<td>the elements of <code>x</code> for which <code>pred</code> is true; with several arrays, <code>map(x[i], y[i], ...)</code> where <code>pred(x[i], y[i], ...)</code> holds</td>
-</tr>
-<tr>
-<td><a href="#filter_reduce"><code>par.filter_reduce(f, pred, x, ..., map=None, init=None, axis=None)</code></a></td>
-<td>reduce with <code>f</code> over elements where <code>pred</code> holds (fuses into one zero-allocation guarded reduction loop when <code>init</code> is given)</td>
-</tr>
-<tr>
-<td><a href="#flatmap"><code>par.flatmap(count_fn, emit_fn, *xs)</code></a> / <a href="#filter_pairs"><code>par.filter_pairs(...)</code></a></td>
-<td>two-pass 1-to-K ragged compaction (<a href="../primitives/#filter-and-expand"><code>IndexExpand</code></a>)</td>
-</tr>
-<tr>
-<td><a href="#scatter_add"><code>par.scatter_add(n, idx, vals, where=None)</code></a></td>
-<td>index-directed associative scatter-add (<a href="../primitives/#scatter"><code>IndexScatter</code></a>) with thread-privatized parallel lowering and exact gather adjoint</td>
-</tr>
-<tr>
-<td><a href="#wavefront"><code>par.wavefront(...)</code></a> / <a href="#batched_wavefront"><code>par.batched_wavefront(...)</code></a> / <a href="#soft_align"><code>par.soft_align(...)</code></a></td>
-<td>2D and banded semiring dynamic programming (<a href="../primitives/#wavefront"><code>IndexWavefront</code></a>) with checkpointed VJP</td>
-</tr>
-<tr>
-<td><code>par.partition_by_size(offsets, ...)</code> / <code>par.segmented_parfor(body, offsets, ...)</code> / <code>par.segmented_histogram2d(...)</code> / <code>par.ragged_partition(...)</code></td>
-<td>adaptive 3-tier ragged dispatch (heavy/medium/light tiers for skewed workloads), single-pass fused 2D <code>(grad, hess, count)</code> histograms, and parallel CSR sample-index partitioning</td>
+<td><code>par.fixed_list(capacity, dtype=np.float32)</code></td>
+<td>Stack-allocated, zero-<code>malloc</code> scratch list (<code>.append</code>, <code>.pop</code>, <code>.clear</code>, indexing, <code>len</code>) for CPU, CUDA, and Metal parallel bodies</td>
 </tr>
 <tr>
 <td><code>par.split_bytes(buf, sep=10, skip_empty=False)</code> / <code>par.parse_int64</code> / <code>par.parse_float32</code> / <code>par.parse_float64</code></td>
-<td>zero-<code>PyObject</code> delimiter splitting into <code>RaggedArray[uint8]</code> and compiled ASCII integer/float parsing over <code>uint8</code> slices or <code>RaggedArray[uint8]</code></td>
+<td>Zero-<code>PyObject</code> delimiter splitting into <code>RaggedArray[uint8]</code> and compiled ASCII numeric parsing</td>
 </tr>
 <tr>
-<td><code>par.fixed_list(capacity, dtype=np.float32)</code></td>
-<td>fixed-capacity, zero-<code>malloc</code> thread-local scratch list (<code>.append</code>, <code>.pop</code>, <code>.clear</code>, indexing, <code>len</code>) for stacks and per-thread buffers inside <code>par.parfor</code> / <code>par.map</code> on CPU, CUDA, and Metal</td>
-</tr>
-<tr>
-<td><code>par.grad</code>, <code>par.value_and_grad</code>, <code>par.jvp</code>, <code>par.vjp</code>, <code>par.hvp</code>, <code>par.linearize</code>, <code>par.linear_transpose</code>, <code>par.jacfwd</code>, <code>par.jacrev</code>, <code>par.hessian</code></td>
-<td>composable reverse-mode, forward-mode, and higher-order AD; see <a href="../autodiff/">Automatic differentiation</a></td>
-</tr>
-<tr>
-<td><code>par.show_rewrite(f, *args)</code></td>
-<td>inspect which algebraic optimizations rewrote <code>f</code> and view before/after IR; see <a href="../algebra/">Algebraic laws</a></td>
+<td><code>par.partition_by_size</code> / <code>par.segmented_parfor</code> / <code>par.segmented_histogram2d</code> / <code>par.ragged_partition</code></td>
+<td>Adaptive 3-tier ragged dispatch (heavy/medium/light tiers), fused 2D <code>(grad, hess, count)</code> histograms, and parallel CSR partitioning</td>
 </tr>
 </tbody>
 </table>
 <hr />
-<h2 id="operator-reference">Operator reference<a class="headerlink" href="#operator-reference" title="Permanent link">&para;</a></h2>
-<h3 id="map"><code>par.map(f, *args, axis=0)</code><a class="headerlink" href="#map" title="Permanent link">&para;</a></h3>
-<p>Apply <code>f</code> in parallel to corresponding slices along <code>axis</code> (or to every scalar
-element with broadcasting when <code>axis=None</code>). Lowers to
-<a href="../primitives/#map"><code>IndexMap</code></a>. Non-array arguments are passed to every call
-unchanged, and <code>f</code> may return a scalar, tuple, or array (results are stacked).</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">par</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">row</span><span class="p">:</span> <span class="n">row</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">row</span><span class="p">),</span> <span class="n">X</span><span class="p">)</span>  <span class="c1"># normalise each row of X</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">par</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">a</span> <span class="o">*</span> <span class="n">a</span> <span class="o">+</span> <span class="n">b</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>  <span class="c1"># element-wise with broadcasting</span>
-</code></pre></div>
-<h3 id="allpairs"><code>par.allpairs(f, x, y, axis=0)</code><a class="headerlink" href="#allpairs" title="Permanent link">&para;</a></h3>
-<p>Evaluate <code>f(x[i], y[j])</code> for every pair of slices <code>(i, j)</code> along <code>axis</code>. Lowers
-to <a href="../primitives/#map"><code>IndexMap</code></a> and fuses directly into downstream reductions
-such as <a href="#fold"><code>par.fold</code></a> or <code>np.argmin</code> without materializing the full
-<code>N × M</code> score matrix.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">par</span><span class="o">.</span><span class="n">allpairs</span><span class="p">(</span><span class="k">lambda</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">((</span><span class="n">a</span> <span class="o">-</span> <span class="n">b</span><span class="p">)</span> <span class="o">**</span> <span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">(</span><span class="mi">2</span><span class="p">)),</span> <span class="n">X</span><span class="p">,</span> <span class="n">C</span><span class="p">)</span>
-</code></pre></div>
-<h3 id="outer_map"><code>par.outer_map(f, *args)</code><a class="headerlink" href="#outer_map" title="Permanent link">&para;</a></h3>
-<p>The n-ary generalisation of <a href="#allpairs"><code>par.allpairs</code></a>, evaluating <code>f</code> on the
-Cartesian product of the leading axes of two or more arrays. Lowers to
-<a href="../primitives/#map"><code>IndexMap</code></a>.</p>
-<h3 id="reduce"><code>par.reduce(f, *args, init=None, axis=None, map=None)</code><a class="headerlink" href="#reduce" title="Permanent link">&para;</a></h3>
-<p>Reduce elements with binary combiner <code>f</code> (such as <code>np.add</code>, <code>np.maximum</code>, or a
-custom function), over all elements (<code>axis=None</code>) or along a specific axis.
-Passing <code>map=g</code> fuses a map step into the reduction with zero intermediate
-allocation. Lowers to <a href="../primitives/#reduce-and-fold"><code>IndexReduce</code></a>.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">par</span><span class="o">.</span><span class="n">reduce</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">maximum</span><span class="p">,</span> <span class="n">X</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>  <span class="c1"># column maxima</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">par</span><span class="o">.</span><span class="n">reduce</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">add</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="nb">map</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">multiply</span><span class="p">)</span>  <span class="c1"># dot product, no temporary array</span>
-</code></pre></div>
-<h3 id="fold"><code>par.fold(lift, merge, x, init=None, *, axis=None, indexed=False, emit=None)</code><a class="headerlink" href="#fold" title="Permanent link">&para;</a></h3>
-<p>Associative structured reduction over multi-field tuple or <code>NamedTuple</code> states.
-<code>lift</code> maps each element (or <code>(value, index)</code> when <code>indexed=True</code>) to a state,
-<code>merge(left, right)</code> combines two adjacent states in input order (preserving
-exact left-to-right tie and NaN semantics), and <code>emit</code> optionally projects the
-final state. Lowers to <a href="../primitives/#reduce-and-fold"><code>IndexReduce</code></a> with
-<code>Carry</code> fields, and triggers tiled pairwise folds on both CPU and GPU when
-composed with <a href="#allpairs"><code>par.allpairs</code></a>.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Exact argmin carrying (best_dist, best_idx) with first-index tie breaking</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">par</span><span class="o">.</span><span class="n">fold</span><span class="p">(</span>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>  <span class="k">lambda</span> <span class="n">v</span><span class="p">,</span> <span class="n">i</span><span class="p">:</span> <span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">i</span><span class="p">),</span>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>  <span class="k">lambda</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">a</span> <span class="k">if</span> <span class="n">a</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="n">b</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">else</span> <span class="n">b</span><span class="p">,</span>
-<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>  <span class="n">scores</span><span class="p">,</span>
-<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>  <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
-<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>  <span class="n">indexed</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>  <span class="n">emit</span><span class="o">=</span><span class="k">lambda</span> <span class="n">state</span><span class="p">:</span> <span class="n">state</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span>
-<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="p">)</span>
-</code></pre></div>
-<h3 id="scan"><code>par.scan(f, *args, init=None, axis=0, map=None, emit=None)</code><a class="headerlink" href="#scan" title="Permanent link">&para;</a></h3>
-<p>Running prefix fold along <code>axis</code> (a generalisation of <code>np.cumsum</code> and
-<code>np.cumprod</code>). Associative combiners lower to a 3-stage parallel prefix scan,
-and affine/bilinear recurrences trigger
-<a href="../algebra/#law-4-chunkwise-state-space-duality">Law 4 chunkwise duality</a>.
-Lowers to <a href="../primitives/#scan"><code>IndexScan</code></a>.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">par</span><span class="o">.</span><span class="n">scan</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">add</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="nb">map</span><span class="o">=</span><span class="k">lambda</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">a</span> <span class="o">-</span> <span class="n">b</span><span class="p">)</span>  <span class="c1"># running sum of differences</span>
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">par</span><span class="o">.</span><span class="n">scan</span><span class="p">(</span><span class="k">lambda</span> <span class="n">acc</span><span class="p">,</span> <span class="n">v</span><span class="p">:</span> <span class="mf">0.9</span> <span class="o">*</span> <span class="n">acc</span> <span class="o">+</span> <span class="mf">0.1</span> <span class="o">*</span> <span class="n">v</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>  <span class="c1"># exponential moving average</span>
-</code></pre></div>
-<h3 id="imap"><code>par.imap(f, shape)</code><a class="headerlink" href="#imap" title="Permanent link">&para;</a></h3>
-<p>Construct an array of <code>shape</code> where entry <code>(i, j, ...)</code> equals <code>f(i, j, ...)</code>.
-Multi-axis coordinates are unpacked automatically when <code>f</code> accepts <code>len(shape)</code>
-arguments (a single tuple parameter <code>lambda ij:</code> also works). Lowers to
-<a href="../primitives/#map"><code>IndexMap</code></a>.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">par</span><span class="o">.</span><span class="n">imap</span><span class="p">(</span><span class="k">lambda</span> <span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">:</span> <span class="n">i</span> <span class="o">&gt;=</span> <span class="n">j</span><span class="p">,</span> <span class="p">(</span><span class="n">T</span><span class="p">,</span> <span class="n">T</span><span class="p">))</span>  <span class="c1"># causal mask (fuses without allocating)</span>
-</code></pre></div>
-<h3 id="ireduce"><code>par.ireduce(f, shape, init=None, combine=np.add)</code><a class="headerlink" href="#ireduce" title="Permanent link">&para;</a></h3>
-<p>Reduce <code>f(i, ...)</code> over every coordinate of <code>shape</code> using <code>combine</code>, without
-constructing an intermediate array first. Lowers to
-<a href="../primitives/#reduce-and-fold"><code>IndexReduce</code></a>.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="n">par</span><span class="o">.</span><span class="n">ireduce</span><span class="p">(</span><span class="k">lambda</span> <span class="n">r</span><span class="p">:</span> <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">r</span><span class="p">]</span> <span class="o">+</span> <span class="n">b</span><span class="p">[</span><span class="n">r</span><span class="p">,</span> <span class="n">j</span><span class="p">],</span> <span class="n">k</span><span class="p">,</span> <span class="n">combine</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">minimum</span><span class="p">)</span>
-</code></pre></div>
-<h3 id="parfor"><code>par.parfor(f, shape)</code><a class="headerlink" href="#parfor" title="Permanent link">&para;</a></h3>
-<p>Execute <code>f(i, ...)</code> in parallel across every coordinate of <code>shape</code> for its side
-effects (such as writing disjoint output slices or updating thread-local
-<code>par.fixed_list</code> scratch buffers). For pure array outputs, prefer NumPy
-expressions, comprehensions, <a href="#map"><code>par.map</code></a>, or <a href="#imap"><code>par.imap</code></a>.</p>
-<h3 id="filter"><code>par.filter(pred, *args, map=None)</code><a class="headerlink" href="#filter" title="Permanent link">&para;</a></h3>
-<p>Return the elements where <code>pred</code> holds (optionally transforming kept elements
-with <code>map</code>). Equivalent to NumPy boolean masking <code>x[pred(x)]</code>. Lowers to
-<a href="../primitives/#filter-and-expand"><code>IndexFilter</code></a>.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="n">par</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="k">lambda</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">a</span> <span class="o">&gt;</span> <span class="n">b</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="nb">map</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">add</span><span class="p">)</span>  <span class="c1"># x + y where x &gt; y</span>
-</code></pre></div>
-<h3 id="filter_reduce"><code>par.filter_reduce(f, pred, *args, map=None, init=None, axis=None)</code><a class="headerlink" href="#filter_reduce" title="Permanent link">&para;</a></h3>
-<p>Reduce with <code>f</code> over elements where <code>pred</code> holds. When <code>init</code> is provided,
-fuses into a single zero-allocation guarded reduction loop (also triggered
-automatically by <code>np.sum(x[x &gt; 0])</code>). Lowers to
-<a href="../primitives/#filter-and-expand"><code>IndexFilter</code></a> +
-<a href="../primitives/#reduce-and-fold"><code>IndexReduce</code></a>.</p>
-<h3 id="flatmap"><code>par.flatmap(count_fn, emit_fn, *xs)</code><a class="headerlink" href="#flatmap" title="Permanent link">&para;</a></h3>
-<p>Two-pass 1-to-K ragged expansion returning a <code>RaggedArray(values, offsets)</code>.
-For each input index <code>i</code>, <code>count_fn(x0[i], ...)</code> returns the count <code>c_i &gt;= 0</code>
-of items to emit, and <code>emit_fn(x0[i], ..., k)</code> emits the <code>k</code>-th item
-(<code>0 &lt;= k &lt; c_i</code>) in parallel after a prefix sum of counts. Lowers to
-<a href="../primitives/#filter-and-expand"><code>IndexExpand</code></a>.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Expand run-length-encoded CIGAR operations into a flat RaggedArray</span>
-<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">par</span><span class="o">.</span><span class="n">flatmap</span><span class="p">(</span><span class="k">lambda</span> <span class="n">op</span><span class="p">,</span> <span class="n">n</span><span class="p">:</span> <span class="n">n</span><span class="p">,</span> <span class="k">lambda</span> <span class="n">op</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">k</span><span class="p">:</span> <span class="n">op</span><span class="p">,</span> <span class="n">ops</span><span class="p">,</span> <span class="n">lengths</span><span class="p">)</span>
-</code></pre></div>
-<h3 id="filter_pairs"><code>par.filter_pairs(pred, x, y, emit=None)</code><a class="headerlink" href="#filter_pairs" title="Permanent link">&para;</a></h3>
-<p>Compact all pairs <code>(i, j)</code> where <code>pred(x[i], y[j])</code> holds into a
-<code>RaggedArray</code> of matching pairs (or <code>emit(x[i], y[j])</code> payloads) using two-pass
-<a href="../primitives/#filter-and-expand"><code>IndexExpand</code></a> without allocating a dense
-<code>N × M</code> mask.</p>
-<h3 id="scatter_add"><code>par.scatter_add(n, idx, vals, where=None)</code><a class="headerlink" href="#scatter_add" title="Permanent link">&para;</a></h3>
-<p>Accumulate <code>vals[i]</code> into output bin <code>idx[i]</code> of length <code>n</code> (optionally guarded
-by boolean mask <code>where</code>, or passed as a generator <code>((k, v) for ...)</code>). Lowers
-to <a href="../primitives/#scatter"><code>IndexScatter</code></a> with thread-privatized histograms on
-CPU, parallel atomics on GPU, sibling histogram fusion, and an exact gather
-adjoint under <code>par.grad</code>. Also targeted automatically by <code>np.bincount</code>,
-<code>np.add.at</code>, and canonical <code>out[idx[i]] += v</code> loops.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="n">grad_hist</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">scatter_add</span><span class="p">(</span><span class="mi">256</span><span class="p">,</span> <span class="n">bin_ids</span><span class="p">,</span> <span class="n">grads</span><span class="p">)</span>
-</code></pre></div>
-<h3 id="wavefront"><code>par.wavefront(step_fn, shape, init_top, init_left, *, init_corner=None, band=None, track_max=False)</code><a class="headerlink" href="#wavefront" title="Permanent link">&para;</a></h3>
-<p>Execute a 2D or diagonally banded dynamic programming recurrence along parallel
-anti-diagonals in <code>O(M)</code> rolling memory (never allocating the full <code>M × N</code>
-table). <code>step_fn(top, left, diag, i, j)</code> returns the next scalar or tuple /
-<code>NamedTuple</code> state (e.g., 3-state Gotoh affine-gap alignment). Lowers to
-<a href="../primitives/#wavefront"><code>IndexWavefront</code></a>.</p>
-<h3 id="batched_wavefront"><code>par.batched_wavefront(...)</code><a class="headerlink" href="#batched_wavefront" title="Permanent link">&para;</a></h3>
-<p>Run <a href="#wavefront"><code>par.wavefront</code></a> independently across a batch of sequence or
-grid pairs in parallel, with one thread/lane per batch item on CPU or GPU.</p>
-<h3 id="soft_align"><code>par.soft_align(scores, gamma=1.0, gap=-1.0, band=None)</code><a class="headerlink" href="#soft_align" title="Permanent link">&para;</a></h3>
-<p>Differentiable soft-maximum global/banded sequence alignment over a <code>scores</code>
-matrix, lowered to <a href="../primitives/#wavefront"><code>IndexWavefront</code></a> with a
-checkpointed reverse-mode VJP under <code>par.grad</code> / <code>par.value_and_grad</code>.</p>
-<hr />
-<h2 id="functions-that-return-arrays">Functions that return arrays<a class="headerlink" href="#functions-that-return-arrays" title="Permanent link">&para;</a></h2>
-<p>The function given to <a href="#map"><code>par.map</code></a> may return an array; the results are
-stacked.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="n">par</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">row</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">cumsum</span><span class="p">(</span><span class="n">row</span><span class="p">),</span> <span class="n">X</span><span class="p">)</span>  <span class="c1"># shape (n, m)</span>
-</code></pre></div>
-<p>All results must have the same shape; this is checked at run time
-(<code>ValueError</code>).</p>
-<h2 id="parallelism-and-associativity">Parallelism and associativity<a class="headerlink" href="#parallelism-and-associativity" title="Permanent link">&para;</a></h2>
-<p><code>map</code>-like operators evaluate elements in parallel, in no particular order.
-<a href="#reduce"><code>par.reduce</code></a> runs in parallel when the combining function is
-recognisably one of <code>+</code>, <code>*</code>, <code>min</code>, <code>max</code>, <code>and</code>, <code>or</code>, <code>&amp;</code>, <code>|</code>, <code>^</code>
-(whether written as <code>np.add</code>, <code>lambda a, b: a + b</code>, or <code>par.add</code>), and
-sequentially otherwise; so a non-associative function such as
-<code>lambda acc, x: acc * 0.5 + x</code> still gives the same answer as
-<code>functools.reduce</code>. Floating-point sums are reassociated, like NumPy's own
-pairwise summation: expect differences in the last digits.</p>
-<h2 id="primitive-combiner-functions">Primitive combiner functions<a class="headerlink" href="#primitive-combiner-functions" title="Permanent link">&para;</a></h2>
-<p>Standard NumPy ufuncs (<code>np.add</code>, <code>np.subtract</code>, <code>np.multiply</code>, <code>np.divide</code>,
-<code>np.minimum</code>, <code>np.maximum</code>) are the idiomatic combiners to pass to
-<a href="#reduce"><code>par.reduce</code></a>, <a href="#ireduce"><code>par.ireduce</code></a>, <a href="#scan"><code>par.scan</code></a>, and
-<a href="#filter"><code>par.filter</code></a>. Parakeet also exports matching aliases (<code>par.add</code>,
-<code>par.minimum</code>, etc.) for backward compatibility, and <code>parakeet.dsl</code> remains
-available as a compatibility alias alongside compact dtype shorthands
-(<code>dsl.f32</code>, <code>dsl.i64</code>).</p>
-<h2 id="structured-reductions-and-tiled-pairwise-folds">Structured reductions and tiled pairwise folds<a class="headerlink" href="#structured-reductions-and-tiled-pairwise-folds" title="Permanent link">&para;</a></h2>
-<p><a href="#fold"><code>par.fold</code></a> lifts each axis-0 slice of <code>x</code> to a nonempty tuple or
-<code>NamedTuple</code> of scalar fields. The pure <code>merge(left, right)</code> must be
-associative and return the same field types. Chunks may regroup adjacent values
-while preserving input order. The initial state is applied once and is the
-result for empty input; with no seed, evaluating an empty lane raises
-<code>ValueError</code>.</p>
-<p>On both CPU and GPU, a map over queries consuming an associative structured
-fold over references whose inputs come from a feature reduction compiles to a
-tiled pairwise fold. For example, both the gallery's nested-map 1-NN and the
-following NumPy expression compile to the same tiled computation:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="nd">@par</span><span class="o">.</span><span class="n">jit</span>
-<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">nearest</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
-<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>  <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">argmin</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">((</span><span class="n">x</span><span class="p">[:,</span> <span class="kc">None</span><span class="p">,</span> <span class="p">:]</span> <span class="o">-</span> <span class="n">y</span><span class="p">[</span><span class="kc">None</span><span class="p">,</span> <span class="p">:,</span> <span class="p">:])</span> <span class="o">**</span> <span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">(</span><span class="mi">2</span><span class="p">),</span> <span class="n">axis</span><span class="o">=</span><span class="mi">2</span><span class="p">),</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
-</code></pre></div>
-<p>The compiler evaluates a bounded rectangle of scores, folds each row, and
-merges consecutive tile summaries in reference order. Each summary carries the
-global reference index, so ties and NaNs retain their first-index semantics
-across tiles. The rewrite inspector (<code>par.show_rewrite</code>) reports
-<code>Pairwise map and ordered tile-summary fold</code> when it applies.</p>
+<h2 id="semantics-notes">Semantics notes<a class="headerlink" href="#semantics-notes" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Array-returning functions:</strong> <code>par.map</code> may return arrays (stacked along the
+  mapped axis). All outputs must share the same shape (<code>ValueError</code> at runtime
+  if ragged).</li>
+<li><strong>Associativity &amp; parallelism:</strong> <code>par.reduce</code> runs in parallel only when its
+  combiner is recognizably one of <code>+</code>, <code>*</code>, <code>min</code>, <code>max</code>, <code>and</code>, <code>or</code>, <code>&amp;</code>, <code>|</code>,
+  <code>^</code> (written as <code>np.add</code>, <code>lambda a, b: a + b</code>, or <code>par.add</code>). Non-associative
+  combiners run sequentially left-to-right like <code>functools.reduce</code>. Floating-point
+  parallel reductions may differ in the last ULP, like NumPy's pairwise summation.</li>
+<li><strong>Combiners:</strong> Standard NumPy ufuncs (<code>np.add</code>, <code>np.multiply</code>, <code>np.minimum</code>,
+  <code>np.maximum</code>) are idiomatic; <code>par.add</code> / <code>parakeet.dsl</code> aliases remain
+  available for compatibility.</li>
+</ul>
 
 
 

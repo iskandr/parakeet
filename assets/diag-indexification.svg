@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 316" width="680" height="316" role="img" aria-label="Indexification lowers diverse array-driven Python and NumPy operations onto uniform coordinate-driven Index* primitives">
+<defs>
+  <marker id="arr" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+    <path d="M 1 1.5 L 9 5 L 1 8.5 z" fill="#64748b"/>
+  </marker>
+  <marker id="arr-green" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+    <path d="M 1 1.5 L 9 5 L 1 8.5 z" fill="#245744"/>
+  </marker>
+  <marker id="arr-blue" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+    <path d="M 1 1.5 L 9 5 L 1 8.5 z" fill="#176083"/>
+  </marker>
+  <marker id="arr-red" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+    <path d="M 1 1.5 L 9 5 L 1 8.5 z" fill="#dc2626"/>
+  </marker>
+  <pattern id="hatch" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+    <line x1="0" y1="0" x2="0" y2="7" stroke="#cbd5e1" stroke-width="1.5"/>
+  </pattern>
+</defs>
+<rect x="0.5" y="0.5" width="679" height="315" rx="10" fill="#ffffff" stroke="#cbd5e1"/>
+<text x="20" y="28" font-family="'Source Sans 3', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15.5" font-weight="700" fill="#0f172a">Why the &#x27;Index&#x27; Prefix? Array-Driven Python → Coordinate-Driven IR</text>
+<text x="20" y="46" font-family="'Source Sans 3', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#475569">Views, broadcasts, transposes, and par.* operators disappear into integer index expressions.</text>
+<text x="20.0" y="72.0" text-anchor="start" font-family="'Source Sans 3', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10.2" font-weight="700" fill="#475569">SURFACE PYTHON / NUMPY / PAR.*</text>
+<text x="324.0" y="72.0" text-anchor="start" font-family="'Source Sans 3', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10.2" font-weight="700" fill="#245744">INDEX-SPACE PRIMITIVE</text>
+<rect x="20.0" y="82.0" width="260.0" height="108.0" rx="7" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.2"/>
+<rect x="28.0" y="92.0" width="244.0" height="19.0" rx="4" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.0"/>
+<text x="35.0" y="105.0" text-anchor="start" font-family="'IBM Plex Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9.6" font-weight="600" fill="#0f172a">x[:, None] - y[None, :]</text>
+<text x="265.0" y="105.0" text-anchor="end" font-family="'Source Sans 3', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="9.2" font-weight="500" fill="#64748b">broadcast</text>
+<rect x="28.0" y="115.0" width="244.0" height="19.0" rx="4" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.0"/>
+<text x="35.0" y="128.0" text-anchor="start" font-family="'IBM Plex Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9.6" font-weight="600" fill="#0f172a">x.T * 2.0</text>
+<text x="265.0" y="128.0" text-anchor="end" font-family="'Source Sans 3', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="9.2" font-weight="500" fill="#64748b">transpose + ufunc</text>
+<rect x="28.0" y="138.0" width="244.0" height="19.0" rx="4" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.0"/>
+<text x="35.0" y="151.0" text-anchor="start" font-family="'IBM Plex Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9.6" font-weight="600" fill="#0f172a">par.allpairs(f, x, y)</text>
+<text x="265.0" y="151.0" text-anchor="end" font-family="'Source Sans 3', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="9.2" font-weight="500" fill="#64748b">pairwise map</text>
+<rect x="28.0" y="161.0" width="244.0" height="19.0" rx="4" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.0"/>
+<text x="35.0" y="174.0" text-anchor="start" font-family="'IBM Plex Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9.6" font-weight="600" fill="#0f172a">[f(xi) for xi in x]</text>
+<text x="265.0" y="174.0" text-anchor="end" font-family="'Source Sans 3', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="9.2" font-weight="500" fill="#64748b">comprehension</text>
+<line x1="284.0" y1="136.0" x2="316.0" y2="136.0" stroke="#245744" stroke-width="2.0" marker-end="url(#arr-green)"/>
+<rect x="324.0" y="82.0" width="336.0" height="108.0" rx="7" fill="#edf4ef" stroke="#86c5a8" stroke-width="1.2"/>
+<text x="338.0" y="103.0" text-anchor="start" font-family="'IBM Plex Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="700" fill="#245744">IndexMap</text>
+<rect x="422.0" y="89.0" width="134.0" height="20.0" rx="10.0" fill="#ffffff" stroke="#86c5a8" stroke-width="1.0"/>
+<text x="489.0" y="102.2" text-anchor="middle" font-family="'Source Sans 3', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="9.5" font-weight="600" fill="#245744">coordinate box (M, N)</text>
+<rect x="338.0" y="116.0" width="308.0" height="42.0" rx="5" fill="#ffffff" stroke="#86c5a8" stroke-width="1.0"/>
+<text x="348.0" y="133.0" text-anchor="start" font-family="'IBM Plex Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9.8" font-weight="600" fill="#0f172a">for (i, j) in (0..M-1, 0..N-1):</text>
+<text x="348.0" y="149.0" text-anchor="start" font-family="'IBM Plex Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9.8" font-weight="500" fill="#475569">  out[i, j] = body(x[i], y[j])</text>
+<text x="338.0" y="177.0" text-anchor="start" font-family="'Source Sans 3', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="9.8" font-weight="500" fill="#245744">No input arrays on the node — broadcasts &amp; views are just index math</text>
+<rect x="20.0" y="202.0" width="260.0" height="96.0" rx="7" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.2"/>
+<rect x="28.0" y="209.0" width="244.0" height="18.0" rx="4" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.0"/>
+<text x="35.0" y="221.5" text-anchor="start" font-family="'IBM Plex Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9.4" font-weight="600" fill="#0f172a">np.sum(x * x, axis=1)</text>
+<text x="265.0" y="221.5" text-anchor="end" font-family="'Source Sans 3', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="9.0" font-weight="500" fill="#64748b">reduction</text>
+<rect x="28.0" y="230.0" width="244.0" height="18.0" rx="4" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.0"/>
+<text x="35.0" y="242.5" text-anchor="start" font-family="'IBM Plex Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9.4" font-weight="600" fill="#0f172a">np.argmin(d2, axis=1)</text>
+<text x="265.0" y="242.5" text-anchor="end" font-family="'Source Sans 3', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="9.0" font-weight="500" fill="#64748b">value + index</text>
+<rect x="28.0" y="251.0" width="244.0" height="18.0" rx="4" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.0"/>
+<text x="35.0" y="263.5" text-anchor="start" font-family="'IBM Plex Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9.4" font-weight="600" fill="#0f172a">par.fold(lift, merge, x)</text>
+<text x="265.0" y="263.5" text-anchor="end" font-family="'Source Sans 3', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="9.0" font-weight="500" fill="#64748b">ordered carry</text>
+<rect x="28.0" y="272.0" width="244.0" height="18.0" rx="4" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.0"/>
+<text x="35.0" y="284.5" text-anchor="start" font-family="'IBM Plex Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9.4" font-weight="600" fill="#0f172a">par.ireduce(f, (K,))</text>
+<text x="265.0" y="284.5" text-anchor="end" font-family="'Source Sans 3', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="9.0" font-weight="500" fill="#64748b">index reduction</text>
+<line x1="284.0" y1="250.0" x2="316.0" y2="250.0" stroke="#176083" stroke-width="2.0" marker-end="url(#arr-blue)"/>
+<rect x="324.0" y="202.0" width="336.0" height="96.0" rx="7" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.2"/>
+<text x="338.0" y="223.0" text-anchor="start" font-family="'IBM Plex Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="700" fill="#176083">IndexReduce</text>
+<rect x="444.0" y="209.0" width="134.0" height="20.0" rx="10.0" fill="#ffffff" stroke="#93c5fd" stroke-width="1.0"/>
+<text x="511.0" y="222.2" text-anchor="middle" font-family="'Source Sans 3', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="9.5" font-weight="600" fill="#176083">reduction axis (0..K-1)</text>
+<rect x="338.0" y="234.0" width="308.0" height="38.0" rx="5" fill="#ffffff" stroke="#93c5fd" stroke-width="1.0"/>
+<text x="348.0" y="250.0" text-anchor="start" font-family="'IBM Plex Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9.8" font-weight="600" fill="#0f172a">fold (⊕, carries) over k in 0..K-1:</text>
+<text x="348.0" y="265.0" text-anchor="start" font-family="'IBM Plex Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9.8" font-weight="500" fill="#475569">  acc = combine(acc, body(k))</text>
+<text x="338.0" y="288.0" text-anchor="start" font-family="'Source Sans 3', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="9.8" font-weight="500" fill="#176083">One fusion &amp; tiling pass now handles sum, argmin, @, einsum &amp; fold</text>
+</svg>

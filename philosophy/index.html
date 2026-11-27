@@ -13,10 +13,10 @@
         <link rel="canonical" href="https://rubinsteyn.com/parakeet/philosophy/">
       
       
-        <link rel="prev" href="../release-benchmarks/">
+        <link rel="prev" href="../internals/">
       
       
-        <link rel="next" href="../language/">
+        <link rel="next" href="../gallery/">
       
       
         
@@ -27,7 +27,7 @@
     
     
       
-        <title>Ideas, history, and boundaries - Parakeet</title>
+        <title>Design, boundaries, and history - Parakeet</title>
       
     
     
@@ -82,7 +82,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#ideas-history-and-boundaries" class="md-skip">
+        <a href="#design-boundaries-and-history" class="md-skip">
           Skip to content
         </a>
       
@@ -116,7 +116,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Ideas, history, and boundaries
+              Design, boundaries, and history
             
           </span>
         </div>
@@ -263,6 +263,40 @@
   
   
   
+    
+  
+  
+    
+    
+      
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../language/" class="md-tabs__link">
+          
+  
+  
+  Guide
+
+        </a>
+      </li>
+    
+  
+
+    
+  
+
+      
+        
+  
+  
+  
   
     
     
@@ -302,33 +336,11 @@
   
   
   
-    
-  
-  
-    
-    
-      <li class="md-tabs__item md-tabs__item--active">
-        <a href="./" class="md-tabs__link">
-          
-  
-  
-  Guide
-
-        </a>
-      </li>
-    
-  
-
-      
-        
-  
-  
-  
   
     
     
       <li class="md-tabs__item">
-        <a href="../supported/" class="md-tabs__link">
+        <a href="../api/" class="md-tabs__link">
           
   
   
@@ -443,6 +455,614 @@
       
   
   
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_1" id="__nav_3_1_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Using Parakeet
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Using Parakeet
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../language/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The compiled language
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operators/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Data-parallel operators
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../autodiff/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Automatic differentiation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../backends/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backends and GPUs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../performance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Performance and tuning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../debugging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Errors and debugging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3_2" id="__nav_3_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How Parakeet optimizes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How Parakeet optimizes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../primitives/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operators & compilation walkthrough
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algebra/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Algebraic laws
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rewrites/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rewrite rules catalog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../internals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Compiler architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design, boundaries, and history
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design, boundaries, and history
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#why-parakeet-is-built-this-way" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why Parakeet is built this way
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#current-boundaries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Current boundaries
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Current boundaries">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#python-language-and-types" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Python language and types
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#numpy-scipy-ad-and-gpus" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        NumPy, SciPy, AD, and GPUs
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#history" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        History
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
   
   
     
@@ -459,10 +1079,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
         
           
-          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
             
   
   
@@ -480,8 +1100,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -613,569 +1233,6 @@
       
   
   
-    
-  
-  
-  
-    
-    
-    
-    
-      
-        
-        
-      
-      
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
-        
-          
-          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
-            
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Guide
-  
-
-    
-  </span>
-  
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_5">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    Guide
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-    
-  
-  
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Ideas, history, and boundaries
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Ideas, history, and boundaries
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#five-design-principles" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Five design principles
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Five design principles">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#1-specialize-on-types-and-shapes-at-call-time" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        1. Specialize on types and shapes at call time
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#2-lower-everything-to-seven-algebraic-primitives" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2. Lower everything to seven algebraic primitives
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#3-fuse-algebraically-before-lowering-to-loops" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        3. Fuse algebraically before lowering to loops
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#4-tile-for-cache-and-gpu-shared-memory-from-the-same-ir" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        4. Tile for cache and GPU shared memory from the same IR
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#5-inspectable-fail-loud-compilation" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        5. Inspectable, fail-loud compilation
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#current-boundaries" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Current boundaries
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Current boundaries">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#python-language-and-types" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Python language and types
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#numpy-and-scipy" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        NumPy and SciPy
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#automatic-differentiation" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Automatic differentiation
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#gpu-and-locality" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        GPU and locality
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#history" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        History
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../language/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    The compiled language
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../backends/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Backends and GPUs
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../primitives/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Algebraic primitives & walkthrough
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../operators/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Data-parallel operators
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../autodiff/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Gradients
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../algebra/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Algebraic laws
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../rewrites/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Rewrite rules and optimizations
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../debugging/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Errors and debugging
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../performance/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Performance
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../internals/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Compiler architecture
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
-    </li>
-  
-
-    
-      
-      
-  
-  
   
   
     
@@ -1231,14 +1288,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../supported/" class="md-nav__link">
+      <a href="../api/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Supported functions
+    API
   
 
     
@@ -1259,14 +1316,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../api/" class="md-nav__link">
+      <a href="../supported/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    API
+    Supported functions
   
 
     
@@ -1398,74 +1455,13 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#five-design-principles" class="md-nav__link">
+  <a href="#why-parakeet-is-built-this-way" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Five design principles
+        Why Parakeet is built this way
       
     </span>
   </a>
-  
-    <nav class="md-nav" aria-label="Five design principles">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#1-specialize-on-types-and-shapes-at-call-time" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        1. Specialize on types and shapes at call time
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#2-lower-everything-to-seven-algebraic-primitives" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2. Lower everything to seven algebraic primitives
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#3-fuse-algebraically-before-lowering-to-loops" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        3. Fuse algebraically before lowering to loops
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#4-tile-for-cache-and-gpu-shared-memory-from-the-same-ir" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        4. Tile for cache and GPU shared memory from the same IR
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#5-inspectable-fail-loud-compilation" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        5. Inspectable, fail-loud compilation
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
       
@@ -1493,32 +1489,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#numpy-and-scipy" class="md-nav__link">
+  <a href="#numpy-scipy-ad-and-gpus" class="md-nav__link">
     <span class="md-ellipsis">
       
-        NumPy and SciPy
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#automatic-differentiation" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Automatic differentiation
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#gpu-and-locality" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        GPU and locality
+        NumPy, SciPy, AD, and GPUs
       
     </span>
   </a>
@@ -1561,67 +1535,50 @@
   
 
 
-<h1 id="ideas-history-and-boundaries">Ideas, history, and boundaries<a class="headerlink" href="#ideas-history-and-boundaries" title="Permanent link">&para;</a></h1>
-<h2 id="five-design-principles">Five design principles<a class="headerlink" href="#five-design-principles" title="Permanent link">&para;</a></h2>
-<h3 id="1-specialize-on-types-and-shapes-at-call-time">1. Specialize on types and shapes at call time<a class="headerlink" href="#1-specialize-on-types-and-shapes-at-call-time" title="Permanent link">&para;</a></h3>
-<p>Python functions act as templates. On each call, Parakeet specializes the
-function on its argument dtypes, array ranks, memory layouts (contiguous vs.
-strided), and container structure, caching the compiled binary per type key.</p>
-<p>When a type or rank depends on a runtime value (<code>axis=</code>, tuple length, or a
-size-1 broadcast axis), Parakeet specializes on that value automatically. That
-fixes the broadcasting corner case (<code>200×1 + 1×300</code>) noted in
-<a href="https://cs.nyu.edu/media/publications/rubinsteyn_alex.pdf">Rubinsteyn's thesis</a>
-statically at compile time.</p>
-<h3 id="2-lower-everything-to-seven-algebraic-primitives">2. Lower everything to seven algebraic primitives<a class="headerlink" href="#2-lower-everything-to-seven-algebraic-primitives" title="Permanent link">&para;</a></h3>
-<p>Instead of shipping hundreds of hand-written C or GPU kernels for individual
-NumPy functions, Parakeet lowers NumPy expressions, comprehensions, matrix
-products, <code>einsum</code>, and <code>par.*</code> operators onto seven core index-space operators
-(<code>Map</code>, <code>Reduce</code>/<code>Fold</code>, <code>Scan</code>, <code>Filter</code>/<code>Expand</code>, <code>Scatter</code>, <code>Wavefront</code>, and
-<code>Tile</code>). See <a href="../primitives/">Algebraic primitives &amp; walkthrough</a> for the full
-catalog and step-by-step examples.</p>
-<h3 id="3-fuse-algebraically-before-lowering-to-loops">3. Fuse algebraically before lowering to loops<a class="headerlink" href="#3-fuse-algebraically-before-lowering-to-loops" title="Permanent link">&para;</a></h3>
-<p>Keeping programs in operator form lets fusion run as algebraic rewrites rather
-than loop-nest dependence analysis:</p>
-<ul>
-<li><strong>Vertical fusion:</strong> collapses producer-consumer chains (<code>Map -&gt; Map</code>,
-  <code>Map -&gt; Reduce/Scan/Filter/Scatter</code>, <code>Scan -&gt; Map</code>, <code>Filter -&gt; Filter</code>, and
-  <code>Filter -&gt; Reduce</code> so <code>np.sum(x[x &gt; 0])</code> allocates nothing).</li>
-<li><strong>Nested map flattening:</strong> merges nested maps into one multi-dimensional map
-  for CPU threads and GPU grids.</li>
-<li><strong>Horizontal and online fusion:</strong> merges sibling maps, reductions, and
-  same-key histograms, and combines dependent <code>max</code> + <code>sum(exp(x - m))</code> pairs
-  into one pass.</li>
-<li><strong>Safety guards:</strong> unlike the 2014 thesis, fusion checks operation cost,
-  single-use counts, aliasing, and associativity so it never silently
-  duplicates expensive work or reorders non-associative user folds.</li>
-</ul>
-<p>See <a href="../rewrites/">Rewrite rules and optimizations</a> for the full rule catalog.</p>
-<h3 id="4-tile-for-cache-and-gpu-shared-memory-from-the-same-ir">4. Tile for cache and GPU shared memory from the same IR<a class="headerlink" href="#4-tile-for-cache-and-gpu-shared-memory-from-the-same-ir" title="Permanent link">&para;</a></h3>
-<p>Following <a href="https://cs.nyu.edu/media/publications/eric_h.pdf">Hielscher's 2013 thesis</a>,
-locality passes rewrite operators directly before loop lowering:</p>
-<ul>
-<li><strong>Reduction interchange:</strong> hoists strided reductions (<code>np.sum(X, axis=0)</code>)
-  outside L1-sized output strips on CPU, while leaving columns coalesced on GPU.</li>
-<li><strong>Cache, register, and GPU SRAM tiling:</strong> turns maps wrapping reductions
-  (<code>a @ b</code>, <code>allpairs</code>, <code>einsum</code>, fused prologues/epilogues) into nested cache
-  and register tiles on CPU and shared-memory tiles on CUDA and Metal (with
-  Metal <code>simdgroup_matrix</code> and optional CUDA <code>nvcuda::wmma</code> TF32 Tensor Cores).</li>
-<li><strong>Modern algebraic laws:</strong> extends the same tiling machinery to online
-  softmax/attention, cut cross-entropy, Gaussian kernel regression, contraction
-  reassociation, chunkwise affine/bilinear scans, and tile-interval mask
-  pruning. See <a href="../algebra/">Algebraic laws</a>.</li>
-<li><strong>Device residency:</strong> <code>par.to_device</code> and <code>par.to_host</code> keep arrays on CUDA
-  or Metal across calls with zero host copies.</li>
-</ul>
-<h3 id="5-inspectable-fail-loud-compilation">5. Inspectable, fail-loud compilation<a class="headerlink" href="#5-inspectable-fail-loud-compilation" title="Permanent link">&para;</a></h3>
-<ul>
-<li><code>par.show_rewrite(f, *args)</code> summarizes which algebraic laws fired.</li>
-<li><code>f.specialize(*args)</code> exposes <code>.operators</code>, <code>.ir</code>, <code>.source</code>, and <code>.kernels</code>.</li>
-<li><code>par.verify</code> checks types, scoping, and buffer ownership after every pass;
-  <code>par.find_broken_transform</code> bisects passes automatically.</li>
-<li>Unsupported Python or NumPy constructs fail at compile time with the exact
-  source caret rather than falling back silently.</li>
-</ul>
+<h1 id="design-boundaries-and-history">Design, boundaries, and history<a class="headerlink" href="#design-boundaries-and-history" title="Permanent link">&para;</a></h1>
+<h2 id="why-parakeet-is-built-this-way">Why Parakeet is built this way<a class="headerlink" href="#why-parakeet-is-built-this-way" title="Permanent link">&para;</a></h2>
+<p>Numerical Python sits between two worlds. <strong>NumPy</strong> gives concise, readable
+code and fast C/Fortran kernels for individual operations, but composing
+expressions allocates temporary arrays and sweeps DRAM on every step—and any
+algorithm that does not fit a built-in ufunc falls back to slow CPython loops.
+<strong>C/CUDA compilers</strong> generate fast scalar loops, but once array code is
+flattened into imperative <code>for</code>-loops, high-level structure (independence,
+associativity, data reuse) is lost and must be painfully recovered by
+dependence analysis.</p>
+<p>Parakeet—originating in the NYU theses of
+<a href="https://cs.nyu.edu/media/publications/eric_h.pdf">Eric Hielscher (2013)</a> and
+<a href="https://cs.nyu.edu/media/publications/rubinsteyn_alex.pdf">Alex Rubinsteyn (2014)</a>
+and <a href="https://www.usenix.org/conference/hotpar12/workshop-program/presentation/rubinsteyn">HotPar '12</a>—bridges
+that gap with one guiding idea: <strong>keep array programs in algebraic operator
+form (data-parallel adverbs over explicit index spaces) all the way through
+optimization.</strong> That single choice unifies five design principles:</p>
+<ol>
+<li><strong>Specialize on types, values, and shape buckets at call time.</strong> Python
+   functions act as templates specialized on argument dtypes, array ranks,
+   layouts, and container structure. Compile-time parameters (<code>axis=</code>, tuple
+   length, size-1 broadcast dimensions) specialize automatically, and tiled GPU
+   schedules propagate power-of-2 shape buckets and divisibility so aligned
+   sizes share one branchless binary.</li>
+<li><strong>Normalize everything into coordinate-driven primitives.</strong> NumPy
+   expressions, comprehensions, matrix products, <code>einsum</code>, and <code>par.*</code> calls
+   all indexify into six source primitives (<code>IndexMap</code>, <code>IndexReduce</code>,
+   <code>IndexScan</code>, <code>IndexFilter</code>/<code>IndexExpand</code>, <code>IndexScatter</code>, <code>IndexWavefront</code>),
+   turning broadcasts, transposes, and slices into plain index arithmetic
+   (<a href="../primitives/">Operators &amp; compilation walkthrough</a>).</li>
+<li><strong>Fuse algebraically before lowering to loops.</strong> Vertical, nested, filter,
+   sibling, and online fusion operate directly on the operator IR with explicit
+   alias, single-use cost, and associativity guards
+   (<a href="../rewrites/">Rewrite rules catalog</a>).</li>
+<li><strong>Tile for cache and GPU shared memory from one IR.</strong> Following Hielscher's
+   locality framework, target-aware reduction interchange, <code>IndexTile</code>
+   cache/register blocking, GPU SRAM staging, hardware matrix units (Metal
+   <code>simdgroup_matrix</code>, CUDA TF32 WMMA), and <a href="../algebra/">Laws 1–6</a> all run on
+   the same operator IR before codegen.</li>
+<li><strong>Inspectable, fail-loud compilation.</strong> Unsupported constructs raise a
+   source-located <code>CompileError</code> instead of silently falling back; every pass
+   is verified by <code>par.verify</code> and inspectable via <code>par.show_rewrite</code>,
+   <code>f.specialize()</code>, and <code>par.find_broken_transform</code>.</li>
+</ol>
 <hr />
 <h2 id="current-boundaries">Current boundaries<a class="headerlink" href="#current-boundaries" title="Permanent link">&para;</a></h2>
 <p>Parakeet compiles a static-type numerical subset of Python, not all of CPython
@@ -1631,79 +1588,56 @@ or SciPy.</p>
 <thead>
 <tr>
 <th>Supported</th>
-<th>Not supported yet</th>
+<th>Not supported</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><code>bool</code>, <code>int8</code>–<code>int64</code>, <code>uint8</code>–<code>uint64</code>, <code>float32</code>, <code>float64</code>, <code>complex64</code>, <code>complex128</code> scalars and arrays</td>
+<td><code>bool</code>, <code>int8</code>–<code>int64</code>, <code>uint8</code>–<code>uint64</code>, <code>float32</code>, <code>float64</code>, <code>complex64</code>, <code>complex128</code> scalars &amp; arrays</td>
 <td>Native <code>float16</code> compute (widened to <code>float32</code>), object or string arrays</td>
 </tr>
 <tr>
 <td>Tuples, <code>NamedTuple</code>, fixed string-key dicts, <code>@dataclass</code> (pure methods, <code>@property</code>, <code>__call__</code>), <code>slice</code>, <code>range</code>, <code>zip</code>, <code>enumerate</code>, <code>itertools</code></td>
-<td>Dynamic dict keys, <code>set</code>, runtime string manipulation, arbitrary mutable classes</td>
+<td>Dynamic dict keys, <code>set</code>, runtime string manipulation, arbitrary non-dataclass classes</td>
 </tr>
 <tr>
-<td>Compile-time lists, CPU growable homogeneous lists, <code>par.fixed_list</code> scratch, dynamic-shape array/<code>RaggedArray</code> loop rebinding</td>
-<td>Heterogeneously typed lists grown inside runtime loops</td>
+<td>Compile-time lists, CPU growable homogeneous lists, <code>par.fixed_list</code>, dynamic-shape array / <code>RaggedArray</code> loop rebinding</td>
+<td>Heterogeneously typed lists mutated inside runtime loops</td>
 </tr>
 <tr>
-<td><code>if</code>/<code>elif</code>/<code>else</code>, <code>for</code>, <code>while</code>, <code>break</code>, <code>continue</code>, early <code>return</code>, <code>match</code>/<code>case</code>, closures, <code>*args</code>/<code>**kwargs</code>, <code>assert</code>, <code>raise</code></td>
-<td><code>try</code>/<code>except</code>, <code>with</code>, <code>yield</code>, <code>global</code>/<code>nonlocal</code>, <code>import</code> inside <code>@jit</code>, recursion</td>
+<td><code>if</code>/<code>elif</code>/<code>else</code>, <code>for</code>, <code>while</code>, <code>break</code>, <code>continue</code>, early <code>return</code>, scalar <code>match</code>/<code>case</code>, closures, <code>*args</code>/<code>**kwargs</code>, <code>assert</code>, <code>raise</code></td>
+<td><code>try</code>/<code>except</code>, <code>with</code>, <code>yield</code>, <code>global</code>/<code>nonlocal</code>, <code>import</code> inside <code>@jit</code>, recursion, <code>print</code></td>
 </tr>
 <tr>
-<td>Static array rank; value specialization on <code>axis</code>, <code>keepdims</code>, <code>dtype</code>, tuple length</td>
+<td>Static array rank; automatic value specialization on <code>axis</code>, <code>keepdims</code>, <code>dtype</code>, tuple length</td>
 <td>Value-dependent output rank (e.g. <code>np.squeeze(x)</code> without <code>axis=</code>)</td>
 </tr>
 </tbody>
 </table>
-<h3 id="numpy-and-scipy">NumPy and SciPy<a class="headerlink" href="#numpy-and-scipy" title="Permanent link">&para;</a></h3>
-<p>About 215 NumPy functions and ufuncs are built in (<a href="../supported/">full list</a>),
-including arithmetic, reductions, scans, sorting, masks/fancy indexing,
-<code>@</code>/<code>einsum</code>, 2D and batched 3D <code>np.linalg</code> (<code>norm</code>, <code>cholesky</code>, <code>det</code>,
-<code>solve</code>, <code>inv</code>, <code>qr</code>, <code>eigh</code>, <code>eigvalsh</code>, <code>svd</code>, <code>pinv</code>, <code>lstsq</code>), and parallel
-<code>np.random</code>. Not built in yet:</p>
+<h3 id="numpy-scipy-ad-and-gpus">NumPy, SciPy, AD, and GPUs<a class="headerlink" href="#numpy-scipy-ad-and-gpus" title="Permanent link">&para;</a></h3>
 <ul>
-<li>Non-symmetric eigensolvers (<code>np.linalg.eig</code>, <code>eigvals</code>) and 4D+ batched
-  <code>np.linalg.*</code> (wrap with <code>par.map</code> for extra batch axes)</li>
-<li><code>np.fft.*</code> (see <code>examples/complex_fft_and_fasta.py</code> for a compiled radix-2 FFT)</li>
-<li>Variable-cardinality set ops (<code>np.unique</code>, <code>np.lexsort</code>, <code>np.isin</code>)</li>
-<li>SciPy modules (<code>scipy.special</code>, <code>scipy.optimize</code>, <code>scipy.ndimage</code>, ...)</li>
-</ul>
-<h3 id="automatic-differentiation">Automatic differentiation<a class="headerlink" href="#automatic-differentiation" title="Permanent link">&para;</a></h3>
-<p>Reverse mode (<code>par.grad</code>, <code>par.value_and_grad</code>, <code>par.vjp</code>), forward mode
-(<code>par.jvp</code>, <code>par.linearize</code>), <code>par.linear_transpose</code>, and higher-order AD
-(<code>par.hvp</code>, <code>par.jacfwd</code>, <code>par.jacrev</code>, <code>par.hessian</code>) cover element-wise ops,
-reductions, scans, <code>sort</code>/<code>topk</code>, <code>@</code>/<code>einsum</code>, <code>np.linalg</code>, gather/scatter-add,
-<code>par.map</code>/<code>allpairs</code>/<code>wavefront</code>, pure runtime <code>if</code>, and checkpointed
-<code>for</code>/<code>while</code> loops. Current limits:</p>
-<ul>
-<li><strong>Tape-based reverse mode:</strong> records array operators during elaboration (with
-  algebraic rematerialization for attention, cross-entropy, softmax, and norms)
-  rather than running as a separate IR-to-IR pass over lowered loops.</li>
-<li><strong>Control flow:</strong> loops with <code>break</code>/<code>continue</code> over differentiated state are
-  refused; runtime <code>if</code> branches over differentiated values run both sides and
-  cannot contain array stores, <code>return</code>, <code>break</code>, or <code>raise</code>.</li>
-<li><strong>Missing rules (refused loudly):</strong> <code>cumprod</code>, <code>convolve</code>, arbitrary indexed
-  overwrites (<code>out[idx] = v</code>; use scatter-add instead), overwriting a buffer
-  still needed by an earlier backward rule, and reverse-over-reverse through
-  non-scalar <code>par.map</code> bodies.</li>
-</ul>
-<h3 id="gpu-and-locality">GPU and locality<a class="headerlink" href="#gpu-and-locality" title="Permanent link">&para;</a></h3>
-<ul>
-<li><strong>Apple Metal <code>float64</code>:</strong> Metal lacks hardware <code>float64</code>; those loops run on
-  CPU with a warning. Use <code>float32</code> on Metal.</li>
-<li><strong>Per-thread heap allocation:</strong> parallel loops that allocate dynamic arrays
-  inside their body run on CPU rather than CUDA or Metal.</li>
-<li><strong>Standalone GPU GEMM:</strong> CPU calls NumPy's BLAS for standalone float <code>A @ B</code>.
-  CUDA and Metal run Parakeet's own tiled kernels (Metal <code>simdgroup_matrix</code>,
-  optional CUDA TF32 WMMA), which fuse prologues/epilogues in one kernel but
-  trail cuBLAS on large standalone matmuls.</li>
-<li><strong>Tile sizing:</strong> chosen analytically from <code>TargetProfile</code> cache and shared
-  memory budgets (<code>config.tile_bytes</code>) rather than
-  <a href="https://cs.nyu.edu/media/publications/eric_h.pdf">Hielscher's</a> online
-  runtime search. Chunkwise <code>TileScan</code> covers affine and bilinear recurrences,
-  not arbitrary general scans.</li>
+<li><strong>NumPy &amp; SciPy:</strong> ~215 NumPy functions and ufuncs are built in
+  (<a href="../supported/">full list</a>), including <code>einsum</code>, <code>np.unique</code>, <code>np.searchsorted</code>,
+  2D &amp; batched 3D <code>np.linalg</code> (<code>cholesky</code>, <code>det</code>, <code>solve</code>, <code>inv</code>, <code>qr</code>, <code>eigh</code>,
+  <code>eigvalsh</code>, <code>svd</code>, <code>pinv</code>, <code>lstsq</code>, <code>norm</code>), and parallel <code>np.random</code>. Not
+  built in: non-symmetric <code>eig</code>/<code>eigvals</code>, 4D+ <code>np.linalg</code> (wrap with
+  <code>par.map</code>), <code>np.fft.*</code> (see <code>examples/complex_fft_and_fasta.py</code> for a compiled
+  radix-2 FFT), <code>np.lexsort</code>/<code>np.isin</code>, and <code>scipy.*</code>.</li>
+<li><strong>Automatic differentiation:</strong> covers reverse mode (<code>grad</code>, <code>vjp</code>, <code>jacrev</code>),
+  forward mode (<code>jvp</code>, <code>linearize</code>, <code>jacfwd</code>), <code>linear_transpose</code>, higher-order
+  AD (<code>hvp</code>, <code>hessian</code>), checkpointed <code>for</code>/<code>while</code> loops, and Law 2
+  rematerialization. Refused loudly: <code>break</code>/<code>continue</code> over differentiated
+  state, runtime <code>if</code> branches with array stores or control exits, <code>cumprod</code>,
+  <code>convolve</code>, arbitrary indexed overwrites (<code>out[idx] = v</code>), overwriting a
+  buffer needed by an earlier VJP, and reverse-over-reverse through non-scalar
+  <code>par.map</code> bodies.</li>
+<li><strong>GPUs &amp; locality:</strong> Apple Metal lacks hardware <code>float64</code> (falls back to CPU
+  with a warning); parallel bodies that dynamically allocate arrays per thread
+  run on CPU; standalone GPU GEMMs use Parakeet's tiled kernels (fusing
+  prologues/epilogues, though trailing cuBLAS on large standalone matmuls);
+  tile sizes are chosen analytically from <code>TargetProfile</code> rather than online
+  search; chunkwise <code>TileScan</code> covers affine and bilinear recurrences rather
+  than arbitrary scans.</li>
 </ul>
 <hr />
 <h2 id="history">History<a class="headerlink" href="#history" title="Permanent link">&para;</a></h2>
@@ -1740,10 +1674,10 @@ That earlier system was hosted at <code>parakeetpython.com</code> and documented
   <a href="https://vimeo.com/73895275">PyData Boston '13</a>, and
   <a href="https://vimeo.com/79556629">PyData NYC '13</a> (<em>Python on the GPU with Parakeet</em>).</li>
 </ul>
-<p>Parakeet 1.x is a rewrite for Python 3.11+ and NumPy 2 that keeps <code>@jit</code> NumPy
-and explicit data-parallel operators together, closes the soundness gaps from
-the earlier design, and adds Apple Metal, NVIDIA CUDA, composable AD, and tiled
-monoidal reductions.</p>
+<p>Parakeet 1.x is a ground-up rewrite for Python 3.11+ and NumPy 2 that keeps
+<code>@jit</code> NumPy and explicit data-parallel operators together, closes the soundness
+gaps from the earlier design, and adds Apple Metal, NVIDIA CUDA, composable AD,
+and tiled monoidal reductions.</p>
 
 
 

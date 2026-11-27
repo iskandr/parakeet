@@ -16,7 +16,7 @@
         <link rel="prev" href="../operators/">
       
       
-        <link rel="next" href="../algebra/">
+        <link rel="next" href="../backends/">
       
       
         
@@ -27,7 +27,7 @@
     
     
       
-        <title>Gradients - Parakeet</title>
+        <title>Automatic differentiation - Parakeet</title>
       
     
     
@@ -82,7 +82,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#gradients" class="md-skip">
+        <a href="#automatic-differentiation" class="md-skip">
           Skip to content
         </a>
       
@@ -116,7 +116,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Gradients
+              Automatic differentiation
             
           </span>
         </div>
@@ -263,6 +263,40 @@
   
   
   
+    
+  
+  
+    
+    
+      
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../language/" class="md-tabs__link">
+          
+  
+  
+  Guide
+
+        </a>
+      </li>
+    
+  
+
+    
+  
+
+      
+        
+  
+  
+  
   
     
     
@@ -302,33 +336,11 @@
   
   
   
-    
-  
-  
-    
-    
-      <li class="md-tabs__item md-tabs__item--active">
-        <a href="../philosophy/" class="md-tabs__link">
-          
-  
-  
-  Guide
-
-        </a>
-      </li>
-    
-  
-
-      
-        
-  
-  
-  
   
     
     
       <li class="md-tabs__item">
-        <a href="../supported/" class="md-tabs__link">
+        <a href="../api/" class="md-tabs__link">
           
   
   
@@ -443,6 +455,641 @@
       
   
   
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_1" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3_1" id="__nav_3_1_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Using Parakeet
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_1_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Using Parakeet
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../language/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The compiled language
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operators/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Data-parallel operators
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Automatic differentiation
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Automatic differentiation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#forward-mode-vs-reverse-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Forward mode vs. reverse mode
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#api-overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        API overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reverse-mode-gradients-grad-and-value_and_grad" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reverse-mode gradients (grad and value_and_grad)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#forward-mode-jvp-general-vjp-and-higher-order-ad" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Forward mode (jvp), general vjp, and higher-order AD
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#supported-operations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Supported operations
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#loops-and-branches" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Loops and branches
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#custom-rules-stop_gradient-and-checkpoint" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Custom rules, stop_gradient, and checkpoint
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#in-place-stores-and-fail-loud-guarantees" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        In-place stores and fail-loud guarantees
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../backends/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backends and GPUs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../performance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Performance and tuning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../debugging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Errors and debugging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_2" id="__nav_3_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How Parakeet optimizes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How Parakeet optimizes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../primitives/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operators & compilation walkthrough
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algebra/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Algebraic laws
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rewrites/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rewrite rules catalog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../internals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Compiler architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../philosophy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design, boundaries, and history
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
   
   
     
@@ -459,10 +1106,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
         
           
-          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
             
   
   
@@ -480,8 +1127,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -613,546 +1260,6 @@
       
   
   
-    
-  
-  
-  
-    
-    
-    
-    
-      
-        
-        
-      
-      
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
-        
-          
-          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
-            
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Guide
-  
-
-    
-  </span>
-  
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_5">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    Guide
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../philosophy/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Ideas, history, and boundaries
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../language/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    The compiled language
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../backends/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Backends and GPUs
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../primitives/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Algebraic primitives & walkthrough
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../operators/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Data-parallel operators
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-    
-  
-  
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Gradients
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Gradients
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#forward-mode-vs-reverse-mode" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Forward mode vs. reverse mode
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#api-overview" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        API overview
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#reverse-mode-gradients-grad-and-value_and_grad" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Reverse-mode gradients (grad and value_and_grad)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#forward-mode-ad-general-vjps-and-linear-transposes" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Forward-mode AD, general VJPs, and linear transposes
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#higher-order-derivatives-hvps-and-jacobians" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Higher-order derivatives, HVPs, and Jacobians
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#what-can-be-differentiated" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        What can be differentiated
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#loops-and-branches" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Loops and branches
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#custom-rules-stop_gradient-and-checkpoint" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Custom rules, stop_gradient, and checkpoint
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#writing-into-arrays" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Writing into arrays
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#unsupported-operations-fail-at-compile-time" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Unsupported operations fail at compile time
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#how-it-works" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        How it works
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../algebra/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Algebraic laws
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../rewrites/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Rewrite rules and optimizations
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../debugging/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Errors and debugging
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../performance/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Performance
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../internals/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Compiler architecture
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
-    </li>
-  
-
-    
-      
-      
-  
-  
   
   
     
@@ -1208,14 +1315,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../supported/" class="md-nav__link">
+      <a href="../api/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Supported functions
+    API
   
 
     
@@ -1236,14 +1343,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../api/" class="md-nav__link">
+      <a href="../supported/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    API
+    Supported functions
   
 
     
@@ -1408,10 +1515,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#forward-mode-ad-general-vjps-and-linear-transposes" class="md-nav__link">
+  <a href="#forward-mode-jvp-general-vjp-and-higher-order-ad" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Forward-mode AD, general VJPs, and linear transposes
+        Forward mode (jvp), general vjp, and higher-order AD
       
     </span>
   </a>
@@ -1419,21 +1526,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#higher-order-derivatives-hvps-and-jacobians" class="md-nav__link">
+  <a href="#supported-operations" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Higher-order derivatives, HVPs, and Jacobians
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#what-can-be-differentiated" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        What can be differentiated
+        Supported operations
       
     </span>
   </a>
@@ -1463,32 +1559,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#writing-into-arrays" class="md-nav__link">
+  <a href="#in-place-stores-and-fail-loud-guarantees" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Writing into arrays
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#unsupported-operations-fail-at-compile-time" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Unsupported operations fail at compile time
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#how-it-works" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        How it works
+        In-place stores and fail-loud guarantees
       
     </span>
   </a>
@@ -1515,37 +1589,29 @@
   
 
 
-<h1 id="gradients">Gradients<a class="headerlink" href="#gradients" title="Permanent link">&para;</a></h1>
-<p>Parakeet differentiates functions directly over its operator IR, so the
-derivative code goes through the same fusion, tiling, and parallel CPU/GPU
-code generation as the forward pass.</p>
+<h1 id="automatic-differentiation">Automatic differentiation<a class="headerlink" href="#automatic-differentiation" title="Permanent link">&para;</a></h1>
+<p>Parakeet differentiates functions directly at the operator level, so derivatives
+go through the same fusion, cache/GPU tiling, and parallel code generation as
+the forward pass.</p>
 <h2 id="forward-mode-vs-reverse-mode">Forward mode vs. reverse mode<a class="headerlink" href="#forward-mode-vs-reverse-mode" title="Permanent link">&para;</a></h2>
-<p>For a function <code>f: R^n -&gt; R^m</code> with Jacobian matrix <code>J</code> (shape <code>m x n</code>), there
-are two fundamental ways to propagate derivatives through the chain rule:</p>
+<p>For a function <code>f: Rⁿ → Rᵐ</code> with Jacobian <code>J</code> (shape <code>m × n</code>), choose the mode
+that matches your input/output shape:</p>
 <ul>
-<li><strong>Reverse mode (<code>par.grad</code>, <code>par.vjp</code>, <code>par.jacrev</code>):</strong> Computes a
-  <strong>vector-Jacobian product</strong> <code>uᵀ · J</code> (pulling output sensitivities backward
-  to every input). Cost scales with the number of <strong>outputs</strong> <code>m</code>, independent
-  of the number of inputs <code>n</code>. Because reverse mode walks backward, it saves
-  (or recomputes) forward intermediates.</li>
-<li><strong>Use reverse mode when inputs outnumber outputs (<code>n &gt;&gt; m</code>):</strong> training
-    losses (<code>m = 1</code> scalar loss with millions of parameters), inverse problems,
-    and sensitivity of one objective with respect to all weights or coordinates.</li>
-<li><strong>Forward mode (<code>par.jvp</code>, <code>par.jacfwd</code>):</strong> Computes a
-  <strong>Jacobian-vector product</strong> <code>J · v</code> (pushing an input perturbation <code>v</code>
-  forward alongside the computation). Cost scales with the number of <strong>inputs</strong>
-  <code>n</code>, independent of the number of outputs <code>m</code>, and it uses <strong>O(1) extra
-  memory</strong> with no backward tape even through long <code>for</code>/<code>while</code> loops.</li>
-<li><strong>Use forward mode when outputs outnumber inputs (<code>m &gt;&gt; n</code>):</strong>
-    differentiating a simulation, ODE trajectory, or physical field with
-    respect to a handful of scalar parameters, computing directional
-    derivatives, or composing forward-over-reverse (<code>jvp(grad(f))</code>) for
-    Hessian-vector products (<code>par.hvp</code>).</li>
+<li><strong>Reverse mode (<code>par.grad</code>, <code>par.vjp</code>, <code>par.jacrev</code>)</strong> computes a
+  vector-Jacobian product <code>uᵀ · J</code> in cost proportional to <strong>outputs <code>m</code></strong>. Use
+  it when <code>n ≫ m</code> (scalar training losses, inverse problems).</li>
+<li><strong>Forward mode (<code>par.jvp</code>, <code>par.jacfwd</code>)</strong> computes a Jacobian-vector product
+  <code>J · v</code> in cost proportional to <strong>inputs <code>n</code></strong> with <strong><code>O(1)</code> extra memory</strong>
+  and no backward tape—even through long loops. Use it when <code>m ≫ n</code>, for
+  directional derivatives, or inside forward-over-reverse <code>par.hvp</code>.</li>
 </ul>
-<p>The two modes are exact linear transposes of each other: for any input <code>x</code>,
-input direction <code>v</code>, and output sensitivity <code>u</code>,</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>dot(jvp(f, x, v), u) == dot(v, vjp(f, x)(u))
-</code></pre></div>
+<p><img alt="Forward-mode JVP vs reverse-mode VJP and algebraic rematerialization" src="../assets/diag-autodiff.svg" /></p>
+<p>The two modes are exact linear transposes of one another for any input <code>x</code>,
+tangent <code>v</code>, and cotangent <code>u</code>:</p>
+<div class="pk-eq">
+⟨ jvp(f, x, v), u ⟩  =  ⟨ v, vjp(f, x)(u) ⟩
+</div>
+
 <h2 id="api-overview">API overview<a class="headerlink" href="#api-overview" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -1559,17 +1625,17 @@ input direction <code>v</code>, and output sensitivity <code>u</code>,</p>
 <tr>
 <td><code>par.grad(f, wrt=0)</code></td>
 <td>Reverse</td>
-<td>Gradient of a scalar-valued function by index (<code>0</code>) or parameter name (<code>"w"</code>)</td>
+<td>Gradient of a scalar loss by position (<code>0</code>) or parameter name (<code>"w"</code>)</td>
 </tr>
 <tr>
 <td><code>par.value_and_grad(f, wrt=0)</code></td>
 <td>Reverse</td>
-<td>Forward value and gradient in one compiled call</td>
+<td>Forward scalar value and gradient in one compiled call</td>
 </tr>
 <tr>
 <td><code>par.vjp(f, *primals)</code></td>
 <td>Reverse</td>
-<td><code>(y, pullback)</code> for vector, matrix, tuple, record, or <code>RaggedArray</code> outputs</td>
+<td><code>(y, pullback)</code> for array, tuple, record, or <code>RaggedArray</code> outputs</td>
 </tr>
 <tr>
 <td><code>par.jvp(f, primals, tangents)</code></td>
@@ -1594,7 +1660,7 @@ input direction <code>v</code>, and output sensitivity <code>u</code>,</p>
 <tr>
 <td><code>par.jacfwd(f)</code> / <code>par.jacrev(f)</code></td>
 <td>Fwd / Rev</td>
-<td>Full Jacobian matrix (<code>jacfwd</code> when <code>n &lt;= m</code>, <code>jacrev</code> when <code>m &lt; n</code>)</td>
+<td>Full Jacobian (<code>jacfwd</code> for <code>n ≤ m</code>, <code>jacrev</code> for <code>m &lt; n</code>)</td>
 </tr>
 <tr>
 <td><code>par.hessian(f, argnum=0)</code></td>
@@ -1604,108 +1670,85 @@ input direction <code>v</code>, and output sensitivity <code>u</code>,</p>
 <tr>
 <td><code>@par.checkpoint</code></td>
 <td>Memory</td>
-<td>Recompute a block's intermediates during backpropagation instead of saving them</td>
+<td>Recompute a block during backprop instead of saving intermediates</td>
 </tr>
 <tr>
 <td><code>@par.jit(jvp=..., vjp=...)</code></td>
 <td>Custom</td>
-<td>Attach flat forward-mode or closure-style reverse-mode derivative rules directly</td>
+<td>Attach flat forward or closure-style reverse rules directly</td>
 </tr>
 <tr>
 <td><code>@par.jvp_for(fn)</code> / <code>@par.vjp_for(fn)</code></td>
 <td>Custom</td>
-<td>Register custom forward or reverse rules onto an existing function</td>
+<td>Register custom rules on an existing function</td>
 </tr>
 </tbody>
 </table>
 <h2 id="reverse-mode-gradients-grad-and-value_and_grad">Reverse-mode gradients (<code>grad</code> and <code>value_and_grad</code>)<a class="headerlink" href="#reverse-mode-gradients-grad-and-value_and_grad" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">parakeet</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">par</span>
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>
-<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="k">def</span><span class="w"> </span><span class="nf">loss</span><span class="p">(</span><span class="n">w</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
-<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>  <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">((</span><span class="n">np</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">x</span> <span class="o">@</span> <span class="n">w</span> <span class="o">+</span> <span class="n">b</span><span class="p">)</span> <span class="o">-</span> <span class="n">y</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span>
-<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>
-<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>
-<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="n">g</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">grad</span><span class="p">(</span><span class="n">loss</span><span class="p">)(</span><span class="n">w</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>  <span class="c1"># d loss / d w, shaped like w</span>
-<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="n">value</span><span class="p">,</span> <span class="n">g</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">value_and_grad</span><span class="p">(</span><span class="n">loss</span><span class="p">,</span> <span class="n">wrt</span><span class="o">=</span><span class="s2">"w"</span><span class="p">)(</span><span class="n">w</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>  <span class="c1"># differentiate by parameter name</span>
-<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="n">gw</span><span class="p">,</span> <span class="n">gb</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">grad</span><span class="p">(</span><span class="n">loss</span><span class="p">,</span> <span class="n">wrt</span><span class="o">=</span><span class="p">(</span><span class="s2">"w"</span><span class="p">,</span> <span class="s2">"b"</span><span class="p">))(</span><span class="n">x</span><span class="o">=</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="n">y</span><span class="p">,</span> <span class="n">w</span><span class="o">=</span><span class="n">w</span><span class="p">,</span> <span class="n">b</span><span class="o">=</span><span class="n">b</span><span class="p">)</span>  <span class="c1"># works with keyword arguments too</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">parakeet</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">par</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="k">def</span><span class="w"> </span><span class="nf">loss</span><span class="p">(</span><span class="n">w</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>  <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">((</span><span class="n">np</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">x</span> <span class="o">@</span> <span class="n">w</span> <span class="o">+</span> <span class="n">b</span><span class="p">)</span> <span class="o">-</span> <span class="n">y</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="n">g</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">grad</span><span class="p">(</span><span class="n">loss</span><span class="p">)(</span><span class="n">w</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>  <span class="c1"># d loss / d w</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="n">value</span><span class="p">,</span> <span class="n">g</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">value_and_grad</span><span class="p">(</span><span class="n">loss</span><span class="p">,</span> <span class="n">wrt</span><span class="o">=</span><span class="s2">"w"</span><span class="p">)(</span><span class="n">w</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>  <span class="c1"># by parameter name</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="n">gw</span><span class="p">,</span> <span class="n">gb</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">grad</span><span class="p">(</span><span class="n">loss</span><span class="p">,</span> <span class="n">wrt</span><span class="o">=</span><span class="p">(</span><span class="s2">"w"</span><span class="p">,</span> <span class="s2">"b"</span><span class="p">))(</span><span class="n">x</span><span class="o">=</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="n">y</span><span class="p">,</span> <span class="n">w</span><span class="o">=</span><span class="n">w</span><span class="p">,</span> <span class="n">b</span><span class="o">=</span><span class="n">b</span><span class="p">)</span>  <span class="c1"># keyword args work too</span>
 </code></pre></div>
-<p>For <code>par.grad</code> and <code>par.value_and_grad</code>, the function returns a single
-floating-point scalar. Differentiated arguments may be floats, float arrays,
-<code>RaggedArray</code>s, or arbitrarily nested tuples, <code>NamedTuple</code>s, dicts, and frozen
-<code>@dataclass</code> records (discrete metadata fields such as <code>int</code>, <code>bool</code>, or <code>str</code>
-pass through cleanly as zero-tangent static leaves):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">mlp</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>  <span class="p">(</span><span class="n">w1</span><span class="p">,</span> <span class="n">b1</span><span class="p">),</span> <span class="p">(</span><span class="n">w2</span><span class="p">,</span> <span class="n">b2</span><span class="p">)</span> <span class="o">=</span> <span class="n">params</span>
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>  <span class="n">h</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">x</span> <span class="o">@</span> <span class="n">w1</span> <span class="o">+</span> <span class="n">b1</span><span class="p">)</span>
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>  <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">((</span><span class="n">h</span> <span class="o">@</span> <span class="n">w2</span> <span class="o">+</span> <span class="n">b2</span> <span class="o">-</span> <span class="n">y</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span>
-<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>
-<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>
-<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="p">(</span><span class="n">gw1</span><span class="p">,</span> <span class="n">gb1</span><span class="p">),</span> <span class="p">(</span><span class="n">gw2</span><span class="p">,</span> <span class="n">gb2</span><span class="p">)</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">grad</span><span class="p">(</span><span class="n">mlp</span><span class="p">)(</span><span class="n">params</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+<p>Differentiated arguments may be floats, float/complex arrays, <code>RaggedArray</code>s, or
+nested tuples, <code>NamedTuple</code>s, fixed-key dicts, and <code>@dataclass</code> records
+(discrete fields like <code>int</code>, <code>bool</code>, or <code>str</code> pass through as zero-tangent
+leaves):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">mlp</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>  <span class="p">(</span><span class="n">w1</span><span class="p">,</span> <span class="n">b1</span><span class="p">),</span> <span class="p">(</span><span class="n">w2</span><span class="p">,</span> <span class="n">b2</span><span class="p">)</span> <span class="o">=</span> <span class="n">params</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>  <span class="n">h</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">x</span> <span class="o">@</span> <span class="n">w1</span> <span class="o">+</span> <span class="n">b1</span><span class="p">)</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>  <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">((</span><span class="n">h</span> <span class="o">@</span> <span class="n">w2</span> <span class="o">+</span> <span class="n">b2</span> <span class="o">-</span> <span class="n">y</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="p">(</span><span class="n">gw1</span><span class="p">,</span> <span class="n">gb1</span><span class="p">),</span> <span class="p">(</span><span class="n">gw2</span><span class="p">,</span> <span class="n">gb2</span><span class="p">)</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">grad</span><span class="p">(</span><span class="n">mlp</span><span class="p">)(</span><span class="n">params</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
 </code></pre></div>
-<p><code>par.grad(f)</code> can be called from plain Python, where it compiles on first use,
-or inside a <code>@par.jit</code> function, where the entire training step becomes one
-compiled function:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nd">@par</span><span class="o">.</span><span class="n">jit</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">descend</span><span class="p">(</span><span class="n">w</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">rate</span><span class="p">,</span> <span class="n">steps</span><span class="p">):</span>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>  <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">steps</span><span class="p">):</span>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="n">w</span> <span class="o">=</span> <span class="n">w</span> <span class="o">-</span> <span class="n">rate</span> <span class="o">*</span> <span class="n">par</span><span class="o">.</span><span class="n">grad</span><span class="p">(</span><span class="n">loss</span><span class="p">)(</span><span class="n">w</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>  <span class="k">return</span> <span class="n">w</span>
+<p>Calling <code>par.grad</code> inside <code>@par.jit</code> compiles the entire training loop into one
+native function (see <a href="../gallery/nanogpt/">Train nanoGPT</a> and
+<a href="https://github.com/iskandr/parakeet/blob/master/examples/convnet.py"><code>examples/convnet.py</code></a>):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nd">@par</span><span class="o">.</span><span class="n">jit</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">descend</span><span class="p">(</span><span class="n">w</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">rate</span><span class="p">,</span> <span class="n">steps</span><span class="p">):</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>  <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">steps</span><span class="p">):</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    <span class="n">w</span> <span class="o">=</span> <span class="n">w</span> <span class="o">-</span> <span class="n">rate</span> <span class="o">*</span> <span class="n">par</span><span class="o">.</span><span class="n">grad</span><span class="p">(</span><span class="n">loss</span><span class="p">)(</span><span class="n">w</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>  <span class="k">return</span> <span class="n">w</span>
 </code></pre></div>
-<p><a href="https://github.com/iskandr/parakeet/blob/master/examples/nanogpt.py"><code>examples/nanogpt.py</code></a>
-trains a small transformer this way, and
-<a href="https://github.com/iskandr/parakeet/blob/master/examples/convnet.py"><code>examples/convnet.py</code></a>
-trains a convolutional network.</p>
-<h2 id="forward-mode-ad-general-vjps-and-linear-transposes">Forward-mode AD, general VJPs, and linear transposes<a class="headerlink" href="#forward-mode-ad-general-vjps-and-linear-transposes" title="Permanent link">&para;</a></h2>
-<p>Use <code>par.jvp</code> for directional derivatives in a single forward pass (no backward
-tape, O(1) extra memory even through long <code>for</code>/<code>while</code> loops), and <code>par.vjp</code>
-when differentiating functions with vector, matrix, tuple, record, or
-<code>RaggedArray</code> outputs:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">f</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">w</span><span class="p">):</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>  <span class="n">z</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">x</span> <span class="o">@</span> <span class="n">w</span><span class="p">)</span>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>  <span class="k">return</span> <span class="n">z</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">z</span> <span class="o">*</span> <span class="n">z</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<h2 id="forward-mode-jvp-general-vjp-and-higher-order-ad">Forward mode (<code>jvp</code>), general <code>vjp</code>, and higher-order AD<a class="headerlink" href="#forward-mode-jvp-general-vjp-and-higher-order-ad" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">f</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">w</span><span class="p">):</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>  <span class="n">z</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">x</span> <span class="o">@</span> <span class="n">w</span><span class="p">)</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>  <span class="k">return</span> <span class="n">z</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">z</span> <span class="o">*</span> <span class="n">z</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="c1"># Forward-mode JVP (O(1) extra memory, single forward pass)</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="p">(</span><span class="n">y1</span><span class="p">,</span> <span class="n">y2</span><span class="p">),</span> <span class="p">(</span><span class="n">dy1</span><span class="p">,</span> <span class="n">dy2</span><span class="p">)</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">jvp</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">w</span><span class="p">),</span> <span class="p">(</span><span class="n">vx</span><span class="p">,</span> <span class="n">vw</span><span class="p">))</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="c1"># General non-scalar VJP</span>
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="p">(</span><span class="n">y1</span><span class="p">,</span> <span class="n">y2</span><span class="p">),</span> <span class="n">pullback</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">vjp</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">w</span><span class="p">)</span>
+<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="n">gx</span><span class="p">,</span> <span class="n">gw</span> <span class="o">=</span> <span class="n">pullback</span><span class="p">((</span><span class="n">u1</span><span class="p">,</span> <span class="n">u2</span><span class="p">))</span>
+</code></pre></div>
+<p><code>par.hvp</code> computes Hessian-vector products via <strong>forward-over-reverse</strong>
+(<code>jvp(grad(f))</code>) in one fused pass—including through checkpointed loops,
+LayerNorm, and tiled attention (recomputing score tiles on the fly without
+allocating <code>T × T</code> matrices):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">objective</span><span class="p">(</span><span class="n">w</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>  <span class="n">h</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">x</span> <span class="o">@</span> <span class="n">w</span><span class="p">)</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>  <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">h</span> <span class="o">*</span> <span class="n">h</span> <span class="o">*</span> <span class="n">h</span><span class="p">)</span>
 <a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>
 <a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>
-<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="c1"># Forward-mode directional derivative (JVP)</span>
-<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="p">(</span><span class="n">y1</span><span class="p">,</span> <span class="n">y2</span><span class="p">),</span> <span class="p">(</span><span class="n">dy1</span><span class="p">,</span> <span class="n">dy2</span><span class="p">)</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">jvp</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">w</span><span class="p">),</span> <span class="p">(</span><span class="n">vx</span><span class="p">,</span> <span class="n">vw</span><span class="p">))</span>
-<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>
-<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="c1"># General non-scalar reverse-mode pullback (VJP)</span>
-<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="p">(</span><span class="n">y1</span><span class="p">,</span> <span class="n">y2</span><span class="p">),</span> <span class="n">pullback</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">vjp</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">w</span><span class="p">)</span>
-<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="n">gx</span><span class="p">,</span> <span class="n">gw</span> <span class="o">=</span> <span class="n">pullback</span><span class="p">((</span><span class="n">u1</span><span class="p">,</span> <span class="n">u2</span><span class="p">))</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="n">hv</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">hvp</span><span class="p">(</span><span class="k">lambda</span> <span class="n">w_</span><span class="p">:</span> <span class="n">objective</span><span class="p">(</span><span class="n">w_</span><span class="p">,</span> <span class="n">x</span><span class="p">),</span> <span class="n">w</span><span class="p">,</span> <span class="n">v</span><span class="p">)</span>  <span class="c1"># H(w) · v</span>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="n">H</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">hessian</span><span class="p">(</span><span class="k">lambda</span> <span class="n">w_</span><span class="p">:</span> <span class="n">objective</span><span class="p">(</span><span class="n">w_</span><span class="p">,</span> <span class="n">x</span><span class="p">))(</span><span class="n">w</span><span class="p">)</span>  <span class="c1"># full Hessian</span>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="n">J_fwd</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">jacfwd</span><span class="p">(</span><span class="k">lambda</span> <span class="n">w_</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">x</span> <span class="o">@</span> <span class="n">w_</span><span class="p">))(</span><span class="n">w</span><span class="p">)</span>
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="n">J_rev</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">jacrev</span><span class="p">(</span><span class="k">lambda</span> <span class="n">w_</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">x</span> <span class="o">@</span> <span class="n">w_</span><span class="p">))(</span><span class="n">w</span><span class="p">)</span>
 </code></pre></div>
-<p>For any differentiable function <code>f</code>, the transpose identity
-<code>⟨jvp(f, x, v), u⟩ == ⟨v, vjp(f, x)(u)⟩</code> holds to machine precision.
-<code>par.linearize(f, *primals)</code> returns <code>(y, lin_fn)</code> for repeated JVP evaluation
-at a point, and <code>par.linear_transpose(L, *example_inputs)</code> constructs the exact
-adjoint <code>Lᵀ</code> of a linear operator.</p>
-<h2 id="higher-order-derivatives-hvps-and-jacobians">Higher-order derivatives, HVPs, and Jacobians<a class="headerlink" href="#higher-order-derivatives-hvps-and-jacobians" title="Permanent link">&para;</a></h2>
-<p><code>par.hvp</code> computes Hessian-vector products via <strong>forward-over-reverse AD</strong>
-(<code>jvp(grad(f))</code>) in one fused pass, including through checkpointed loops,
-LayerNorm, and tiled attention (recomputing score tiles on the fly instead of
-storing the <code>T × T</code> attention matrix):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">objective</span><span class="p">(</span><span class="n">w</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>  <span class="n">h</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">x</span> <span class="o">@</span> <span class="n">w</span><span class="p">)</span>
-<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>  <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">h</span> <span class="o">*</span> <span class="n">h</span> <span class="o">*</span> <span class="n">h</span><span class="p">)</span>
-<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>
-<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>
-<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="n">hv</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">hvp</span><span class="p">(</span><span class="k">lambda</span> <span class="n">w_</span><span class="p">:</span> <span class="n">objective</span><span class="p">(</span><span class="n">w_</span><span class="p">,</span> <span class="n">x</span><span class="p">),</span> <span class="n">w</span><span class="p">,</span> <span class="n">v</span><span class="p">)</span>  <span class="c1"># ∇²f(w) · v (forward-over-reverse)</span>
-<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="n">H</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">hessian</span><span class="p">(</span><span class="k">lambda</span> <span class="n">w_</span><span class="p">:</span> <span class="n">objective</span><span class="p">(</span><span class="n">w_</span><span class="p">,</span> <span class="n">x</span><span class="p">))(</span><span class="n">w</span><span class="p">)</span>  <span class="c1"># full Hessian matrix</span>
-<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="n">J_fwd</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">jacfwd</span><span class="p">(</span><span class="k">lambda</span> <span class="n">w_</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">x</span> <span class="o">@</span> <span class="n">w_</span><span class="p">))(</span><span class="n">w</span><span class="p">)</span>  <span class="c1"># forward-mode Jacobian</span>
-<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="n">J_rev</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">jacrev</span><span class="p">(</span><span class="k">lambda</span> <span class="n">w_</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">x</span> <span class="o">@</span> <span class="n">w_</span><span class="p">))(</span><span class="n">w</span><span class="p">)</span>  <span class="c1"># reverse-mode Jacobian</span>
-</code></pre></div>
-<p>Nested reverse-over-reverse <code>par.grad(par.grad(...))</code> also works through
-element-wise operations, reductions, matrix products, views, <code>np.stack</code> /
-<code>np.concatenate</code>, <code>np.cumsum</code>, gather indexing (<code>x[idx]</code>), scatter-add
-(<code>np.add.at</code>, <code>par.scatter_add</code>), and scalar 1-to-1 <code>par.map</code>:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">penalty</span><span class="p">(</span><span class="n">w</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
-<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>  <span class="n">g</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">grad</span><span class="p">(</span><span class="n">loss</span><span class="p">)(</span><span class="n">w</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>
-<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>  <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">g</span> <span class="o">*</span> <span class="n">g</span><span class="p">)</span>
-<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>
-<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>
-<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="n">par</span><span class="o">.</span><span class="n">grad</span><span class="p">(</span><span class="n">penalty</span><span class="p">)(</span><span class="n">w</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>  <span class="c1"># 2 H g, reverse over reverse</span>
-</code></pre></div>
-<h2 id="what-can-be-differentiated">What can be differentiated<a class="headerlink" href="#what-can-be-differentiated" title="Permanent link">&para;</a></h2>
+<p>Nested reverse-over-reverse (<code>par.grad(par.grad(...))</code>) also works through
+element-wise ops, reductions, matmuls, views, <code>stack</code>/<code>concatenate</code>, <code>cumsum</code>,
+gather/scatter-add, and scalar <code>par.map</code>.</p>
+<h2 id="supported-operations">Supported operations<a class="headerlink" href="#supported-operations" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
 <tr>
@@ -1715,156 +1758,120 @@ element-wise operations, reductions, matrix products, views, <code>np.stack</cod
 </thead>
 <tbody>
 <tr>
-<td>Arithmetic and math</td>
-<td><code>+ - * / **</code>, <code>np.exp</code>, <code>np.tanh</code>, <code>np.maximum</code>, <code>np.where</code>, <code>np.abs</code>, <code>np.clip</code>, … with broadcasting</td>
+<td>Arithmetic &amp; math</td>
+<td><code>+ - * / **</code>, <code>exp</code>, <code>tanh</code>, <code>maximum</code>, <code>where</code>, <code>abs</code>, <code>clip</code>, … with broadcasting (ties in <code>min</code>/<code>max</code>/<code>abs</code>/<code>topk</code> split derivatives equally)</td>
 </tr>
 <tr>
 <td>Reductions</td>
-<td><code>np.sum</code>, <code>np.mean</code>, <code>np.var</code>, <code>np.std</code>, <code>np.max</code>, <code>np.min</code>, <code>np.prod</code> (zero-safe), <code>np.linalg.norm</code> with <code>axis</code>/<code>keepdims</code>; <code>par.reduce</code> with <code>np.add</code>, <code>np.multiply</code>, <code>np.minimum</code>, <code>np.maximum</code>, or arbitrary user folds</td>
+<td><code>sum</code>, <code>mean</code>, <code>var</code>, <code>std</code>, <code>max</code>, <code>min</code>, <code>prod</code> (zero-safe), <code>linalg.norm</code>, <code>par.reduce</code> (including arbitrary user folds)</td>
 </tr>
 <tr>
 <td>Linear algebra</td>
-<td><code>@</code>, <code>np.dot</code>, <code>np.matmul</code> for vectors, matrices, and batches; <code>np.einsum</code>; compiled <code>np.linalg.det</code>, <code>inv</code>, <code>solve</code>, <code>cholesky</code> (reverse + forward), and <code>eigh</code>, <code>eigvalsh</code>, <code>svd</code>, <code>pinv</code> (reverse)</td>
+<td><code>@</code>, <code>dot</code>, <code>matmul</code> (vectors, matrices, batches), <code>einsum</code>; <code>linalg.det</code>, <code>inv</code>, <code>solve</code>, <code>cholesky</code> (rev + fwd), <code>eigh</code>, <code>eigvalsh</code>, <code>svd</code>, <code>pinv</code> (rev)</td>
 </tr>
 <tr>
-<td>Scans, sorting, and selection</td>
-<td><code>np.cumsum</code>, <code>par.scan</code>, <code>np.sort</code>, <code>par.topk</code>, <code>par.topk_fold</code></td>
+<td>Scans, sort &amp; select</td>
+<td><code>cumsum</code>, <code>par.scan</code>, <code>sort</code>, <code>par.topk</code>, <code>par.topk_fold</code></td>
 </tr>
 <tr>
-<td>Indexing, lookup, and scatter</td>
-<td>Views (slice, <code>T</code>, <code>reshape</code>, <code>ravel</code>, <code>np.transpose</code>), gather <code>x[idx]</code>, <code>FrozenHashTable.get</code>, <code>SortedIndex.get</code>, <code>np.add.at</code>, canonical <code>for</code>-loop <code>out[idx[i]] += val[i]</code>, <code>par.scatter_add</code></td>
+<td>Views, gather &amp; scatter</td>
+<td>Slicing, <code>.T</code>, <code>reshape</code>, <code>transpose</code>, gather <code>x[idx]</code>, <code>FrozenHashTable.get</code>, <code>SortedIndex.get</code>, <code>np.add.at</code>, <code>out[idx[i]] += v</code>, <code>par.scatter_add</code></td>
 </tr>
 <tr>
-<td>Building arrays</td>
-<td><code>np.concatenate</code>, <code>np.stack</code>, <code>np.array([a, b, c])</code>, comprehensions</td>
+<td>Array building &amp; operators</td>
+<td><code>concatenate</code>, <code>stack</code>, comprehensions, <code>par.map</code>, <code>par.allpairs</code>, <code>par.imap</code>, <code>par.fold</code>, <code>par.wavefront</code>, <code>par.soft_align</code></td>
 </tr>
 <tr>
-<td>Parallel operators</td>
-<td><code>par.map</code> / <code>par.each</code>, <code>par.allpairs</code>, <code>par.imap</code>, <code>par.fold</code>, <code>par.wavefront</code> / <code>par.soft_align</code></td>
-</tr>
-<tr>
-<td>Structured types</td>
-<td>Nested tuples, <code>NamedTuple</code>, fixed string-key dicts, frozen <code>@dataclass</code>, <code>RaggedArray</code></td>
+<td>Containers</td>
+<td>Nested tuples, <code>NamedTuple</code>, fixed string-key dicts, <code>@dataclass</code>, <code>RaggedArray</code></td>
 </tr>
 </tbody>
 </table>
-<p>Derivatives of <code>min</code>, <code>max</code>, <code>abs</code>, and <code>topk</code> at a tie follow standard
-conventions: ties share the derivative equally.</p>
 <h2 id="loops-and-branches">Loops and branches<a class="headerlink" href="#loops-and-branches" title="Permanent link">&para;</a></h2>
-<p>Parakeet differentiates <strong>both</strong> small static loops and arbitrary runtime-bound
-<code>for</code> and <code>while</code> loops in forward and reverse mode:</p>
-<ul>
-<li><strong>Small static <code>for</code> loops</strong> (compile-time trip count <code>&lt;= 32</code> or iterating
-  over a heterogeneous tuple of weight matrices) are <strong>unrolled</strong> onto the tape
-  for zero checkpoint overhead and cross-iteration fusion.</li>
-<li><strong>Runtime-bound and long <code>for</code> loops</strong> (<code>for t in range(n):</code>, <code>for x in arr:</code>,
-  or static ranges longer than 32 iterations; including 10,000+ iterations)
-  compile to an <strong>IR-level <code>O(sqrt(T))</code> checkpointed reverse loop</strong> (<code>ForRange</code>)
-  with constant IR size and bounded memory.</li>
-<li><strong>Data-dependent <code>while</code> loops</strong> (<code>while err &gt; tol:</code>) compile to a fixed-slot
-  stride-doubling <strong>checkpointed reverse <code>While</code> loop</strong> (<code>O(log T)</code> slots, zero
-  dynamic reallocation inside the loop).</li>
-<li><strong>Custom <code>par.reduce</code> folds</strong> use <code>O(sqrt(N))</code> checkpointed reverse mode, and
-  1-D <strong><code>par.scan</code></strong> with any user combiner is differentiable directly.</li>
-<li><strong>Forward-mode <code>par.jvp</code></strong> propagates tangents alongside the loop in a single
-  forward pass with O(1) extra memory.</li>
-</ul>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">deep</span><span class="p">(</span><span class="n">weights</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>  <span class="c1"># a tuple of matrices (unrolled)</span>
-<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>  <span class="k">for</span> <span class="n">w</span> <span class="ow">in</span> <span class="n">weights</span><span class="p">:</span>
-<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>    <span class="n">x</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">x</span> <span class="o">@</span> <span class="n">w</span><span class="p">)</span>
-<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>  <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
-<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>
-<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>
-<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="k">def</span><span class="w"> </span><span class="nf">iir_loss</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">s0</span><span class="p">):</span>  <span class="c1"># runtime-length recurrence (O(sqrt(T)) checkpointed reverse loop)</span>
-<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>  <span class="n">s</span> <span class="o">=</span> <span class="n">s0</span>
-<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>  <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
-<a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>    <span class="n">s</span> <span class="o">=</span> <span class="n">a</span><span class="p">[</span><span class="n">t</span><span class="p">]</span> <span class="o">*</span> <span class="n">s</span> <span class="o">+</span> <span class="n">b</span><span class="p">[</span><span class="n">t</span><span class="p">]</span>
-<a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a>  <span class="k">return</span> <span class="n">s</span> <span class="o">*</span> <span class="n">s</span>
-</code></pre></div>
-<p>Loops that do not touch differentiated values are left alone, so a training
-loop around <code>par.grad</code> is an ordinary loop. Loops containing <code>break</code>,
-<code>continue</code>, or early <code>return</code> over differentiated state are refused loudly.</p>
-<p>An <code>if</code> statement whose condition is only known at run time is differentiated
-in reverse mode by running <strong>both</strong> branches and selecting between their
-results (like <code>np.where</code>). Branches touching differentiated values may only
-assign variables: no <code>return</code>, <code>raise</code>, <code>break</code>, or array stores. A guard that
-only raises (<code>if n == 0: raise ValueError(...)</code>) is allowed without running
-both sides.</p>
+<table>
+<thead>
+<tr>
+<th>Construct</th>
+<th>Reverse-mode strategy</th>
+<th>Forward-mode strategy</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Small static <code>for</code> (<code>≤ 32</code> iters or heterogeneous tuple)</td>
+<td>Unrolled onto tape (zero checkpoint cost)</td>
+<td>Unrolled in single forward pass</td>
+</tr>
+<tr>
+<td>Long or runtime-bound <code>for</code> (<code>range(n)</code>, 10k+ iters)</td>
+<td><code>O(√T)</code> checkpointed reverse loop (constant IR size)</td>
+<td>Single forward pass, <code>O(1)</code> memory</td>
+</tr>
+<tr>
+<td>Data-dependent <code>while</code> loop</td>
+<td>Fixed-slot stride-doubling checkpointed reverse (<code>O(log T)</code> slots)</td>
+<td>Single forward pass, <code>O(1)</code> memory</td>
+</tr>
+<tr>
+<td>Custom <code>par.reduce</code> / 1-D <code>par.scan</code></td>
+<td><code>O(√N)</code> checkpointed reverse / direct reverse scan</td>
+<td>Single forward pass</td>
+</tr>
+<tr>
+<td>Runtime <code>if</code> / <code>else</code></td>
+<td>Evaluates both pure branches and selects (guard-only <code>raise</code> skips unselected side)</td>
+<td>Selects tangent alongside value</td>
+</tr>
+</tbody>
+</table>
+<p>Loops not touching differentiated state are left untouched. Loops with <code>break</code>,
+<code>continue</code>, or early <code>return</code> over differentiated state—and runtime <code>if</code>
+branches containing array stores, <code>return</code>, <code>break</code>, or <code>raise</code>—fail loudly at
+compile time.</p>
 <h2 id="custom-rules-stop_gradient-and-checkpoint">Custom rules, <code>stop_gradient</code>, and <code>checkpoint</code><a class="headerlink" href="#custom-rules-stop_gradient-and-checkpoint" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong><code>@par.jit(jvp=..., vjp=...)</code></strong> attaches custom forward-mode and/or
-  reverse-mode rules directly on a compiled function with plain flat signatures:</li>
-<li>A <code>jvp</code> rule takes flat <code>(*primals, *tangents)</code> and returns <code>(output, d_output)</code>.</li>
-<li>A <code>vjp</code> rule takes <code>(*primals)</code> and returns <code>(output, pullback)</code> where
-    <code>pullback(d_output)</code> returns the input cotangent(s) (or pass a <code>(fwd, bwd)</code>
-    pair for explicit residuals).
-  <div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">smooth_relu_jvp</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">dx</span><span class="p">):</span>
-<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>  <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">maximum</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">),</span> <span class="n">dx</span> <span class="o">/</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">+</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="n">x</span><span class="p">))</span>
-<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>
-<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>
-<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="k">def</span><span class="w"> </span><span class="nf">smooth_relu_vjp</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
-<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>  <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">maximum</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">),</span> <span class="k">lambda</span> <span class="n">dy</span><span class="p">:</span> <span class="n">dy</span> <span class="o">/</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">+</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="n">x</span><span class="p">))</span>
-<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>
-<a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>
-<a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="nd">@par</span><span class="o">.</span><span class="n">jit</span><span class="p">(</span><span class="n">jvp</span><span class="o">=</span><span class="n">smooth_relu_jvp</span><span class="p">,</span> <span class="n">vjp</span><span class="o">=</span><span class="n">smooth_relu_vjp</span><span class="p">)</span>
-<a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="k">def</span><span class="w"> </span><span class="nf">smooth_relu</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
-<a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a>  <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">maximum</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">)</span>
-</code></pre></div></li>
-<li><strong><code>@par.jvp_for(fn)</code> and <code>@par.vjp_for(fn)</code></strong> attach the same flat JVP or
-  closure-style VJP rules to an existing plain Python or <code>@par.jit</code> function
-  (this is how Parakeet registers its own analytical derivatives for compiled
-  <code>np.linalg.cholesky</code>, <code>solve</code>, <code>inv</code>, <code>det</code>, <code>eigh</code>, and <code>svd</code>). The
-  JAX-style <code>@par.custom_vjp</code> / <code>.defvjp(fwd, bwd)</code> and <code>@par.custom_jvp</code> /
-  <code>.defjvp(rule)</code> decorators remain supported as aliases.</li>
-<li><strong><code>par.stop_gradient(x)</code></strong> detaches a scalar, array, tuple, record, or
-  <code>RaggedArray</code> from both reverse-mode <code>grad</code>/<code>vjp</code> and forward-mode <code>jvp</code> with
-  zero copy:
-  <div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="n">y</span> <span class="o">=</span> <span class="n">x</span> <span class="o">+</span> <span class="n">par</span><span class="o">.</span><span class="n">stop_gradient</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">round</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">-</span> <span class="n">x</span><span class="p">)</span>
-</code></pre></div></li>
-<li><strong><code>@par.checkpoint</code></strong> (or <code>par.checkpoint(fn)(*args)</code>) drops a block's
-  forward intermediates and rematerializes them during backpropagation,
-  composing cleanly with Parakeet's
-  <a href="../algebra/#law-2-algebraic-rematerialization-in-reverse-mode-ad">algebraic rematerialization</a>
-  rules for attention, linear cross-entropy, softmax, and LayerNorm / RMSNorm.</li>
+<li><strong><code>@par.jit(jvp=..., vjp=...)</code></strong> attaches custom rules with plain flat
+  signatures:</li>
+<li><code>jvp(*primals, *tangents) -&gt; (output, d_output)</code></li>
+<li><code>vjp(*primals) -&gt; (output, pullback)</code> where <code>pullback(d_output) -&gt; d_inputs</code>
+    (or pass a <code>(fwd, bwd)</code> tuple for explicit residuals)</li>
 </ul>
-<h2 id="writing-into-arrays">Writing into arrays<a class="headerlink" href="#writing-into-arrays" title="Permanent link">&para;</a></h2>
-<p>Stores are differentiated: assigning a slice, an element, or updating in place
-(<code>out[i] += v</code>, <code>np.add.at(out, idx, vals)</code>) all work cleanly:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="n">out</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">n</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
-<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">out</span><span class="p">[:</span><span class="mi">3</span><span class="p">]</span> <span class="o">=</span> <span class="n">x</span><span class="p">[:</span><span class="mi">3</span><span class="p">]</span> <span class="o">@</span> <span class="n">w</span>
-<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="n">out</span><span class="p">[</span><span class="mi">3</span><span class="p">:]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">3</span><span class="p">:]</span> <span class="o">@</span> <span class="n">w</span><span class="p">)</span>
-<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="n">out</span> <span class="o">+=</span> <span class="n">bias</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">smooth_relu_jvp</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">dx</span><span class="p">):</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>  <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">maximum</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">),</span> <span class="n">dx</span> <span class="o">/</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">+</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="n">x</span><span class="p">))</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="k">def</span><span class="w"> </span><span class="nf">smooth_relu_vjp</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>  <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">maximum</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">),</span> <span class="k">lambda</span> <span class="n">dy</span><span class="p">:</span> <span class="n">dy</span> <span class="o">/</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">+</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="n">x</span><span class="p">))</span>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>
+<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="nd">@par</span><span class="o">.</span><span class="n">jit</span><span class="p">(</span><span class="n">jvp</span><span class="o">=</span><span class="n">smooth_relu_jvp</span><span class="p">,</span> <span class="n">vjp</span><span class="o">=</span><span class="n">smooth_relu_vjp</span><span class="p">)</span>
+<a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="k">def</span><span class="w"> </span><span class="nf">smooth_relu</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+<a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>  <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">maximum</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">)</span>
 </code></pre></div>
-<p>Going backwards, whatever adjoint arrived for the stored region belongs to the
-value that was stored, and the region starts again from zero. Overwriting a
-value that an earlier operation's derivative still has to read
-(<code>y = np.tanh(h); h[0] = 5.0</code>) is refused loudly, because the derivative of
-<code>tanh</code> needs the original <code>h</code>.</p>
-<h2 id="unsupported-operations-fail-at-compile-time">Unsupported operations fail at compile time<a class="headerlink" href="#unsupported-operations-fail-at-compile-time" title="Permanent link">&para;</a></h2>
-<p>Parakeet never returns a derivative that silently drops part of your function.
-If an operation on the path from inputs to output lacks a derivative rule (such
-as <code>np.cumprod</code>, <code>np.convolve</code>, or an arbitrary indexed overwrite
-<code>out[idx] = v</code>), compilation raises an <code>UnsupportedError</code> naming it:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>UnsupportedError: cannot differentiate through cumprod() (line 12): its derivative is not implemented
-</code></pre></div>
-<h2 id="how-it-works">How it works<a class="headerlink" href="#how-it-works" title="Permanent link">&para;</a></h2>
-<p>While a function is elaborated, reverse-mode AD records each array operator on
-an algebraic tape (and forward-mode AD propagates symbolic tangents alongside
-primals). Because rules operate at the index-operator level before lowering:</p>
 <ul>
-<li>Element-wise operators differentiate symbolically via partial derivatives.</li>
-<li><code>parakeet/transforms/algebraic_vjp.py</code> runs a composable registry of
-  algebraic rematerialization rules (<code>ALGEBRAIC_AD_RULES</code>) for tiled attention
-  (VJP, JVP, and HVP without allocating <code>T × T</code> score matrices), linear
-  cross-entropy, softmax, and LayerNorm / RMSNorm, both at top level and inside
-  checkpointed loops.</li>
-<li>Scalars and views are not recorded on the tape: scalar adjoints push straight
-  down the expression tree, and a view of an array is the same view of its
-  adjoint.</li>
+<li><strong><code>@par.jvp_for(fn)</code> / <code>@par.vjp_for(fn)</code></strong> register rules on an existing
+  function (JAX-style <code>@par.custom_jvp</code> / <code>@par.custom_vjp</code> remain as aliases).</li>
+<li><strong><code>par.stop_gradient(x)</code></strong> detaches any scalar, array, record, or
+  <code>RaggedArray</code> from both forward and reverse AD with zero copy.</li>
+<li><strong><code>@par.checkpoint</code></strong> discards forward intermediates for a block and
+  rematerializes them during backprop, composing automatically with
+  <a href="../algebra/#law-2-algebraic-rematerialization-in-reverse-mode-ad">Law 2 algebraic rematerialization</a>
+  for attention, linear cross-entropy, softmax, and LayerNorm / RMSNorm.</li>
 </ul>
-<p>See <a href="https://github.com/iskandr/parakeet/blob/master/parakeet/transforms/autodiff.py"><code>parakeet/transforms/autodiff.py</code></a>,
-<a href="https://github.com/iskandr/parakeet/blob/master/parakeet/transforms/jvp.py"><code>parakeet/transforms/jvp.py</code></a>,
-and <a href="https://github.com/iskandr/parakeet/blob/master/parakeet/transforms/algebraic_vjp.py"><code>parakeet/transforms/algebraic_vjp.py</code></a>.</p>
+<h2 id="in-place-stores-and-fail-loud-guarantees">In-place stores and fail-loud guarantees<a class="headerlink" href="#in-place-stores-and-fail-loud-guarantees" title="Permanent link">&para;</a></h2>
+<p>Slice assignments, indexed updates, and in-place additions (<code>out[:3] = ...</code>,
+<code>out += bias</code>, <code>np.add.at</code>) are differentiated accurately. Overwriting a buffer
+that an earlier backward rule still requires (<code>y = np.tanh(h); h[0] = 5.0</code>) is
+detected and refused at compile time.</p>
+<p>Parakeet never silently drops gradients. Any unsupported operation on the
+differentiated path (such as <code>np.cumprod</code>, <code>np.convolve</code>, or arbitrary indexed
+overwrites <code>out[idx] = v</code>) raises an <code>UnsupportedError</code> naming the line:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>UnsupportedError: cannot differentiate through cumprod() (line 12): its derivative is not implemented
+</code></pre></div>
+<p>Implementation modules:
+<a href="https://github.com/iskandr/parakeet/blob/master/parakeet/transforms/autodiff.py"><code>autodiff.py</code></a>,
+<a href="https://github.com/iskandr/parakeet/blob/master/parakeet/transforms/jvp.py"><code>jvp.py</code></a>,
+<a href="https://github.com/iskandr/parakeet/blob/master/parakeet/transforms/algebraic_vjp.py"><code>algebraic_vjp.py</code></a>.</p>
 
 
 

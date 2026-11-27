@@ -13,10 +13,10 @@
         <link rel="canonical" href="https://rubinsteyn.com/parakeet/performance/">
       
       
-        <link rel="prev" href="../debugging/">
+        <link rel="prev" href="../backends/">
       
       
-        <link rel="next" href="../internals/">
+        <link rel="next" href="../debugging/">
       
       
         
@@ -27,7 +27,7 @@
     
     
       
-        <title>Performance - Parakeet</title>
+        <title>Performance and tuning - Parakeet</title>
       
     
     
@@ -82,7 +82,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#performance" class="md-skip">
+        <a href="#performance-and-tuning" class="md-skip">
           Skip to content
         </a>
       
@@ -116,7 +116,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Performance
+              Performance and tuning
             
           </span>
         </div>
@@ -263,6 +263,40 @@
   
   
   
+    
+  
+  
+    
+    
+      
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../language/" class="md-tabs__link">
+          
+  
+  
+  Guide
+
+        </a>
+      </li>
+    
+  
+
+    
+  
+
+      
+        
+  
+  
+  
   
     
     
@@ -302,33 +336,11 @@
   
   
   
-    
-  
-  
-    
-    
-      <li class="md-tabs__item md-tabs__item--active">
-        <a href="../philosophy/" class="md-tabs__link">
-          
-  
-  
-  Guide
-
-        </a>
-      </li>
-    
-  
-
-      
-        
-  
-  
-  
   
     
     
       <li class="md-tabs__item">
-        <a href="../supported/" class="md-tabs__link">
+        <a href="../api/" class="md-tabs__link">
           
   
   
@@ -443,6 +455,608 @@
       
   
   
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_1" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3_1" id="__nav_3_1_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Using Parakeet
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_1_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Using Parakeet
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../language/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The compiled language
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operators/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Data-parallel operators
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../autodiff/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Automatic differentiation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../backends/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backends and GPUs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Performance and tuning
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Performance and tuning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#where-parakeet-wins-vs-where-it-doesnt" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where Parakeet wins vs. where it doesn't
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cpu-micro-benchmarks-apple-m1-pro-10-cores-float64" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CPU micro-benchmarks (Apple M1 Pro, 10 cores, float64)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#compute-bound-vs-transfer-bound-on-gpus" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Compute-bound vs. transfer-bound on GPUs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tiling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cache and register tiling
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#practical-tuning-checklist" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Practical tuning checklist
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../debugging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Errors and debugging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_2" id="__nav_3_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How Parakeet optimizes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How Parakeet optimizes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../primitives/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operators & compilation walkthrough
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algebra/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Algebraic laws
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rewrites/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rewrite rules catalog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../internals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Compiler architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../philosophy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design, boundaries, and history
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
   
   
     
@@ -459,10 +1073,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
         
           
-          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
             
   
   
@@ -480,8 +1094,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -613,519 +1227,6 @@
       
   
   
-    
-  
-  
-  
-    
-    
-    
-    
-      
-        
-        
-      
-      
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
-        
-          
-          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
-            
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Guide
-  
-
-    
-  </span>
-  
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_5">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    Guide
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../philosophy/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Ideas, history, and boundaries
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../language/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    The compiled language
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../backends/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Backends and GPUs
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../primitives/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Algebraic primitives & walkthrough
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../operators/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Data-parallel operators
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../autodiff/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Gradients
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../algebra/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Algebraic laws
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../rewrites/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Rewrite rules and optimizations
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../debugging/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Errors and debugging
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-    
-  
-  
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Performance
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Performance
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#cpu-float64" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        CPU (float64)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#gpu-float32-metal-on-the-same-machine" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        GPU (float32, Metal on the same machine)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#gpu-float32-cuda-on-a-tesla-t4" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        GPU (float32, CUDA on a Tesla T4)
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="GPU (float32, CUDA on a Tesla T4)">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#a-big-gpu-on-the-work-it-is-for" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        A big GPU on the work it is for
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#where-the-gpu-starts-to-win" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Where the GPU starts to win
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#reading-the-numbers" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Reading the numbers
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#tiling" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Tiling
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#tips" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Tips
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../internals/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Compiler architecture
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
-    </li>
-  
-
-    
-      
-      
-  
-  
   
   
     
@@ -1181,14 +1282,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../supported/" class="md-nav__link">
+      <a href="../api/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Supported functions
+    API
   
 
     
@@ -1209,14 +1310,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../api/" class="md-nav__link">
+      <a href="../supported/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    API
+    Supported functions
   
 
     
@@ -1348,10 +1449,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#cpu-float64" class="md-nav__link">
+  <a href="#where-parakeet-wins-vs-where-it-doesnt" class="md-nav__link">
     <span class="md-ellipsis">
       
-        CPU (float64)
+        Where Parakeet wins vs. where it doesn't
       
     </span>
   </a>
@@ -1359,10 +1460,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#gpu-float32-metal-on-the-same-machine" class="md-nav__link">
+  <a href="#cpu-micro-benchmarks-apple-m1-pro-10-cores-float64" class="md-nav__link">
     <span class="md-ellipsis">
       
-        GPU (float32, Metal on the same machine)
+        CPU micro-benchmarks (Apple M1 Pro, 10 cores, float64)
       
     </span>
   </a>
@@ -1370,49 +1471,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#gpu-float32-cuda-on-a-tesla-t4" class="md-nav__link">
+  <a href="#compute-bound-vs-transfer-bound-on-gpus" class="md-nav__link">
     <span class="md-ellipsis">
       
-        GPU (float32, CUDA on a Tesla T4)
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="GPU (float32, CUDA on a Tesla T4)">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#a-big-gpu-on-the-work-it-is-for" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        A big GPU on the work it is for
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#where-the-gpu-starts-to-win" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Where the GPU starts to win
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#reading-the-numbers" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Reading the numbers
+        Compute-bound vs. transfer-bound on GPUs
       
     </span>
   </a>
@@ -1423,7 +1485,7 @@
   <a href="#tiling" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Tiling
+        Cache and register tiling
       
     </span>
   </a>
@@ -1431,10 +1493,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#tips" class="md-nav__link">
+  <a href="#practical-tuning-checklist" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Tips
+        Practical tuning checklist
       
     </span>
   </a>
@@ -1461,27 +1523,51 @@
   
 
 
-<h1 id="performance">Performance<a class="headerlink" href="#performance" title="Permanent link">&para;</a></h1>
+<h1 id="performance-and-tuning">Performance and tuning<a class="headerlink" href="#performance-and-tuning" title="Permanent link">&para;</a></h1>
 <div class="admonition tip">
-<p class="admonition-title">Looking for cross-library benchmarks?</p>
-<p>For head-to-head comparisons against PyTorch, JAX, CuPy, Faiss, and
-PyKeOps on CPU and NVIDIA GPUs, see <a href="../release-benchmarks/">Benchmarks</a>.
-This page explains <em>when</em> and <em>why</em> Parakeet wins or loses on CPUs and GPUs,
-how cache tiling behaves, and practical tuning tips.</p>
+<p class="admonition-title">Cross-library benchmarks</p>
+<p>For head-to-head comparisons against PyTorch, <code>torch.compile</code>, JAX, CuPy,
+Faiss, PyKeOps, RDKit, Biopython, and edlib on NVIDIA L4 and Apple M1 Pro,
+see <a href="../release-benchmarks/">Benchmarks</a>. This page explains <em>when</em> Parakeet
+wins or loses and how to tune your code.</p>
 </div>
-<p>All numbers on this page were measured with <code>python benchmarks/run.py</code> on an
-Apple M1 Pro (10 cores, 32 GB), macOS 26.5, Python 3.12.6, NumPy 2.5.5; best of
-five runs, compilation excluded. "NumPy" is the same computation written with
-NumPy alone; "×" is the speed-up over it. Run the script on your own machine -
-results vary a lot between CPUs, compilers and array sizes.</p>
-<h2 id="cpu-float64">CPU (float64)<a class="headerlink" href="#cpu-float64" title="Permanent link">&para;</a></h2>
+<h2 id="where-parakeet-wins-vs-where-it-doesnt">Where Parakeet wins vs. where it doesn't<a class="headerlink" href="#where-parakeet-wins-vs-where-it-doesnt" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
 <tr>
-<th>benchmark</th>
+<th>Parakeet excels at</th>
+<th>Specialist libraries still lead on</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Multi-step array expressions (eliminates temporaries, single pass over RAM)</td>
+<td>Large standalone GPU GEMMs (use cuBLAS; on CPU, Parakeet already calls NumPy's BLAS)</td>
+</tr>
+<tr>
+<td>Pairwise kernels, attention, cross-entropy, 1-NN (<code>O(N²)</code> buffers tiled away)</td>
+<td>Single-threaded transcendentals (<code>np.tanh</code>, <code>np.exp</code> — NumPy uses SIMD; Parakeet wins once multi-core kicks in)</td>
+</tr>
+<tr>
+<td>Algorithms that would otherwise need a Python loop (stencils, Julia set, DP, bit-parallel bio kernels)</td>
+<td>Tiny inputs (~10–100 elements), where native call marshalling outweighs work</td>
+</tr>
+<tr>
+<td>Multi-core CPU scaling &amp; GIL-free concurrency</td>
+<td>Memory-bound GPU loops that copy host arrays back and forth on every call (use <code>par.to_device</code>)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="cpu-micro-benchmarks-apple-m1-pro-10-cores-float64">CPU micro-benchmarks (Apple M1 Pro, 10 cores, <code>float64</code>)<a class="headerlink" href="#cpu-micro-benchmarks-apple-m1-pro-10-cores-float64" title="Permanent link">&para;</a></h2>
+<p>Measured via <code>python benchmarks/run.py</code> (best of 5, compilation excluded; <code>×</code> is
+speedup over NumPy):</p>
+<table>
+<thead>
+<tr>
+<th>Benchmark</th>
 <th style="text-align: right;">NumPy</th>
-<th style="text-align: right;"><code>backend="c"</code></th>
-<th style="text-align: right;"><code>backend="multicore"</code></th>
+<th style="text-align: right;"><code>backend="c"</code> (1T)</th>
+<th style="text-align: right;"><code>backend="multicore"</code> (10T)</th>
 </tr>
 </thead>
 <tbody>
@@ -1489,536 +1575,189 @@ results vary a lot between CPUs, compilers and array sizes.</p>
 <td><code>np.tanh(x * a) + b</code> (4M)</td>
 <td style="text-align: right;">14.5 ms</td>
 <td style="text-align: right;">24.8 ms (0.6×)</td>
-<td style="text-align: right;">3.5 ms (4.2×)</td>
+<td style="text-align: right;"><strong>3.5 ms (4.2×)</strong></td>
 </tr>
 <tr>
 <td>Euclidean norm (4M)</td>
 <td style="text-align: right;">3.4 ms</td>
 <td style="text-align: right;">1.1 ms (3.1×)</td>
-<td style="text-align: right;">0.65 ms (5.3×)</td>
+<td style="text-align: right;"><strong>0.65 ms (5.3×)</strong></td>
 </tr>
 <tr>
-<td>arc distance (4M)</td>
+<td>Arc distance (4M)</td>
 <td style="text-align: right;">174 ms</td>
 <td style="text-align: right;">174 ms (1.0×)</td>
-<td style="text-align: right;">23.3 ms (7.5×)</td>
+<td style="text-align: right;"><strong>23.3 ms (7.5×)</strong></td>
 </tr>
 <tr>
 <td>Rosenbrock derivative (4M)</td>
 <td style="text-align: right;">11.4 ms</td>
 <td style="text-align: right;">8.7 ms (1.3×)</td>
-<td style="text-align: right;">0.72 ms (16×)</td>
+<td style="text-align: right;"><strong>0.72 ms (16×)</strong></td>
 </tr>
 <tr>
 <td>Harris corner response (2000²)</td>
 <td style="text-align: right;">19.4 ms</td>
 <td style="text-align: right;">4.0 ms (4.9×)</td>
-<td style="text-align: right;">1.1 ms (17×)</td>
+<td style="text-align: right;"><strong>1.1 ms (17×)</strong></td>
 </tr>
 <tr>
-<td>diffusion stencil, 20 steps (1000²)</td>
+<td>Diffusion stencil, 20 steps (1000²)</td>
 <td style="text-align: right;">54.5 ms</td>
 <td style="text-align: right;">24.5 ms (2.2×)</td>
-<td style="text-align: right;">6.3 ms (8.6×)</td>
+<td style="text-align: right;"><strong>6.3 ms (8.6×)</strong></td>
 </tr>
 <tr>
-<td>all-pairs distances (40k × 64 × 32)</td>
+<td>All-pairs distances (40k × 64 × 32)</td>
 <td style="text-align: right;">103 ms</td>
 <td style="text-align: right;">11.1 ms (9.2×)</td>
-<td style="text-align: right;">1.6 ms (66×)</td>
+<td style="text-align: right;"><strong>1.6 ms (66×)</strong></td>
 </tr>
 <tr>
 <td>3×3 convolution (2000²)</td>
 <td style="text-align: right;">21.2 ms</td>
 <td style="text-align: right;">9.1 ms (2.3×)</td>
-<td style="text-align: right;">1.4 ms (15×)</td>
+<td style="text-align: right;"><strong>1.4 ms (15×)</strong></td>
 </tr>
 <tr>
 <td>Julia set (1000²)</td>
 <td style="text-align: right;">402 ms</td>
 <td style="text-align: right;">47.2 ms (8.5×)</td>
-<td style="text-align: right;">6.1 ms (66×)</td>
+<td style="text-align: right;"><strong>6.1 ms (66×)</strong></td>
 </tr>
 <tr>
-<td>matrix product (300²)</td>
-<td style="text-align: right;">0.16 ms</td>
+<td>Matrix product (300², <code>blas=False</code>)</td>
+<td style="text-align: right;"><strong>0.16 ms</strong></td>
 <td style="text-align: right;">4.1 ms</td>
 <td style="text-align: right;">0.72 ms</td>
 </tr>
-<tr>
-<td>explicit summation loop (4M)</td>
-<td style="text-align: right;">-</td>
-<td style="text-align: right;">3.8 ms</td>
-<td style="text-align: right;">3.8 ms</td>
-</tr>
-<tr>
-<td>GrowCut step (64², radius 5)</td>
-<td style="text-align: right;">-</td>
-<td style="text-align: right;">1.9 ms</td>
-<td style="text-align: right;">0.47 ms</td>
-</tr>
 </tbody>
 </table>
-<h2 id="gpu-float32-metal-on-the-same-machine">GPU (float32, Metal on the same machine)<a class="headerlink" href="#gpu-float32-metal-on-the-same-machine" title="Permanent link">&para;</a></h2>
+<h2 id="compute-bound-vs-transfer-bound-on-gpus">Compute-bound vs. transfer-bound on GPUs<a class="headerlink" href="#compute-bound-vs-transfer-bound-on-gpus" title="Permanent link">&para;</a></h2>
+<p>GPUs win decisively when arithmetic intensity is high (many FLOPs per byte
+loaded) or when arrays stay resident across iterations via <code>par.to_device</code>.
+Measured with <code>python benchmarks/gpu_showcase.py</code> on an NVIDIA A100 (12 CPU
+threads, <code>float32</code>, identical Python source):</p>
 <table>
 <thead>
 <tr>
-<th>benchmark</th>
+<th>Kernel</th>
+<th>Size</th>
 <th style="text-align: right;">NumPy</th>
-<th style="text-align: right;"><code>"multicore"</code></th>
-<th style="text-align: right;"><code>"metal"</code></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>np.tanh(x * a) + b</code> (4M)</td>
-<td style="text-align: right;">5.5 ms</td>
-<td style="text-align: right;">2.4 ms (2.2×)</td>
-<td style="text-align: right;">2.9 ms (1.9×)</td>
-</tr>
-<tr>
-<td>Euclidean norm (4M)</td>
-<td style="text-align: right;">1.8 ms</td>
-<td style="text-align: right;">0.40 ms (4.5×)</td>
-<td style="text-align: right;">6.2 ms (0.3×)</td>
-</tr>
-<tr>
-<td>arc distance (4M)</td>
-<td style="text-align: right;">50.5 ms</td>
-<td style="text-align: right;">13.5 ms (3.7×)</td>
-<td style="text-align: right;">8.7 ms (5.8×)</td>
-</tr>
-<tr>
-<td>Rosenbrock derivative (4M)</td>
-<td style="text-align: right;">6.4 ms</td>
-<td style="text-align: right;">0.66 ms (9.8×)</td>
-<td style="text-align: right;">3.4 ms (1.9×)</td>
-</tr>
-<tr>
-<td>Harris corner response (2000²)</td>
-<td style="text-align: right;">8.3 ms</td>
-<td style="text-align: right;">1.1 ms (7.8×)</td>
-<td style="text-align: right;">5.2 ms (1.6×)</td>
-</tr>
-<tr>
-<td>diffusion stencil, 20 steps (1000²)</td>
-<td style="text-align: right;">24.8 ms</td>
-<td style="text-align: right;">5.5 ms (4.5×)</td>
-<td style="text-align: right;">57.0 ms (0.4×)</td>
-</tr>
-<tr>
-<td>all-pairs distances (40k × 64 × 32)</td>
-<td style="text-align: right;">68.9 ms</td>
-<td style="text-align: right;">1.1 ms (63×)</td>
-<td style="text-align: right;">4.0 ms (17×)</td>
-</tr>
-<tr>
-<td>3×3 convolution (2000²)</td>
-<td style="text-align: right;">10.5 ms</td>
-<td style="text-align: right;">1.2 ms (8.9×)</td>
-<td style="text-align: right;">1.2 ms (8.6×)</td>
-</tr>
-<tr>
-<td>Julia set (1000²)</td>
-<td style="text-align: right;">401 ms</td>
-<td style="text-align: right;">6.0 ms (67×)</td>
-<td style="text-align: right;">6.1 ms (66×)</td>
-</tr>
-<tr>
-<td>matrix product (300²)</td>
-<td style="text-align: right;">0.06 ms</td>
-<td style="text-align: right;">0.42 ms</td>
-<td style="text-align: right;">3.9 ms</td>
-</tr>
-</tbody>
-</table>
-<h2 id="gpu-float32-cuda-on-a-tesla-t4">GPU (float32, CUDA on a Tesla T4)<a class="headerlink" href="#gpu-float32-cuda-on-a-tesla-t4" title="Permanent link">&para;</a></h2>
-<p>A Google Colab T4 instance: the host has only 2 CPU threads, so <code>"multicore"</code>
-is nothing like the M1 Pro above, and this NumPy has no fast <code>float32</code> <code>tanh</code>.</p>
-<table>
-<thead>
-<tr>
-<th>benchmark</th>
-<th style="text-align: right;">NumPy</th>
-<th style="text-align: right;"><code>"multicore"</code> (2 threads)</th>
-<th style="text-align: right;"><code>"cuda"</code></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>np.tanh(x * a) + b</code> (4M)</td>
-<td style="text-align: right;">7.4 ms</td>
-<td style="text-align: right;">60.5 ms (0.1×)</td>
-<td style="text-align: right;">14.6 ms (0.5×)</td>
-</tr>
-<tr>
-<td>Euclidean norm (4M)</td>
-<td style="text-align: right;">6.9 ms</td>
-<td style="text-align: right;">1.9 ms (3.6×)</td>
-<td style="text-align: right;">8.3 ms (0.8×)</td>
-</tr>
-<tr>
-<td>arc distance (4M)</td>
-<td style="text-align: right;">53.0 ms</td>
-<td style="text-align: right;">179 ms (0.3×)</td>
-<td style="text-align: right;">42.8 ms (1.2×)</td>
-</tr>
-<tr>
-<td>Rosenbrock derivative (4M)</td>
-<td style="text-align: right;">35.5 ms</td>
-<td style="text-align: right;">12.1 ms (2.9×)</td>
-<td style="text-align: right;">16.8 ms (2.1×)</td>
-</tr>
-<tr>
-<td>Harris corner response (2000²)</td>
-<td style="text-align: right;">46.0 ms</td>
-<td style="text-align: right;">15.1 ms (3.0×)</td>
-<td style="text-align: right;">15.2 ms (3.0×)</td>
-</tr>
-<tr>
-<td>diffusion stencil, 20 steps (1000²)</td>
-<td style="text-align: right;">79.1 ms</td>
-<td style="text-align: right;">38.0 ms (2.1×)</td>
-<td style="text-align: right;">98.8 ms (0.8×)</td>
-</tr>
-<tr>
-<td>all-pairs distances (40k × 64 × 32)</td>
-<td style="text-align: right;">313 ms</td>
-<td style="text-align: right;">17.1 ms (18×)</td>
-<td style="text-align: right;">13.3 ms (24×)</td>
-</tr>
-<tr>
-<td>3×3 convolution (2000²)</td>
-<td style="text-align: right;">64.4 ms</td>
-<td style="text-align: right;">48.7 ms (1.3×)</td>
-<td style="text-align: right;">44.1 ms (1.5×)</td>
-</tr>
-<tr>
-<td>Julia set (1000²)</td>
-<td style="text-align: right;">1064 ms</td>
-<td style="text-align: right;">43.4 ms (25×)</td>
-<td style="text-align: right;">10.6 ms (101×)</td>
-</tr>
-<tr>
-<td>matrix product (300²)</td>
-<td style="text-align: right;">7.6 ms</td>
-<td style="text-align: right;">4.8 ms (1.6×)</td>
-<td style="text-align: right;">2.7 ms (2.8×)</td>
-</tr>
-</tbody>
-</table>
-<p>These numbers predate arrays staying on the device between the loops of a
-call; the copy to the GPU and back on every <em>call</em> is still there, and is most
-of the time in the rows where CUDA loses.</p>
-<h3 id="a-big-gpu-on-the-work-it-is-for">A big GPU on the work it is for<a class="headerlink" href="#a-big-gpu-on-the-work-it-is-for" title="Permanent link">&para;</a></h3>
-<p><code>python benchmarks/gpu_showcase.py</code> on an NVIDIA A100 (Google Colab, 12 CPU
-threads, float32). The same Python source runs in every column.</p>
-<table>
-<thead>
-<tr>
-<th>kernel</th>
-<th>size</th>
-<th style="text-align: right;">NumPy</th>
-<th style="text-align: right;">one core</th>
+<th style="text-align: right;">1 core</th>
 <th style="text-align: right;">12 threads</th>
 <th style="text-align: right;">A100</th>
-<th style="text-align: right;">A100 vs 12 threads</th>
+<th style="text-align: right;">A100 vs 12T</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>n-body forces</td>
+<td>N-body forces</td>
 <td>16,384 bodies</td>
 <td style="text-align: right;">–</td>
-<td style="text-align: right;">1393 ms</td>
+<td style="text-align: right;">1,393 ms</td>
 <td style="text-align: right;">238 ms</td>
-<td style="text-align: right;">7.5 ms</td>
-<td style="text-align: right;">32×</td>
+<td style="text-align: right;"><strong>7.5 ms</strong></td>
+<td style="text-align: right;"><strong>32×</strong></td>
 </tr>
 <tr>
-<td>k-means assignment</td>
-<td>2M points × 256 centers × 16</td>
-<td style="text-align: right;">2247 ms</td>
-<td style="text-align: right;">9551 ms</td>
-<td style="text-align: right;">1913 ms</td>
-<td style="text-align: right;">75.8 ms</td>
-<td style="text-align: right;">25×</td>
+<td>K-means assignment</td>
+<td>2M × 256 × 16</td>
+<td style="text-align: right;">2,247 ms</td>
+<td style="text-align: right;">9,551 ms</td>
+<td style="text-align: right;">1,913 ms</td>
+<td style="text-align: right;"><strong>75.8 ms</strong></td>
+<td style="text-align: right;"><strong>25×</strong></td>
 </tr>
 <tr>
-<td>heat equation, 200 steps</td>
+<td>Heat equation, 200 steps</td>
 <td>2048²</td>
-<td style="text-align: right;">7821 ms</td>
-<td style="text-align: right;">4532 ms</td>
+<td style="text-align: right;">7,821 ms</td>
+<td style="text-align: right;">4,532 ms</td>
 <td style="text-align: right;">370 ms</td>
-<td style="text-align: right;">118 ms</td>
-<td style="text-align: right;">3.1×</td>
+<td style="text-align: right;"><strong>118 ms</strong></td>
+<td style="text-align: right;"><strong>3.1×</strong></td>
 </tr>
 <tr>
 <td>Black-Scholes</td>
 <td>20M options</td>
 <td style="text-align: right;">625 ms</td>
-<td style="text-align: right;">1746 ms</td>
+<td style="text-align: right;">1,746 ms</td>
 <td style="text-align: right;">227 ms</td>
-<td style="text-align: right;">111 ms</td>
-<td style="text-align: right;">2.0×</td>
+<td style="text-align: right;"><strong>111 ms</strong></td>
+<td style="text-align: right;"><strong>2.0×</strong></td>
 </tr>
 <tr>
 <td>Julia set</td>
 <td>4096²</td>
 <td style="text-align: right;">–</td>
-<td style="text-align: right;">1425 ms</td>
+<td style="text-align: right;">1,425 ms</td>
 <td style="text-align: right;">155 ms</td>
-<td style="text-align: right;">95.5 ms</td>
-<td style="text-align: right;">1.6×</td>
+<td style="text-align: right;"><strong>95.5 ms</strong></td>
+<td style="text-align: right;"><strong>1.6×</strong></td>
 </tr>
 </tbody>
 </table>
-<p>The first two are what a GPU is for: every element needs thousands of
-operations and the result is small. The n-body kernel is 186× faster than one
-core. The last three are bounded by moving their arrays across the bus once
-each way (Black-Scholes reads 240 MB and writes 80 MB); the heat equation is
-600 loops over a grid that never leaves the device between them, which before
-arrays stayed on the device took 1.4 s here.</p>
-<p>A float matrix product is <em>not</em> in this table: on the CPU it goes to the BLAS
-(24 ms for 2048² on this machine), on the GPU it is Parakeet's own kernel
-(73 ms). Dense linear algebra on a GPU wants cuBLAS, which Parakeet does not
-call.</p>
-<h3 id="where-the-gpu-starts-to-win">Where the GPU starts to win<a class="headerlink" href="#where-the-gpu-starts-to-win" title="Permanent link">&para;</a></h3>
-<p><code>python benchmarks/crossover.py</code> times the same kernel across sizes. On the same
-kind of machine (Tesla T4, 2 CPU threads, float32), after tiling and with
-gradients:</p>
+<p>N-body and k-means do thousands of operations per output element (186× faster
+than 1 core on n-body). Heat equation runs 600 kernels on device-resident grids
+with zero intermediate host copies (down from 1.4 s before residency).
+Black-Scholes is mostly PCIe transfer (240 MB in, 80 MB out)—passing
+<code>par.to_device</code> inputs removes that bus bottleneck across repeated calls.</p>
+<h2 id="tiling">Cache and register tiling<a class="headerlink" href="#tiling" title="Permanent link">&para;</a></h2>
+<p>Any 2D+ map wrapping a reduction (<code>a @ b</code>, <code>allpairs</code>, <code>einsum</code>, tropical
+products) sweeps through the second operand on every row if run naively,
+thrashing L1/L2 cache. Parakeet automatically tiles the inner dimension to fit
+<code>config.tile_bytes</code> (default half of per-core L2) and jams <code>2×4</code> register
+micro-tiles on CPU (and shared-memory + matrix-unit tiles on GPU).</p>
+<p><code>a @ b</code> on <code>1024 × 1024</code> <code>float64</code> (Apple M1 Max, <code>config.blas = False</code>):</p>
 <table>
 <thead>
 <tr>
-<th>kernel</th>
-<th>size</th>
-<th style="text-align: right;">NumPy</th>
-<th style="text-align: right;">one core</th>
-<th style="text-align: right;">2 threads</th>
-<th style="text-align: right;">CUDA</th>
+<th>Schedule</th>
+<th style="text-align: right;">1 core</th>
+<th style="text-align: right;">All cores</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><code>np.tanh(x * a) + b</code></td>
-<td>100k</td>
-<td style="text-align: right;">0.18 ms</td>
-<td style="text-align: right;">3.3 ms</td>
-<td style="text-align: right;">2.6 ms</td>
-<td style="text-align: right;">0.77 ms</td>
-</tr>
-<tr>
-<td></td>
-<td>1M</td>
-<td style="text-align: right;">1.7 ms</td>
-<td style="text-align: right;">29.9 ms</td>
-<td style="text-align: right;">30.6 ms</td>
-<td style="text-align: right;">2.8 ms</td>
-</tr>
-<tr>
-<td></td>
-<td>10M</td>
-<td style="text-align: right;">39.0 ms</td>
-<td style="text-align: right;">277 ms</td>
-<td style="text-align: right;">164 ms</td>
-<td style="text-align: right;">75.5 ms</td>
-</tr>
-<tr>
-<td>all-pairs distances</td>
-<td>1k × 64</td>
-<td style="text-align: right;">9.3 ms</td>
-<td style="text-align: right;">0.42 ms</td>
-<td style="text-align: right;">0.41 ms</td>
-<td style="text-align: right;">0.77 ms</td>
-</tr>
-<tr>
-<td></td>
-<td>100k × 64</td>
-<td style="text-align: right;">760 ms</td>
-<td style="text-align: right;">34.5 ms</td>
-<td style="text-align: right;">27.3 ms</td>
-<td style="text-align: right;">42.5 ms</td>
-</tr>
-<tr>
-<td>matrix product</td>
-<td>512²</td>
-<td style="text-align: right;">2.5 ms</td>
-<td style="text-align: right;">10.1 ms</td>
-<td style="text-align: right;">8.0 ms</td>
-<td style="text-align: right;">14.3 ms</td>
-</tr>
-<tr>
-<td></td>
-<td>1024²</td>
-<td style="text-align: right;">24.8 ms</td>
-<td style="text-align: right;">62.3 ms</td>
-<td style="text-align: right;">63.1 ms</td>
-<td style="text-align: right;">49.6 ms</td>
-</tr>
-<tr>
-<td></td>
-<td>2048²</td>
-<td style="text-align: right;">145 ms</td>
-<td style="text-align: right;">510 ms</td>
-<td style="text-align: right;">654 ms</td>
-<td style="text-align: right;">375 ms</td>
-</tr>
-<tr>
-<td>Julia set</td>
-<td>256²</td>
-<td style="text-align: right;">–</td>
-<td style="text-align: right;">5.2 ms</td>
-<td style="text-align: right;">3.0 ms</td>
-<td style="text-align: right;">0.81 ms</td>
-</tr>
-<tr>
-<td></td>
-<td>1024²</td>
-<td style="text-align: right;">–</td>
-<td style="text-align: right;">82.2 ms</td>
-<td style="text-align: right;">47.0 ms</td>
-<td style="text-align: right;">6.4 ms</td>
-</tr>
-<tr>
-<td></td>
-<td>2048²</td>
-<td style="text-align: right;">–</td>
-<td style="text-align: right;">338 ms</td>
-<td style="text-align: right;">197 ms</td>
-<td style="text-align: right;">78.2 ms</td>
-</tr>
-<tr>
-<td>Harris corners</td>
-<td>1024²</td>
-<td style="text-align: right;">9.7 ms</td>
-<td style="text-align: right;">2.9 ms</td>
-<td style="text-align: right;">4.0 ms</td>
-<td style="text-align: right;">3.0 ms</td>
-</tr>
-<tr>
-<td></td>
-<td>4096²</td>
-<td style="text-align: right;">292 ms</td>
-<td style="text-align: right;">77.0 ms</td>
-<td style="text-align: right;">88.8 ms</td>
-<td style="text-align: right;">133 ms</td>
-</tr>
-<tr>
-<td>MLP gradient (784-256-10)</td>
-<td>batch 64</td>
-<td style="text-align: right;">–</td>
-<td style="text-align: right;">3.7 ms</td>
-<td style="text-align: right;">4.1 ms</td>
-<td style="text-align: right;">5.5 ms</td>
-</tr>
-<tr>
-<td></td>
-<td>batch 4096</td>
-<td style="text-align: right;">–</td>
-<td style="text-align: right;">231 ms</td>
-<td style="text-align: right;">189 ms</td>
-<td style="text-align: right;">139 ms</td>
-</tr>
-<tr>
-<td>decision tree fit (32 features)</td>
-<td>100k rows</td>
-<td style="text-align: right;">–</td>
-<td style="text-align: right;">4.2 s</td>
-<td style="text-align: right;">3.0 s</td>
-<td style="text-align: right;">2.9 s (CPU)</td>
-</tr>
-</tbody>
-</table>
-<p>The GPU wins once each element costs real arithmetic (the Julia set from the
-smallest size, <code>tanh</code> from about 100k elements) and the result is not much
-bigger than the work that produced it. It ties or loses when a loop mostly
-moves memory, because every launch pays for the copy both ways: Harris at
-4096² and all-pairs at 100k rows are slower on the device than on two CPU
-threads. Loops below <code>config.device_threshold</code> (32,768 iterations) never leave
-the CPU, which is why the decision tree, whose parallel loops run over 32
-features, is a CPU program on every backend.</p>
-<p>The matrix product is the tiled one: on this machine it is within 2.5–3.5× of
-NumPy's OpenBLAS on one core.</p>
-<h2 id="reading-the-numbers">Reading the numbers<a class="headerlink" href="#reading-the-numbers" title="Permanent link">&para;</a></h2>
-<p><strong>Where Parakeet wins.</strong> Expressions with several operations (no temporaries,
-one pass over memory), code that needs a Python-level loop in NumPy (Julia set,
-GrowCut, pairwise kernels), and anything that can use all cores.</p>
-<p><strong>Where it does not.</strong></p>
-<ul>
-<li><em>Dense linear algebra, when there is no BLAS to call.</em> A product of two
-  float matrices is handed to the BLAS NumPy itself uses, so it costs what it
-  costs in NumPy. Parakeet's own <a href="#tiling">tiled</a> loops run everything else
-  that has that shape (integer products, <code>allpairs</code> distances, products inside
-  a parallel map or on a GPU) and are 3–10× behind a hand-tuned BLAS.</li>
-<li><em>Single-threaded transcendental functions.</em> NumPy ships SIMD implementations
-  of <code>tanh</code>, <code>sin</code>, <code>exp</code>, ...; Parakeet's sequential backend calls the C math
-  library one element at a time (the <code>tanh</code> row). With threads it is ahead again.</li>
-<li><em>Memory-bound loops on a GPU.</em> On this machine the 10 CPU cores usually beat
-  the integrated GPU unless each element needs a lot of arithmetic (arc distance,
-  convolution). Loops that mostly move memory (norm, stencils) lose, and
-  repeatedly launching cheap kernels over a NumPy-owned array (diffusion) loses
-  badly because the array is copied to and from the device on every launch.</li>
-<li><em>Tiny inputs.</em> A call into compiled code costs a few microseconds of argument
-  marshalling; a NumPy call on a 10-element array is cheaper.</li>
-</ul>
-<h2 id="tiling">Tiling<a class="headerlink" href="#tiling" title="Permanent link">&para;</a></h2>
-<p>A <em>matmul-shaped</em> operation is a map over pairs whose element is a reduction
-over data picked by each member of the pair: a matrix product, <code>allpairs</code>
-distances, a tropical product. Evaluated row by row, every row of the result
-sweeps over all of the second operand, which stops fitting in cache long before
-the arrays are large. Parakeet recognises the shape; any two-dimensional map
-whose element function is one reduction plus straight-line code, whoever wrote
-it; and does two things:</p>
-<ul>
-<li><strong>tiles</strong> the inner dimension, so a cache-sized block of the second operand is
-  reused for every row before moving on (<code>config.tile_bytes</code>, by default half of
-  a core's L2 cache);</li>
-<li><strong>jams</strong> the reductions of a 2×4 block of elements into one loop, so each
-  loaded value is used several times.</li>
-</ul>
-<p>Neither changes what is computed, only the order. <code>a @ b</code> on 1024×1024 float64
-(Apple M1 Max):</p>
-<table>
-<thead>
-<tr>
-<th></th>
-<th style="text-align: right;">one core</th>
-<th style="text-align: right;">all cores</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>untiled</td>
+<td>Untiled (<code>tiling=False</code>)</td>
 <td style="text-align: right;">190 ms</td>
 <td style="text-align: right;">43 ms</td>
 </tr>
 <tr>
-<td>tiled</td>
-<td style="text-align: right;">92 ms</td>
-<td style="text-align: right;">13 ms</td>
+<td>Tiled (default)</td>
+<td style="text-align: right;"><strong>92 ms</strong></td>
+<td style="text-align: right;"><strong>13 ms</strong></td>
 </tr>
 <tr>
-<td>NumPy (Accelerate)</td>
-<td style="text-align: right;"></td>
+<td>NumPy (Accelerate BLAS, <code>blas=True</code>)</td>
+<td style="text-align: right;">—</td>
 <td style="text-align: right;">4.5 ms</td>
 </tr>
 </tbody>
 </table>
-<p><code>@jit(tiling=False)</code> or <code>config.tiling = False</code> turns it off. The timings
-above are with <code>config.blas = False</code>; by default a float matrix product on a
-CPU backend calls the BLAS and takes the NumPy time.</p>
-<h2 id="tips">Tips<a class="headerlink" href="#tips" title="Permanent link">&para;</a></h2>
+<p>Disable tiling with <code>@par.jit(tiling=False)</code> or <code>par.config.tiling = False</code>. On
+CPU, standalone float <code>a @ b</code> calls NumPy's BLAS directly by default
+(<code>config.blas = True</code>).</p>
+<h2 id="practical-tuning-checklist">Practical tuning checklist<a class="headerlink" href="#practical-tuning-checklist" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Prefer array expressions or comprehensions over index loops when they say the
-  same thing: they parallelise, explicit <code>for</code> loops do not.</li>
-<li>Keep work inside one <code>@jit</code> function so expressions can fuse across helper
-  calls (helpers are inlined automatically).</li>
-<li><code>@jit(bounds_check=False)</code> removes index checks from explicit indexing in
-  loops once the code is known to be correct.</li>
-<li>Compiled code is specialised on whether an input is C-contiguous; contiguous
-  arrays give the C compiler unit strides to vectorise.</li>
-<li><code>parakeet.config.fast_math = True</code> allows the C compiler to reorder
-  floating-point arithmetic everywhere (results may change in the last digits).</li>
+<li><strong>Keep arrays contiguous:</strong> specializations track C-contiguity; unit-stride
+  arrays vectorize cleanly on CPU and coalesce on GPU.</li>
+<li><strong>Keep GPU arrays resident:</strong> wrap repeated GPU inputs with <code>par.to_device</code>
+  so you do not pay host-to-device transfers on every call.</li>
+<li><strong>Use <code>float32</code> on Apple Metal:</strong> Metal has no hardware <code>float64</code> and falls
+  back to CPU for double-precision loops.</li>
+<li><strong>Enable Tensor Cores on NVIDIA <code>sm_80+</code>:</strong> set <code>par.config.tensor_cores = True</code>
+  (or <code>PARAKEET_TENSOR_CORES=1</code>) for TF32 WMMA matmuls and training steps.</li>
+<li><strong>Prefer expressions / operators over raw <code>for</code> loops:</strong> NumPy expressions,
+  comprehensions, <code>par.map</code>, <code>par.fold</code>, and <code>par.scatter_add</code> parallelize
+  automatically; arbitrary sequential <code>for</code> loops do not (except recognized
+  Law 4 affine/bilinear recurrences and canonical <code>out[idx[i]] += v</code> scatters).</li>
+<li><strong>Inline across helpers:</strong> put the outer workflow inside one <code>@par.jit</code>
+  function so fusion crosses helper boundaries automatically.</li>
+<li><strong>Drop checks when verified:</strong> <code>@par.jit(bounds_check=False)</code> eliminates
+  bounds checks in tight indexed loops; <code>par.config.fast_math = True</code> enables
+  <code>-ffast-math</code> when exact IEEE rounding is not required.</li>
 </ul>
 
 
