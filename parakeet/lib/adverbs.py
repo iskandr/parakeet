@@ -18,9 +18,40 @@ from ..ndtypes import Int64
 from ..syntax import ops
 from ..syntax.ir import Const, Expr, Var
 from ..syntax.ops import ZERO, I, cast, cmp
+from ..syntax.records import record_type as _record_type
 from ..syntax.values import CHEAP_COST, ArrayVal, RangeVal, describe
+from ..tree import tree_map as _py_tree_map
+from ..tree import tree_map_arrays as _py_tree_map_arrays
 from . import core
 from .core import FUNCTIONS, NAMES, along_axis, build_map, norm_axis, reduce_arrays, reduce_values, scan_values
+
+
+def _elab_tree_map(el, fn, *trees, arrays_only: bool = False):
+  if not trees:
+    raise el.error(TypeInferenceError, "tree_map() expects at least one tree argument")
+
+  def _walk(nodes):
+    first = nodes[0]
+    if isinstance(first, tuple) and not hasattr(first, "_fields"):
+      if any(not isinstance(n, tuple) or len(n) != len(first) for n in nodes):
+        raise el.error(TypeInferenceError, "tree_map() arguments must have matching tuple structure")
+      return tuple(_walk(parts) for parts in zip(*nodes, strict=True))
+    if (rec := _record_type(first)) is not None:
+      if any(_record_type(n) != rec for n in nodes):
+        raise el.error(TypeInferenceError, f"tree_map() arguments must have matching {rec.cls.__name__} structure")
+      cols = [rec.values(n) for n in nodes]
+      return rec.build(tuple(_walk(parts) for parts in zip(*cols, strict=True)))
+    if arrays_only and not isinstance(first, ArrayVal):
+      return first
+    return el.call(fn, list(nodes), {})
+
+  return _walk(trees)
+
+
+FUNCTIONS[_py_tree_map] = lambda el, fn, *trees: _elab_tree_map(el, fn, *trees, arrays_only=False)
+NAMES[_py_tree_map] = "tree_map"
+FUNCTIONS[_py_tree_map_arrays] = lambda el, fn, *trees: _elab_tree_map(el, fn, *trees, arrays_only=True)
+NAMES[_py_tree_map_arrays] = "tree_map_arrays"
 
 
 class LibFunction:

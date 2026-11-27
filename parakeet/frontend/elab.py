@@ -3594,6 +3594,10 @@ class Elaborator(ArrayMixin):
       if lut is not None:
         return lut
       raise self.error(StaticValueError, "dictionary lookup requires a known string key", node)
+    if (rec := record_type(obj)) is not None and rec.cls is not dict:
+      raw_getitem = inspect.getattr_static(rec.cls, "__getitem__", None)
+      if isinstance(raw_getitem, pytypes.FunctionType):
+        return self.call_user(self.lift(raw_getitem), [obj, index], {}, node)
     if isinstance(obj, ListVal):
       if isinstance(index, slice):
         parts = [

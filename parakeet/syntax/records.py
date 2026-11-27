@@ -261,7 +261,10 @@ def record_type(obj):
       or (cls.__module__ == "parakeet.ragged" and cls.__name__ == "RaggedArray")
       or (cls.__module__ == "parakeet.index" and cls.__name__ in ("SortedIndex", "FrozenHashTable"))
       or (cls.__module__ == "parakeet.spatial" and cls.__name__ == "BlockMask")
+      or getattr(cls, "__parakeet_record__", False)
     )
   ):
     return Record(cls, tuple(f.name for f in fields(obj)))
+  if not isinstance(obj, type) and getattr(cls, "__parakeet_record__", False):
+    return Record(cls, tuple(obj.__dict__.keys()))
   return None
