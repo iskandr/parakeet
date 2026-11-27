@@ -14,7 +14,9 @@ hide:
 <p class="pk-lead">A data-parallel compiler for numerical Python.</p>
 
 Write ordinary NumPy, loops, comprehensions, or explicit data-parallel
-operators (`map`, `reduce`, `scan`, `allpairs`). Parakeet specializes your
+operators ([`par.map`](operators.md#map), [`par.reduce`](operators.md#reduce),
+[`par.fold`](operators.md#fold), [`par.scan`](operators.md#scan),
+[`par.allpairs`](operators.md#allpairs)). Parakeet specializes your
 function for its input types, fuses and tiles the array algebra, and compiles
 native code for multi-core CPUs, Apple Metal, and NVIDIA CUDA.
 
@@ -70,7 +72,7 @@ explicit N-D coordinate space, while your code stays idiomatic NumPy or `par.*`.
 
 <div class="pk-prim-card" markdown>
 <div class="pk-prim-head"><strong>Map</strong> <code>IndexMap</code></div>
-Independent per-element work over an N-D index space: broadcasting, comprehensions, <code>par.map</code>, <code>par.allpairs</code>.
+Independent per-element work over an N-D index space: broadcasting, comprehensions, [`par.map`](operators.md#map), [`par.imap`](operators.md#imap), [`par.allpairs`](operators.md#allpairs).
 ```python
 np.tanh(x * 0.5) + 0.3
 ```
@@ -79,7 +81,7 @@ np.tanh(x * 0.5) + 0.3
 
 <div class="pk-prim-card" markdown>
 <div class="pk-prim-head"><strong>Reduce &amp; Fold</strong> <code>IndexReduce</code></div>
-Associative reductions (<code>np.sum</code>, <code>par.reduce</code>) and ordered multi-state folds (<code>np.argmin</code>, <code>par.fold</code>).
+Associative reductions (`np.sum`, [`par.reduce`](operators.md#reduce), [`par.ireduce`](operators.md#ireduce)) and ordered multi-state folds (`np.argmin`, [`par.fold`](operators.md#fold)).
 ```python
 np.argmin(d2, axis=1)
 ```
@@ -88,7 +90,7 @@ np.argmin(d2, axis=1)
 
 <div class="pk-prim-card" markdown>
 <div class="pk-prim-head"><strong>Scan</strong> <code>IndexScan</code></div>
-Prefix sums (<code>np.cumsum</code>, <code>par.scan</code>) and affine/bilinear <code>for</code> recurrences (IIR filters, Mamba-2 SSMs).
+Prefix sums (`np.cumsum`, [`par.scan`](operators.md#scan)) and affine/bilinear `for` recurrences (IIR filters, Mamba-2 SSMs).
 ```python
 np.cumsum(x)  # or affine for-loop
 ```
@@ -97,7 +99,7 @@ np.cumsum(x)  # or affine for-loop
 
 <div class="pk-prim-card" markdown>
 <div class="pk-prim-head"><strong>Filter &amp; Expand</strong> <code>IndexFilter</code> <code>IndexExpand</code></div>
-Stream compaction (1-to-0/1 boolean masking) and 2-pass ragged expansion (1-to-K <code>par.flatmap</code>).
+Stream compaction (1-to-0/1 boolean masking, [`par.filter`](operators.md#filter)) and 2-pass ragged expansion (1-to-K [`par.flatmap`](operators.md#flatmap), [`par.filter_pairs`](operators.md#filter_pairs)).
 ```python
 np.sum(x[x > 0.0])  # 0-alloc FilterReduce
 ```
@@ -106,7 +108,7 @@ np.sum(x[x > 0.0])  # 0-alloc FilterReduce
 
 <div class="pk-prim-card" markdown>
 <div class="pk-prim-head"><strong>Scatter</strong> <code>IndexScatter</code></div>
-Associative bin accumulation (<code>np.bincount</code>, <code>np.add.at</code>, <code>out[idx[i]] += v</code>, <code>par.scatter_add</code>).
+Associative bin accumulation (`np.bincount`, `np.add.at`, `out[idx[i]] += v`, [`par.scatter_add`](operators.md#scatter_add)).
 ```python
 np.bincount(bins, weights=grads, minlength=256)
 ```
@@ -115,7 +117,7 @@ np.bincount(bins, weights=grads, minlength=256)
 
 <div class="pk-prim-card" markdown>
 <div class="pk-prim-head"><strong>Wavefront</strong> <code>IndexWavefront</code></div>
-Anti-diagonal and banded 2D dynamic programming for sequence alignment and differentiable DP.
+Anti-diagonal and banded 2D dynamic programming ([`par.wavefront`](operators.md#wavefront), [`par.soft_align`](operators.md#soft_align)) for sequence alignment and differentiable DP.
 ```python
 par.soft_align(scores, gamma=1.0)
 ```

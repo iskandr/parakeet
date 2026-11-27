@@ -68,6 +68,29 @@
 
 ::: parakeet.clear_cache
 
+## Data-parallel operators
+
+All top-level data-parallel operators are documented with signatures and
+examples in [Data-parallel operators](operators.md#operator-reference):
+
+[`par.map`](operators.md#map),
+[`par.allpairs`](operators.md#allpairs),
+[`par.outer_map`](operators.md#outer_map),
+[`par.reduce`](operators.md#reduce),
+[`par.fold`](operators.md#fold),
+[`par.scan`](operators.md#scan),
+[`par.imap`](operators.md#imap),
+[`par.ireduce`](operators.md#ireduce),
+[`par.parfor`](operators.md#parfor),
+[`par.filter`](operators.md#filter),
+[`par.filter_reduce`](operators.md#filter_reduce),
+[`par.flatmap`](operators.md#flatmap),
+[`par.filter_pairs`](operators.md#filter_pairs),
+[`par.scatter_add`](operators.md#scatter_add),
+[`par.wavefront`](operators.md#wavefront),
+[`par.batched_wavefront`](operators.md#batched_wavefront),
+[`par.soft_align`](operators.md#soft_align).
+
 ## Structured folds and rewrite inspection
 
 ::: parakeet.show_rewrite

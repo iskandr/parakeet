@@ -1,10 +1,21 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
-  <rect x="2" y="2" width="60" height="60" rx="14" fill="#245744"/>
-  <!-- Simple stylized parakeet silhouette in cream + leaf green -->
-  <path d="M18 46 C18 30, 26 16, 40 16 C47 16, 51 20, 51 26 C51 31, 47 35, 42 36 L34 38 C31 39, 29 42, 28 48 L18 48 Z" fill="#edf4ef"/>
-  <path d="M23 46 C24 36, 30 29, 39 28 C35 33, 32 39, 31 46 Z" fill="#6cc08b"/>
-  <!-- Beak -->
-  <path d="M50 22 L57 25 L50 29 Z" fill="#e9b949"/>
-  <!-- Eye -->
-  <circle cx="43" cy="23" r="2.6" fill="#203a30"/>
+  <defs>
+    <clipPath id="pk-badge">
+      <rect x="2" y="2" width="60" height="60" rx="14"/>
+    </clipPath>
+  </defs>
+  <rect x="2" y="2" width="60" height="60" rx="14" fill="#1e4637"/>
+  <g clip-path="url(#pk-badge)">
+    <!-- Parrot head and neck rising from bottom-left (matches logo.png) -->
+    <path d="M8 64 C11 39, 18 11, 34 11 C43 11, 48 16, 48 25 C48 31, 45 35, 43 41 C41 48, 39 56, 37 64 Z" fill="#4fb243"/>
+    <!-- Yellow-green breast highlight -->
+    <path d="M27 64 C29 50, 34 40, 44 36 C42 45, 40 55, 37 64 Z" fill="#d9e650"/>
+    <!-- Lower beak tucked under upper beak -->
+    <path d="M44 30 C49 30, 51 33, 49 36 C46 37, 43 35, 43 32 Z" fill="#b84432"/>
+    <!-- Hooked coral-orange upper parrot beak curving downward -->
+    <path d="M44 21 C53 20, 58 26, 56 35 C55 38, 53 39, 52 38 C52 33, 49 30, 44 30 Z" fill="#e6644a"/>
+    <!-- Crisp dark eye with tiny highlight -->
+    <circle cx="37.5" cy="23" r="3.6" fill="#14221c"/>
+    <circle cx="38.7" cy="21.8" r="1.2" fill="#ffffff"/>
+  </g>
 </svg>
