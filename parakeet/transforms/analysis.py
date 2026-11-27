@@ -20,6 +20,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from ..shape_lattice import TOP as DIM_TOP
+from ..shape_lattice import DimInfo
 from ..syntax import ir, ops
 from ..syntax.ir import Assign, Const, Expr, Load, Prim, Var
 
@@ -143,27 +145,40 @@ class IndexFacts:
     bounds: dict[int, Expr] | None = None,
     guarded_eqs: list[tuple[frozenset[object], Expr, Expr]] | None = None,
     expr_eqs: set[tuple[object, object]] | None = None,
+    dim_facts: dict[int, tuple[DimInfo, frozenset[tuple]]] | None = None,
+    used_guards: set[tuple] | None = None,
   ) -> None:
     self.defs: dict[int, Expr] = {} if defs is None else dict(defs)
     self.vars_by_uid: dict[int, Var] = {} if vars_by_uid is None else dict(vars_by_uid)
     self.bounds: dict[int, Expr] = {} if bounds is None else dict(bounds)
     self.guarded_eqs: list[tuple[frozenset[object], Expr, Expr]] = [] if guarded_eqs is None else list(guarded_eqs)
     self.expr_eqs: set[tuple[object, object]] = set() if expr_eqs is None else set(expr_eqs)
+    self.dim_facts: dict[int, tuple[DimInfo, frozenset[tuple]]] = {} if dim_facts is None else dict(dim_facts)
+    self.used_guards: set[tuple] = set() if used_guards is None else used_guards
     self._poly_cache: dict[int, AffineExpr] = {}
 
   @classmethod
   def from_function(cls, fn: ir.Function) -> IndexFacts:
-    """Seed facts from single-assignment integer definitions in ``fn.body``."""
+    """Seed facts from single-assignment integer definitions and array shape
+    buckets in ``fn``."""
     counts: dict[int, int] = {}
     values: dict[int, Expr] = {}
     vmap: dict[int, Var] = {}
+    dfacts: dict[int, tuple[DimInfo, frozenset[tuple]]] = {}
     for p in fn.params:
       if isinstance(p, Var):
         vmap[p.uid] = p
       else:
         vmap[p.offset.uid] = p.offset
+        if p.strides is None:
+          # C-contiguous array parameter always has offset == 0 (already in type_key)
+          dfacts[p.offset.uid] = (DimInfo(0, 0, 0), frozenset())
         for d in p.shape:
           vmap[d.uid] = d
+          entry = fn.dim_facts.get(d.uid)
+          if entry is not None:
+            leaf_idx, axis, info = entry
+            dfacts[d.uid] = (info, frozenset({(leaf_idx, axis, info)}))
         if p.strides:
           for st in p.strides:
             vmap[st.uid] = st
@@ -175,10 +190,110 @@ class IndexFacts:
         counts[uid] = counts.get(uid, 0) + 1
         values[uid] = s.value
     pure = {u: values[u] for u, c in counts.items() if c == 1 and is_pure_expr(values[u])}
-    return cls(pure, vmap)
+    facts = cls(pure, vmap, dim_facts=dfacts, used_guards=fn.dim_guards)
+    for s in fn.body:
+      facts.record_stmt(s)
+    return facts
 
   def fork(self) -> IndexFacts:
-    return IndexFacts(self.defs, self.vars_by_uid, self.bounds, self.guarded_eqs, self.expr_eqs)
+    return IndexFacts(
+      self.defs,
+      self.vars_by_uid,
+      self.bounds,
+      self.guarded_eqs,
+      self.expr_eqs,
+      self.dim_facts,
+      self.used_guards,
+    )
+
+  def has_dim_facts(self) -> bool:
+    return bool(self.dim_facts)
+
+  def dim_info(
+    self,
+    e: Expr,
+    extra: dict[int, DimInfo] | None = None,
+    extra_defs: dict[int, Expr] | None = None,
+    budget: int = 24,
+  ) -> tuple[DimInfo, frozenset[tuple]]:
+    """Soundly evaluate ``e`` in the :class:`DimInfo` shape/divisibility domain,
+    returning ``(info, guard_deps)`` without committing guards yet."""
+    if budget <= 0:
+      return DIM_TOP, frozenset()
+    if isinstance(e, Const):
+      if not isinstance(e.value, bool) and isinstance(e.value, int) and e.value >= 0:
+        return DimInfo.from_const(int(e.value)), frozenset()
+      return DIM_TOP, frozenset()
+    if isinstance(e, Var):
+      if extra is not None and e.uid in extra:
+        return extra[e.uid], frozenset()
+      direct = self.dim_facts.get(e.uid)
+      d = extra_defs.get(e.uid) if (extra_defs is not None and e.uid in extra_defs) else self.defs.get(e.uid)
+      if d is not None:
+        d_info, d_deps = self.dim_info(d, extra, extra_defs, budget - 1)
+        if direct is not None:
+          return direct[0].meet(d_info), direct[1] | d_deps
+        return d_info, d_deps
+      if direct is not None:
+        return direct
+      return DIM_TOP, frozenset()
+    if isinstance(e, ir.Cast) and not isinstance(e.type, ir.BufType) and e.type.kind in "iu":
+      if not isinstance(e.arg.type, ir.BufType) and e.arg.type.kind in "iu":
+        return self.dim_info(e.arg, extra, extra_defs, budget - 1)
+      return DIM_TOP, frozenset()
+    if isinstance(e, Prim):
+      if len(e.args) == 2:
+        a_info, a_deps = self.dim_info(e.args[0], extra, extra_defs, budget - 1)
+        b_info, b_deps = self.dim_info(e.args[1], extra, extra_defs, budget - 1)
+        deps = a_deps | b_deps
+        if e.op == "add":
+          return a_info.add(b_info), deps
+        if e.op == "sub":
+          return a_info.sub(b_info), deps
+        if e.op == "mul":
+          return a_info.mul(b_info), deps
+        if e.op == "floordiv":
+          k = b_info.exact
+          if k is not None and k > 0:
+            return a_info.floordiv_const(k), deps
+          return DIM_TOP, frozenset()
+        if e.op == "min":
+          return a_info.imin(b_info), deps
+        if e.op == "max":
+          return a_info.imax(b_info), deps
+    return DIM_TOP, frozenset()
+
+  def commit_dim_guards(self, deps: frozenset[tuple]) -> None:
+    if deps:
+      self.used_guards.update(deps)
+
+  def require_dim_info(self, e: Expr) -> DimInfo:
+    """Evaluate ``dim_info(e)`` and commit its contributing input guards when
+    the result is strictly more informative than ``TOP``."""
+    info, deps = self.dim_info(e)
+    if not info.is_top and deps:
+      self.used_guards.update(deps)
+    return info
+
+  def stage_index_div4(
+    self,
+    stage_body: list[ir.Stmt],
+    raw_idx: Expr,
+    fast_var: Var,
+    slow_var: Var,
+  ) -> bool:
+    """Return True if ``raw_idx`` is provably divisible by 4 whenever
+    ``fast_var`` is a multiple of 4 (committing contributing guards if True)."""
+    local_defs = {s.var.uid: s.value for s in stage_body if isinstance(s, Assign)}
+    extra = {
+      fast_var.uid: DimInfo(0, None, 4),
+      slow_var.uid: DimInfo(0, None, 1),
+    }
+    info, deps = self.dim_info(raw_idx, extra=extra, extra_defs=local_defs)
+    if info.divisible_by(4):
+      self.commit_dim_guards(deps)
+      return True
+    return False
 
   def note_var(self, v: Var) -> None:
     self.vars_by_uid[v.uid] = v
@@ -233,6 +348,13 @@ class IndexFacts:
         self.vars_by_uid[hi.uid] = hi
         self.vars_by_uid[lo.uid] = lo
         self._poly_cache.clear()
+        if hi.uid in self.dim_facts:
+          hi_info, hi_deps = self.dim_facts[hi.uid]
+          if lo.uid in self.dim_facts:
+            lo_info, lo_deps = self.dim_facts[lo.uid]
+            self.dim_facts[lo.uid] = (lo_info.meet(hi_info), lo_deps | hi_deps)
+          else:
+            self.dim_facts[lo.uid] = (hi_info, hi_deps)
     elif (
       isinstance(a, Var)
       and isinstance(rb, (Var, Const))

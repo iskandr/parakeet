@@ -529,6 +529,7 @@ class WarpRowReducePlan:
   stages: list[WarpRowStage]
   epilogue: IndexMap | None = None
   pre_checks: list[Check] = field(default_factory=list)
+  dim_hints: tuple | None = None  # optional (N_rows_info, K_info) DimInfo pair
 
   @property
   def reduce(self) -> IndexReduce:
@@ -559,6 +560,8 @@ class SharedTilePlan:
   has_mixed_loads: bool = False  # True if mixed_body/mixed_folds still contain global Loads
   pre_checks: list[Check] = field(default_factory=list)  # uniform (i,j-invariant) checks from before
   row_fold: TileRowFold | None = None
+  dim_hints: tuple | None = None  # optional (M_info, N_info, K_info) DimInfo triple
+  stage_align4: tuple[tuple[bool, bool], ...] = ()  # per-stage (align4_when_d0_div4, align4_when_d1_div4)
 
 
 @dataclass(eq=False)
@@ -715,6 +718,8 @@ class Function:
   results: list[Expr | ArrayResult]
   scope: Scope
   loc: SourceLocation | None = None
+  dim_facts: dict[int, tuple] = field(default_factory=dict)  # shape Var.uid -> (leaf_idx, axis, DimInfo)
+  dim_guards: set[tuple] = field(default_factory=set)  # relied-upon (leaf_idx, axis, DimInfo) guards
 
 
 # --------------------------------------------------------------------------

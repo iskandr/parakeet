@@ -282,15 +282,21 @@ def _choose_cuda_wmma_config(plan: ir.SharedTilePlan) -> tuple[int, int, int, in
   """Select a shape-adapted CUDA WMMA block/warp/register tile configuration
   ``(bm, bn, bk, wm, wn, r_m, r_n, threads)`` whose double-buffered shared
   memory fits inside 48 KiB static SMEM (2+ blocks/SM on Ampere/Ada)."""
-  m_c = int(plan.shape[-2].value) if isinstance(plan.shape[-2], ir.Const) else None
-  n_c = int(plan.shape[-1].value) if isinstance(plan.shape[-1], ir.Const) else None
-  if (m_c is not None and m_c <= 64) or (n_c is not None and n_c <= 64):
+  m_hi = int(plan.shape[-2].value) if isinstance(plan.shape[-2], ir.Const) else None
+  n_hi = int(plan.shape[-1].value) if isinstance(plan.shape[-1], ir.Const) else None
+  if plan.dim_hints is not None:
+    mh, nh, _kh = plan.dim_hints
+    if m_hi is None and mh.hi is not None:
+      m_hi = mh.hi
+    if n_hi is None and nh.hi is not None:
+      n_hi = nh.hi
+  if (m_hi is not None and m_hi <= 64) or (n_hi is not None and n_hi <= 64):
     # 64x64x32 double-buffered: 4 warps (2x2), 2x2 WMMA/warp, 35.0 KiB SMEM
     return 64, 64, 32, 2, 2, 2, 2, 128
-  if n_c is not None and n_c <= 96:
+  if n_hi is not None and n_hi <= 127:
     # 128x64x16 double-buffered: 4 warps (2x2), 4x2 WMMA/warp, 28.5 KiB SMEM
     return 128, 64, 16, 2, 2, 4, 2, 128
-  if m_c is not None and m_c <= 96:
+  if m_hi is not None and m_hi <= 127:
     # 64x128x16 double-buffered: 4 warps (2x2), 2x4 WMMA/warp, 28.5 KiB SMEM
     return 64, 128, 16, 2, 2, 2, 4, 128
   # Default / large / dynamic: 128x128x16 double-buffered: 8 warps (4x2), 2x4 WMMA/warp, 36.5 KiB SMEM
@@ -405,9 +411,17 @@ def _emit_cuda_wmma_stage_load(
   unit_load: tuple[ir.Var, list[ir.Stmt], ir.Expr] | None,
   lines: list[str],
   pad: str,
+  *,
+  slow_full: bool = False,
+  fast_full: bool = False,
+  aligned_16: bool = False,
 ) -> None:
   """Emit cooperative loading of one A or B tile into ``sh_name[buf_expr]``,
-  using 128-bit ``cp.async`` DMA when ``unit_load`` is contiguous."""
+  using 128-bit ``cp.async`` DMA when ``unit_load`` is contiguous.
+
+  When ``slow_full`` / ``fast_full`` / ``aligned_16`` are statically proven by
+  the shape-divisibility lattice (Hielscher's ``f^k`` interior tile fast path),
+  the bounds and alignment branches are elided completely."""
   if unit_load is not None and fast_dim % 4 == 0:
     u_buf, u_prep, u_idx = unit_load
     chunks_per_row = fast_dim // 4
@@ -420,25 +434,56 @@ def _emit_cuda_wmma_stage_load(
     lines.append(f"{pad}  const long long {slow_var.name} = {slow_base} + pk_ts;")
     lines.append(f"{pad}  const long long {fast_var.name} = {fast_base} + pk_tf;")
     lines.append(f"{pad}  float* pk_sp = &{sh_name}[{buf_expr}][pk_ts * {sh_stride} + pk_tf];")
+    if slow_full and fast_full:
+      _emit_decl_locals(em, u_prep, {slow_var.uid, fast_var.uid}, lines, pad + "  ")
+      em.block(u_prep, lines, len(pad) // 2 + 1)
+      lines.append(f"{pad}  const long long pk_goff = (long long)({em.expr(u_idx)});")
+      lines.append(f"{pad}  const float* pk_gp = &{b_ptr}[pk_goff];")
+      if aligned_16:
+        lines.append(f"{pad}  pk_cp_async_16(pk_sp, pk_gp);")
+      else:
+        lines.append(f"{pad}  if ((((unsigned long long)pk_gp) & 15ULL) == 0ULL) {{")
+        lines.append(f"{pad}    pk_cp_async_16(pk_sp, pk_gp);")
+        lines.append(f"{pad}  }} else {{")
+        lines.append(f"{pad}    #pragma unroll")
+        lines.append(f"{pad}    for (int pk_v = 0; pk_v < 4; ++pk_v) pk_sp[pk_v] = pk_gp[pk_v];")
+        lines.append(f"{pad}  }}")
+      lines.append(f"{pad}}}")
+      return
     lines.append(f"{pad}  if ({slow_var.name} < {slow_lim}) {{")
     _emit_decl_locals(em, u_prep, {slow_var.uid, fast_var.uid}, lines, pad + "    ")
     em.block(u_prep, lines, len(pad) // 2 + 2)
     lines.append(f"{pad}    const long long pk_goff = (long long)({em.expr(u_idx)});")
-    lines.append(f"{pad}    if (({fast_var.name} + 3) < {fast_lim}) {{")
-    lines.append(f"{pad}      const float* pk_gp = &{b_ptr}[pk_goff];")
-    lines.append(f"{pad}      if ((((unsigned long long)pk_gp) & 15ULL) == 0ULL) {{")
-    lines.append(f"{pad}        pk_cp_async_16(pk_sp, pk_gp);")
-    lines.append(f"{pad}      }} else {{")
-    lines.append(f"{pad}        #pragma unroll")
-    lines.append(f"{pad}        for (int pk_v = 0; pk_v < 4; ++pk_v) pk_sp[pk_v] = pk_gp[pk_v];")
-    lines.append(f"{pad}      }}")
-    lines.append(f"{pad}    }} else {{")
-    lines.append(f"{pad}      #pragma unroll")
-    lines.append(f"{pad}      for (int pk_v = 0; pk_v < 4; ++pk_v)")
-    lines.append(
-      f"{pad}        pk_sp[pk_v] = (({fast_var.name} + pk_v) < {fast_lim}) ? {b_ptr}[pk_goff + pk_v] : 0.0f;"
-    )
-    lines.append(f"{pad}    }}")
+    if fast_full:
+      lines.append(f"{pad}    const float* pk_gp = &{b_ptr}[pk_goff];")
+      if aligned_16:
+        lines.append(f"{pad}    pk_cp_async_16(pk_sp, pk_gp);")
+      else:
+        lines.append(f"{pad}    if ((((unsigned long long)pk_gp) & 15ULL) == 0ULL) {{")
+        lines.append(f"{pad}      pk_cp_async_16(pk_sp, pk_gp);")
+        lines.append(f"{pad}    }} else {{")
+        lines.append(f"{pad}      #pragma unroll")
+        lines.append(f"{pad}      for (int pk_v = 0; pk_v < 4; ++pk_v) pk_sp[pk_v] = pk_gp[pk_v];")
+        lines.append(f"{pad}    }}")
+    else:
+      lines.append(f"{pad}    if (({fast_var.name} + 3) < {fast_lim}) {{")
+      lines.append(f"{pad}      const float* pk_gp = &{b_ptr}[pk_goff];")
+      if aligned_16:
+        lines.append(f"{pad}      pk_cp_async_16(pk_sp, pk_gp);")
+      else:
+        lines.append(f"{pad}      if ((((unsigned long long)pk_gp) & 15ULL) == 0ULL) {{")
+        lines.append(f"{pad}        pk_cp_async_16(pk_sp, pk_gp);")
+        lines.append(f"{pad}      }} else {{")
+        lines.append(f"{pad}        #pragma unroll")
+        lines.append(f"{pad}        for (int pk_v = 0; pk_v < 4; ++pk_v) pk_sp[pk_v] = pk_gp[pk_v];")
+        lines.append(f"{pad}      }}")
+      lines.append(f"{pad}    }} else {{")
+      lines.append(f"{pad}      #pragma unroll")
+      lines.append(f"{pad}      for (int pk_v = 0; pk_v < 4; ++pk_v)")
+      lines.append(
+        f"{pad}        pk_sp[pk_v] = (({fast_var.name} + pk_v) < {fast_lim}) ? {b_ptr}[pk_goff + pk_v] : 0.0f;"
+      )
+      lines.append(f"{pad}    }}")
     lines.append(f"{pad}  }} else {{")
     lines.append(f"{pad}    #pragma unroll")
     lines.append(f"{pad}    for (int pk_v = 0; pk_v < 4; ++pk_v) pk_sp[pk_v] = 0.0f;")
@@ -452,13 +497,23 @@ def _emit_cuda_wmma_stage_load(
   lines.append(f"{pad}  const long long pk_tf = pk_idx & {fast_dim - 1};")
   lines.append(f"{pad}  const long long {slow_var.name} = {slow_base} + pk_ts;")
   lines.append(f"{pad}  const long long {fast_var.name} = {fast_base} + pk_tf;")
-  lines.append(f"{pad}  if ({slow_var.name} < {slow_lim} && {fast_var.name} < {fast_lim}) {{")
-  _emit_decl_locals(em, st.body, {slow_var.uid, fast_var.uid}, lines, pad + "    ")
-  em.block(st.body, lines, len(pad) // 2 + 2)
-  lines.append(f"{pad}    {sh_name}[{buf_expr}][pk_ts * {sh_stride} + pk_tf] = (float)({em.expr(st.value)});")
-  lines.append(f"{pad}  }} else {{")
-  lines.append(f"{pad}    {sh_name}[{buf_expr}][pk_ts * {sh_stride} + pk_tf] = 0.0f;")
-  lines.append(f"{pad}  }}")
+  if slow_full and fast_full:
+    _emit_decl_locals(em, st.body, {slow_var.uid, fast_var.uid}, lines, pad + "  ")
+    em.block(st.body, lines, len(pad) // 2 + 1)
+    lines.append(f"{pad}  {sh_name}[{buf_expr}][pk_ts * {sh_stride} + pk_tf] = (float)({em.expr(st.value)});")
+  else:
+    cond_parts = []
+    if not slow_full:
+      cond_parts.append(f"{slow_var.name} < {slow_lim}")
+    if not fast_full:
+      cond_parts.append(f"{fast_var.name} < {fast_lim}")
+    lines.append(f"{pad}  if ({' && '.join(cond_parts)}) {{")
+    _emit_decl_locals(em, st.body, {slow_var.uid, fast_var.uid}, lines, pad + "    ")
+    em.block(st.body, lines, len(pad) // 2 + 2)
+    lines.append(f"{pad}    {sh_name}[{buf_expr}][pk_ts * {sh_stride} + pk_tf] = (float)({em.expr(st.value)});")
+    lines.append(f"{pad}  }} else {{")
+    lines.append(f"{pad}    {sh_name}[{buf_expr}][pk_ts * {sh_stride} + pk_tf] = 0.0f;")
+    lines.append(f"{pad}  }}")
   lines.append(f"{pad}}}")
 
 
@@ -687,6 +742,22 @@ def _generate_matrix_unit_kernel(
     a_slow_lim, a_fast_lim = ("pk_K", "pk_M") if a_col_major else ("pk_M", "pk_K")
     b_slow_lim, b_fast_lim = ("pk_N", "pk_K") if b_col_major else ("pk_K", "pk_N")
 
+    # Shape-divisibility facts for Hielscher's interior f^k fast path
+    m_div_bm = isinstance(plan.shape[-2], ir.Const) and int(plan.shape[-2].value) % bm == 0
+    n_div_bn = isinstance(plan.shape[-1], ir.Const) and int(plan.shape[-1].value) % bn == 0
+    k_div_bk = isinstance(plan.reduce.shape[0], ir.Const) and int(plan.reduce.shape[0].value) % bk == 0
+    if plan.dim_hints is not None:
+      mh, nh, kh = plan.dim_hints
+      m_div_bm = m_div_bm or mh.divisible_by(bm)
+      n_div_bn = n_div_bn or nh.divisible_by(bn)
+      k_div_bk = k_div_bk or kh.divisible_by(bk)
+    a_slow_full = k_div_bk if a_col_major else m_div_bm
+    a_fast_full = m_div_bm if a_col_major else k_div_bk
+    b_slow_full = n_div_bn if b_col_major else k_div_bk
+    b_fast_full = k_div_bk if b_col_major else n_div_bn
+    a_aligned_16 = plan.stage_align4[row_idx][0 if a_col_major else 1] if row_idx < len(plan.stage_align4) else False
+    b_aligned_16 = plan.stage_align4[col_idx][1 if b_col_major else 0] if col_idx < len(plan.stage_align4) else False
+
     lines.append("  if (pk_k_start < pk_k_end) {")
     # Prologue: prefetch first K tile into buffer 0
     lines.append("    {")
@@ -708,6 +779,9 @@ def _generate_matrix_unit_kernel(
       a_unit,
       lines,
       "      ",
+      slow_full=a_slow_full,
+      fast_full=a_fast_full,
+      aligned_16=a_aligned_16,
     )
     _emit_cuda_wmma_stage_load(
       em,
@@ -727,6 +801,9 @@ def _generate_matrix_unit_kernel(
       b_unit,
       lines,
       "      ",
+      slow_full=b_slow_full,
+      fast_full=b_fast_full,
+      aligned_16=b_aligned_16,
     )
     lines.append("      pk_cp_async_commit();")
     lines.append("      pk_cp_async_wait();")
@@ -757,6 +834,9 @@ def _generate_matrix_unit_kernel(
       a_unit,
       lines,
       "        ",
+      slow_full=a_slow_full,
+      fast_full=a_fast_full,
+      aligned_16=a_aligned_16,
     )
     _emit_cuda_wmma_stage_load(
       em,
@@ -776,6 +856,9 @@ def _generate_matrix_unit_kernel(
       b_unit,
       lines,
       "        ",
+      slow_full=b_slow_full,
+      fast_full=b_fast_full,
+      aligned_16=b_aligned_16,
     )
     lines.append("        pk_cp_async_commit();")
     lines.append("      }")
@@ -882,26 +965,31 @@ def _generate_matrix_unit_kernel(
     lines.append(f"    for (int pk_rn = 0; pk_rn < {r_n}; ++pk_rn) {{")
     lines.append("      store_matrix_sync(pk_ep, pk_c[pk_rm][pk_rn], 16, mem_row_major);")
     lines.append("      __syncwarp();")
-    lines.append(f"      for ({idx_t} pk_e = pk_lane; pk_e < 256; pk_e += 32) {{")
+    lines.append("      for (long long pk_e = pk_lane; pk_e < 256; pk_e += 32) {")
     lines.append(f"        const {idx_t} {i_var.name} = pk_i0 + pk_sg_m * {warp_m} + pk_rm * 16 + (pk_e >> 4);")
     lines.append(f"        const {idx_t} {j_var.name} = pk_j0 + pk_sg_n * {warp_n} + pk_rn * 16 + (pk_e & 15);")
-    lines.append(f"        if ({i_var.name} < pk_M && {j_var.name} < pk_N) {{")
-    lines.append(f"          const float {fold.result.name} = pk_ep[pk_e];")
+    ep_full = m_div_bm and n_div_bn
+    ep_pad = "        " if ep_full else "          "
+    ep_ind = 4 if ep_full else 5
+    if not ep_full:
+      lines.append(f"        if ({i_var.name} < pk_M && {j_var.name} < pk_N) {{")
+    lines.append(f"{ep_pad}const float {fold.result.name} = pk_ep[pk_e];")
     if split_k_enabled and pure_ep is not None:
       prefix_ep, store_ep = pure_ep
-      _emit_decl_locals(em, epilogue_stmts, skip_ep, lines, "          ")
-      em.block(prefix_ep, lines, 5)
+      _emit_decl_locals(em, epilogue_stmts, skip_ep, lines, ep_pad)
+      em.block(prefix_ep, lines, ep_ind)
       st_idx = em.expr(store_ep.index)
       st_val = em.expr(store_ep.value)
-      lines.append("          if (pk_split_k > 1) {")
-      lines.append(f"            atomicAdd(&{em.data(store_ep.buf)}[{st_idx}], {st_val});")
-      lines.append("          } else {")
-      lines.append(f"            {em.data(store_ep.buf)}[{st_idx}] = {st_val};")
-      lines.append("          }")
+      lines.append(f"{ep_pad}if (pk_split_k > 1) {{")
+      lines.append(f"{ep_pad}  atomicAdd(&{em.data(store_ep.buf)}[{st_idx}], {st_val});")
+      lines.append(f"{ep_pad}}} else {{")
+      lines.append(f"{ep_pad}  {em.data(store_ep.buf)}[{st_idx}] = {st_val};")
+      lines.append(f"{ep_pad}}}")
     else:
-      _emit_decl_locals(em, epilogue_stmts, skip_ep, lines, "          ")
-      em.block(epilogue_stmts, lines, 5)
-    lines.append("        }")
+      _emit_decl_locals(em, epilogue_stmts, skip_ep, lines, ep_pad)
+      em.block(epilogue_stmts, lines, ep_ind)
+    if not ep_full:
+      lines.append("        }")
     lines.append("      }")
     lines.append("      __syncwarp();")
     lines.append("    }")
@@ -993,12 +1081,23 @@ def generate_warp_reduce_cuda_kernel(
   lines.append("  const long long pk_wid = pk_tid >> 5;")
   lines.append("  const int pk_lane = (int)(pk_tid & 31LL);")
 
+  n_div_8 = False
+  k_nonempty = False
+  k_unroll_iters = 0
+  if plan.dim_hints is not None:
+    nh, kh = plan.dim_hints
+    n_div_8 = nh.divisible_by(8)
+    k_nonempty = kh.lo >= 1
+    if kh.exact is not None and 32 <= kh.exact <= 256 and kh.exact % 32 == 0:
+      k_unroll_iters = kh.exact // 32
+
   lines.append(f"  const long long pk_N = (long long)({em.expr(plan.shape[-1])});")
   lines.append(f"  const long long pk_K = (long long)({em.expr(plan.k_dim)});")
   lines.append("  const long long pk_nb_n = (pk_N + 7LL) / 8LL;")
   lines.append("  const long long pk_blk_n = pk_blk % pk_nb_n;")
   lines.append(f"  const long long {plan.index[-1].name} = pk_blk_n * 8LL + pk_wid;")
-  lines.append(f"  if ({plan.index[-1].name} >= pk_N) return;")
+  if not n_div_8:
+    lines.append(f"  if ({plan.index[-1].name} >= pk_N) return;")
 
   if len(plan.shape) >= 2:
     lines.append("  long long pk_rem = pk_blk / pk_nb_n;")
@@ -1011,7 +1110,7 @@ def generate_warp_reduce_cuda_kernel(
 
   # Empty-reduction check for unseeded folds (e.g. np.max on 0-length axis)
   empty_errs = [f.empty for st in plan.stages for f in st.reduce.folds if f.empty is not None]
-  if empty_errs:
+  if empty_errs and not k_nonempty:
     eid = em.error_id(empty_errs[0])
     lines.append("  if (pk_K <= 0LL) {")
     lines.append(f"    if (pk_lane == 0) pk_fail(pk_flag, pk_info, {eid}, 0LL, 0LL, 0LL, 0LL);")
@@ -1044,7 +1143,12 @@ def generate_warp_reduce_cuda_kernel(
 
     # Coalesced stride-32 warp reduction loop
     k_var = red.index[0]
-    lines.append(f"  for (long long {k_var.name} = (long long)pk_lane; {k_var.name} < pk_K; {k_var.name} += 32LL) {{")
+    if k_unroll_iters > 0:
+      lines.append("  #pragma unroll")
+      lines.append(f"  for (int pk_ki = 0; pk_ki < {k_unroll_iters}; ++pk_ki) {{")
+      lines.append(f"    const long long {k_var.name} = (long long)pk_ki * 32LL + (long long)pk_lane;")
+    else:
+      lines.append(f"  for (long long {k_var.name} = (long long)pk_lane; {k_var.name} < pk_K; {k_var.name} += 32LL) {{")
     _emit_decl_locals(em, red.body, declared_uids | {k_var.uid}, lines, "    ")
     em.block(red.body, lines, 2)
     for fi, f in enumerate(folds):
@@ -1131,7 +1235,12 @@ def generate_warp_reduce_cuda_kernel(
     ep = plan.epilogue
     ep_k = ep.index[0]
     ep_body = [t for t in ep.body if not (isinstance(t, ir.ReleaseScope) and t.scope is ep.scope)]
-    lines.append(f"  for (long long {ep_k.name} = (long long)pk_lane; {ep_k.name} < pk_K; {ep_k.name} += 32LL) {{")
+    if k_unroll_iters > 0:
+      lines.append("  #pragma unroll")
+      lines.append(f"  for (int pk_ki = 0; pk_ki < {k_unroll_iters}; ++pk_ki) {{")
+      lines.append(f"    const long long {ep_k.name} = (long long)pk_ki * 32LL + (long long)pk_lane;")
+    else:
+      lines.append(f"  for (long long {ep_k.name} = (long long)pk_lane; {ep_k.name} < pk_K; {ep_k.name} += 32LL) {{")
     _emit_decl_locals(em, ep_body, declared_uids | {ep_k.uid}, lines, "    ")
     em.block(ep_body, lines, 2)
     lines.append("  }")
@@ -1348,6 +1457,16 @@ def generate_tiled_gpu_kernel(
   mixed_uses_k = k_var.uid in mixed_used
   stage_var_uids = {sv.uid for sv in plan.stage_vars}
 
+  # Shape-divisibility facts for Hielscher's interior f^k fast path
+  m_div_bm = isinstance(plan.shape[-2], ir.Const) and int(plan.shape[-2].value) % bm == 0
+  n_div_bn = isinstance(plan.shape[-1], ir.Const) and int(plan.shape[-1].value) % bn == 0
+  k_div_bk = isinstance(plan.reduce.shape[0], ir.Const) and int(plan.reduce.shape[0].value) % bk == 0
+  if plan.dim_hints is not None:
+    mh, nh, kh = plan.dim_hints
+    m_div_bm = m_div_bm or mh.divisible_by(bm)
+    n_div_bn = n_div_bn or nh.divisible_by(bn)
+    k_div_bk = k_div_bk or kh.divisible_by(bk)
+
   # Main K-tile loop
   lines.append(f"  for ({idx_t} pk_k0 = 0; pk_k0 < pk_K; pk_k0 += {bk}) {{")
 
@@ -1369,13 +1488,18 @@ def generate_tiled_gpu_kernel(
         lines.append(f"      const {idx_t} pk_tk = pk_idx & {bk - 1};")
       lines.append(f"      const {idx_t} {st.index[0].name} = pk_i0 + pk_ti;")
       lines.append(f"      const {idx_t} {st.index[1].name} = pk_k0 + pk_tk;")
-      lines.append(f"      if ({st.index[0].name} < pk_M && {st.index[1].name} < pk_K) {{")
-      _emit_decl_locals(em, st.body, {st.index[0].uid, st.index[1].uid}, lines, "        ")
-      em.block(st.body, lines, 4)
-      lines.append(f"        pk_sh_{s_idx}[pk_ti * {pad_k} + pk_tk] = ({ct})({em.expr(st.value)});")
-      lines.append("      } else {")
-      lines.append(f"        pk_sh_{s_idx}[pk_ti * {pad_k} + pk_tk] = {zero};")
-      lines.append("      }")
+      if m_div_bm and k_div_bk:
+        _emit_decl_locals(em, st.body, {st.index[0].uid, st.index[1].uid}, lines, "      ")
+        em.block(st.body, lines, 3)
+        lines.append(f"      pk_sh_{s_idx}[pk_ti * {pad_k} + pk_tk] = ({ct})({em.expr(st.value)});")
+      else:
+        lines.append(f"      if ({st.index[0].name} < pk_M && {st.index[1].name} < pk_K) {{")
+        _emit_decl_locals(em, st.body, {st.index[0].uid, st.index[1].uid}, lines, "        ")
+        em.block(st.body, lines, 4)
+        lines.append(f"        pk_sh_{s_idx}[pk_ti * {pad_k} + pk_tk] = ({ct})({em.expr(st.value)});")
+        lines.append("      } else {")
+        lines.append(f"        pk_sh_{s_idx}[pk_ti * {pad_k} + pk_tk] = {zero};")
+        lines.append("      }")
       lines.append("    }")
     elif side == "col":
       total_elts = bn * bk
@@ -1388,32 +1512,46 @@ def generate_tiled_gpu_kernel(
         lines.append(f"      const {idx_t} pk_tk = pk_idx & {bk - 1};")
       lines.append(f"      const {idx_t} {st.index[0].name} = pk_j0 + pk_tj;")
       lines.append(f"      const {idx_t} {st.index[1].name} = pk_k0 + pk_tk;")
-      lines.append(f"      if ({st.index[0].name} < pk_N && {st.index[1].name} < pk_K) {{")
-      _emit_decl_locals(em, st.body, {st.index[0].uid, st.index[1].uid}, lines, "        ")
-      em.block(st.body, lines, 4)
-      lines.append(f"        pk_sh_{s_idx}[pk_tj * {pad_k} + pk_tk] = ({ct})({em.expr(st.value)});")
-      lines.append("      } else {")
-      lines.append(f"        pk_sh_{s_idx}[pk_tj * {pad_k} + pk_tk] = {zero};")
-      lines.append("      }")
+      if n_div_bn and k_div_bk:
+        _emit_decl_locals(em, st.body, {st.index[0].uid, st.index[1].uid}, lines, "      ")
+        em.block(st.body, lines, 3)
+        lines.append(f"      pk_sh_{s_idx}[pk_tj * {pad_k} + pk_tk] = ({ct})({em.expr(st.value)});")
+      else:
+        lines.append(f"      if ({st.index[0].name} < pk_N && {st.index[1].name} < pk_K) {{")
+        _emit_decl_locals(em, st.body, {st.index[0].uid, st.index[1].uid}, lines, "        ")
+        em.block(st.body, lines, 4)
+        lines.append(f"        pk_sh_{s_idx}[pk_tj * {pad_k} + pk_tk] = ({ct})({em.expr(st.value)});")
+        lines.append("      } else {")
+        lines.append(f"        pk_sh_{s_idx}[pk_tj * {pad_k} + pk_tk] = {zero};")
+        lines.append("      }")
       lines.append("    }")
     else:
       lines.append(f"    if (pk_tid < {bk}) {{")
       lines.append(f"      const {idx_t} {st.index[0].name} = pk_k0 + pk_tid;")
-      lines.append(f"      if ({st.index[0].name} < pk_K) {{")
-      _emit_decl_locals(em, st.body, {st.index[0].uid}, lines, "        ")
-      em.block(st.body, lines, 4)
-      lines.append(f"        pk_sh_{s_idx}[pk_tid] = ({ct})({em.expr(st.value)});")
-      lines.append("      } else {")
-      lines.append(f"        pk_sh_{s_idx}[pk_tid] = {zero};")
-      lines.append("      }")
+      if k_div_bk:
+        _emit_decl_locals(em, st.body, {st.index[0].uid}, lines, "      ")
+        em.block(st.body, lines, 3)
+        lines.append(f"      pk_sh_{s_idx}[pk_tid] = ({ct})({em.expr(st.value)});")
+      else:
+        lines.append(f"      if ({st.index[0].name} < pk_K) {{")
+        _emit_decl_locals(em, st.body, {st.index[0].uid}, lines, "        ")
+        em.block(st.body, lines, 4)
+        lines.append(f"        pk_sh_{s_idx}[pk_tid] = ({ct})({em.expr(st.value)});")
+        lines.append("      } else {")
+        lines.append(f"        pk_sh_{s_idx}[pk_tid] = {zero};")
+        lines.append("      }")
       lines.append("    }")
 
   lines.append(f"    {barrier}")
 
   # Phase 2: register-blocked TM x TN computation over the staged tile
-  lines.append(f"    const {idx_t} pk_klim = (pk_K - pk_k0 < {bk}) ? (pk_K - pk_k0) : {bk};")
-  lines.append("    #pragma unroll")
-  lines.append(f"    for ({idx_t} pk_tk = 0; pk_tk < pk_klim; pk_tk++) {{")
+  if k_div_bk:
+    lines.append("    #pragma unroll")
+    lines.append(f"    for ({idx_t} pk_tk = 0; pk_tk < {bk}; pk_tk++) {{")
+  else:
+    lines.append(f"    const {idx_t} pk_klim = (pk_K - pk_k0 < {bk}) ? (pk_K - pk_k0) : {bk};")
+    lines.append("    #pragma unroll")
+    lines.append(f"    for ({idx_t} pk_tk = 0; pk_tk < pk_klim; pk_tk++) {{")
   if mixed_uses_k:
     lines.append(f"      const {idx_t} {k_var.name} = pk_k0 + pk_tk;")
   # Preload row/col/k shared values for this tk into registers
@@ -1479,19 +1617,24 @@ def generate_tiled_gpu_kernel(
   fold_result_uids = {f.result.uid for f in plan.mixed_folds} | {
     c.result.uid for f in plan.mixed_folds for c in f.carries
   }
+  simt_ep_full = m_div_bm and n_div_bn
   for mi in range(tm):
     for nj in range(tn):
       lines.append("  {")
       lines.append(f"    const {idx_t} {i_var.name} = pk_i0 + pk_ty + {mi * NTY};")
       lines.append(f"    const {idx_t} {j_var.name} = pk_j0 + pk_tx + {nj * NTX};")
-      lines.append(f"    if ({i_var.name} < pk_M && {j_var.name} < pk_N) {{")
+      ep_pad = "    " if simt_ep_full else "      "
+      ep_ind = 2 if simt_ep_full else 3
+      if not simt_ep_full:
+        lines.append(f"    if ({i_var.name} < pk_M && {j_var.name} < pk_N) {{")
       for f_idx, f in enumerate(plan.mixed_folds):
-        lines.append(f"      const {em.ctype(f.result.type)} {f.result.name} = pk_acc_{f_idx}_{mi}_{nj};")
+        lines.append(f"{ep_pad}const {em.ctype(f.result.type)} {f.result.name} = pk_acc_{f_idx}_{mi}_{nj};")
         for c_idx, c in enumerate(f.carries):
-          lines.append(f"      const {em.ctype(c.result.type)} {c.result.name} = pk_pacc_{f_idx}_{c_idx}_{mi}_{nj};")
-      _emit_decl_locals(em, epilogue_stmts, fold_result_uids | {i_var.uid, j_var.uid}, lines, "      ")
-      em.block(epilogue_stmts, lines, 3)
-      lines.append("    }")
+          lines.append(f"{ep_pad}const {em.ctype(c.result.type)} {c.result.name} = pk_pacc_{f_idx}_{c_idx}_{mi}_{nj};")
+      _emit_decl_locals(em, epilogue_stmts, fold_result_uids | {i_var.uid, j_var.uid}, lines, ep_pad)
+      em.block(epilogue_stmts, lines, ep_ind)
+      if not simt_ep_full:
+        lines.append("    }")
       lines.append("  }")
 
   if row_fold is not None:

@@ -337,7 +337,13 @@ def interchange_block(
   return out
 
 
-def should_split_gpu_reduce(s: IndexMap, m: Shape, defs: dict[int, Expr], target) -> bool:
+def should_split_gpu_reduce(
+  s: IndexMap,
+  m: Shape,
+  defs: dict[int, Expr],
+  target,
+  facts: IndexFacts | None = None,
+) -> bool:
   """True when an ``IndexMap`` wrapping an associative ``IndexReduce`` is a
   non-contraction axis reduction on GPU that benefits from 2D Split-K
   parallelism when its outer grid is smaller than the GPU's compute capacity
@@ -361,6 +367,15 @@ def should_split_gpu_reduce(s: IndexMap, m: Shape, defs: dict[int, Expr], target
   min_threads = max(target.num_compute_units * 256, 4096)
   if all(isinstance(d, Const) for d in s.shape) and math.prod(d.value for d in s.shape) >= min_threads:
     return False
+  if facts is not None and facts.has_dim_facts():
+    red_info, red_deps = facts.dim_info(iprod(m.extent))
+    if red_info.hi is not None and red_info.hi < 128:
+      facts.commit_dim_guards(red_deps)
+      return False
+    out_info, out_deps = facts.dim_info(iprod(s.shape))
+    if out_info.lo >= min_threads:
+      facts.commit_dim_guards(out_deps)
+      return False
   # Leave 2D+ contractions (matmul / allpairs / einsum) for SharedTilePlan GPU tiling!
   if len(s.shape) >= 2 and extract_shared_tile_plan(s, m, s.shape, m.extent) is not None:
     return False
@@ -424,6 +439,7 @@ def split_gpu_reduce(
   target,
   block_allocs: dict[int, Alloc] | None = None,
   store_counts: dict[int, int] | None = None,
+  facts: IndexFacts | None = None,
 ) -> list:
   """Rewrite a low-occupancy GPU axis reduction into a runtime-guarded Split-K
   reduction.
@@ -448,6 +464,18 @@ def split_gpu_reduce(
   red_shape = tuple(lp.tmp(d, "k") for d in m.extent)
   red_total = lp.tmp(iprod(red_shape), "red_n")
   min_threads = max(target.num_compute_units * 256, 4096)
+  always_split = False
+  if facts is not None and facts.has_dim_facts():
+    out_info, out_deps = facts.dim_info(iprod(s.shape))
+    red_info, red_deps = facts.dim_info(iprod(m.extent))
+    if (
+      out_info.lo >= 1
+      and out_info.hi is not None
+      and out_info.hi < min_threads
+      and (red_info.lo >= 1024 or (red_info.lo >= 128 and red_info.lo > out_info.hi))
+    ):
+      facts.commit_dim_guards(out_deps | red_deps)
+      always_split = True
   # Only pay for a Split-K reduction when the outer grid truly under-fills
   # the GPU AND the reduction is long enough to amortize it
   # (e.g. backward bias/gain sum over (B, T)=4096 for C=256, NOT LayerNorm over C=256 for B*T=4096).
@@ -557,7 +585,10 @@ def split_gpu_reduce(
         p1_body.append(after_cloner.stmt(t))
     p1_body.append(ir.ReleaseScope(p1_scope))
     tlp.emit(IndexMap((split, *out_shape), (p_var, *p_out_idx), p1_body, p1_scope, False, True, s.loc))
-    lp.emit(If(cond, then_blk, [s]))
+    if always_split:
+      out.extend(then_blk)
+    else:
+      lp.emit(If(cond, then_blk, [s]))
     return out
 
   out_flat1 = row_major_index(p_out_idx, out_shape)
@@ -615,12 +646,20 @@ def split_gpu_reduce(
   for pb in pbufs:
     tlp.emit(ir.Release(pb))
 
-  lp.emit(If(cond, then_blk, [s]))
+  if always_split:
+    out.extend(then_blk)
+  else:
+    lp.emit(If(cond, then_blk, [s]))
   return out
 
 
 def split_gpu_reduce_block(
-  block: list, defs: dict[int, Expr], owner: Scope, target, store_counts: dict[int, int] | None = None
+  block: list,
+  defs: dict[int, Expr],
+  owner: Scope,
+  target,
+  store_counts: dict[int, int] | None = None,
+  facts: IndexFacts | None = None,
 ) -> list:
   """Apply :func:`split_gpu_reduce` across eligible axis reductions in ``block``."""
   block_allocs: dict[int, Alloc] = {}
@@ -631,15 +670,15 @@ def split_gpu_reduce_block(
       out.append(s)
       continue
     if isinstance(s, If):
-      s.then[:] = split_gpu_reduce_block(s.then, defs, owner, target, store_counts)
-      s.orelse[:] = split_gpu_reduce_block(s.orelse, defs, owner, target, store_counts)
+      s.then[:] = split_gpu_reduce_block(s.then, defs, owner, target, store_counts, facts)
+      s.orelse[:] = split_gpu_reduce_block(s.orelse, defs, owner, target, store_counts, facts)
     elif isinstance(s, IndexReduce):
-      s.body[:] = split_gpu_reduce_block(s.body, defs, s.scope, target, store_counts)
+      s.body[:] = split_gpu_reduce_block(s.body, defs, s.scope, target, store_counts, facts)
     elif isinstance(s, (IndexMap, ForRange, ir.While, ir.ParLoop)):
-      s.body[:] = split_gpu_reduce_block(s.body, defs, s.scope, target, store_counts)
+      s.body[:] = split_gpu_reduce_block(s.body, defs, s.scope, target, store_counts, facts)
     m = match(s, defs, min_rank=1)
-    if m is not None and should_split_gpu_reduce(s, m, defs, target):  # type: ignore[arg-type]
-      out.extend(split_gpu_reduce(s, m, defs, owner, target, block_allocs, store_counts))  # type: ignore[arg-type]
+    if m is not None and should_split_gpu_reduce(s, m, defs, target, facts):  # type: ignore[arg-type]
+      out.extend(split_gpu_reduce(s, m, defs, owner, target, block_allocs, store_counts, facts))  # type: ignore[arg-type]
     else:
       out.append(s)
   return out
@@ -656,9 +695,10 @@ def interchange(fn: ir.Function, options) -> None:
     from .analysis import BufferInfo
 
     binfo = BufferInfo.analyze(fn)
+    facts = IndexFacts.from_function(fn)
     if not target.supports_float64:
       fn.body[:] = interchange_block(fn.body, pure_defs(fn.body), fn.scope, metal_f64_only=True, tile_width_val=tw)
-    fn.body[:] = split_gpu_reduce_block(fn.body, pure_defs(fn.body), fn.scope, target, binfo.store_counts)
+    fn.body[:] = split_gpu_reduce_block(fn.body, pure_defs(fn.body), fn.scope, target, binfo.store_counts, facts)
     return
   fn.body[:] = interchange_block(fn.body, pure_defs(fn.body), fn.scope, tile_width_val=tw)
 
@@ -689,8 +729,37 @@ def tile_size(lp: Loops, length: Expr, itemsize: int, tile_bytes: int) -> Expr:
   return size
 
 
+def _stage_load_index(st: ir.TileStage) -> Expr | None:
+  """Return the global ``Load.index`` if ``st`` is a single pure float32 Load."""
+  if len(st.index) != 2 or st.buf.type.elt.name != "float32":
+    return None
+  local_defs: dict[int, Expr] = {}
+  for s in st.body:
+    if isinstance(s, ir.Comment):
+      continue
+    if not isinstance(s, Assign):
+      return None
+    local_defs[s.var.uid] = s.value
+  val: Expr = st.value
+  for _ in range(8):
+    if isinstance(val, ir.Cast) and val.type.name == "float32":
+      val = val.arg
+    elif isinstance(val, Var) and val.uid in local_defs:
+      val = local_defs[val.uid]
+    else:
+      break
+  if not isinstance(val, Load) or val.buf.type.elt.name != "float32":
+    return None
+  return val.index
+
+
 def extract_shared_tile_plan(
-  s: IndexMap, m: Shape, shape: tuple[Expr, ...], extent: tuple[Expr, ...]
+  s: IndexMap,
+  m: Shape,
+  shape: tuple[Expr, ...],
+  extent: tuple[Expr, ...],
+  facts: IndexFacts | None = None,
+  target=None,
 ) -> ir.SharedTilePlan | None:
   """Analyze a map-of-reduction ``(s, m)`` and extract a general
   :class:`~parakeet.syntax.ir.SharedTilePlan` for GPU ``__shared__`` /
@@ -913,6 +982,23 @@ def extract_shared_tile_plan(
   ) or any(
     isinstance(x, Load) for f in mixed_folds for e in (f.value, *(c.value for c in f.carries)) for x in ir.walk_expr(e)
   )
+  dim_hints = None
+  stage_align4: tuple[tuple[bool, bool], ...] = ()
+  if facts is not None and target is not None and target.is_gpu and facts.has_dim_facts():
+    m_info = facts.require_dim_info(s.shape[-2])
+    n_info = facts.require_dim_info(s.shape[-1])
+    k_info = facts.require_dim_info(m.extent[0])
+    dim_hints = (m_info, n_info, k_info)
+    align_pairs: list[tuple[bool, bool]] = []
+    for st in stages:
+      raw_idx = _stage_load_index(st)
+      if raw_idx is None:
+        align_pairs.append((False, False))
+      else:
+        a0 = facts.stage_index_div4(st.body, raw_idx, st.index[0], st.index[1])
+        a1 = facts.stage_index_div4(st.body, raw_idx, st.index[1], st.index[0])
+        align_pairs.append((a0, a1))
+    stage_align4 = tuple(align_pairs)
   return ir.SharedTilePlan(
     shape=shape,
     index=s.index,
@@ -926,6 +1012,8 @@ def extract_shared_tile_plan(
     mixed_folds=mixed_folds,
     has_mixed_loads=has_mixed_loads,
     pre_checks=pre_checks,
+    dim_hints=dim_hints,
+    stage_align4=stage_align4,
   )
 
 
@@ -964,7 +1052,9 @@ def _has_unit_k_load(stmts: list[ir.Stmt], extra_exprs: list[Expr], k_uid: int, 
   return False
 
 
-def extract_warp_row_pipeline_plan(s: IndexMap, defs: dict[int, Expr], target) -> ir.WarpRowReducePlan | None:
+def extract_warp_row_pipeline_plan(
+  s: IndexMap, defs: dict[int, Expr], target, facts: IndexFacts | None = None
+) -> ir.WarpRowReducePlan | None:
   """Return a CUDA 1-warp-per-row coalesced plan when ``s`` is a non-contraction
   ``IndexMap`` containing 1+ sequential 1-D contiguous ``IndexReduce`` stages
   over the same inner axis ``K`` plus an optional trailing 1-D ``IndexMap``
@@ -979,9 +1069,9 @@ def extract_warp_row_pipeline_plan(s: IndexMap, defs: dict[int, Expr], target) -
   if not body:
     return None
 
-  facts = IndexFacts(defs)
+  local_facts = IndexFacts(defs) if facts is None else facts.fork()
   for t in body:
-    facts.record_stmt(t)
+    local_facts.record_stmt(t)
 
   # Split body into sequential [before_i, IndexReduce_i, after_i] stages + optional trailing IndexMap epilogue
   epilogue: IndexMap | None = None
@@ -1012,7 +1102,7 @@ def extract_warp_row_pipeline_plan(s: IndexMap, defs: dict[int, Expr], target) -
       return None
     if k_dim is None:
       k_dim = red.shape[0]
-    elif not facts.same_expr(k_dim, red.shape[0]):
+    elif not local_facts.same_expr(k_dim, red.shape[0]):
       return None
     nxt_pos = red_positions[idx_pos + 1] if idx_pos + 1 < len(red_positions) else len(body)
     before = body[prev_end:pos] if idx_pos == 0 else []
@@ -1030,7 +1120,7 @@ def extract_warp_row_pipeline_plan(s: IndexMap, defs: dict[int, Expr], target) -
     raw_stages.append((before, red, after))
 
   assert k_dim is not None
-  if epilogue is not None and not facts.same_expr(k_dim, epilogue.shape[0]):
+  if epilogue is not None and not local_facts.same_expr(k_dim, epilogue.shape[0]):
     return None
   if isinstance(k_dim, Const) and int(k_dim.value) < 16:
     return None
@@ -1069,12 +1159,18 @@ def extract_warp_row_pipeline_plan(s: IndexMap, defs: dict[int, Expr], target) -
         seen_b.add(t.var.uid)
     stages.append(ir.WarpRowStage(before=list(before), reduce=red, after=list(after), broadcast_vars=bcast))
 
+  dim_hints = None
+  if facts is not None and facts.has_dim_facts():
+    n_info = local_facts.require_dim_info(s.shape[-1])
+    k_info = local_facts.require_dim_info(k_dim)
+    dim_hints = (n_info, k_info)
   return ir.WarpRowReducePlan(
     shape=s.shape,
     index=s.index,
     k_dim=k_dim,
     stages=stages,
     epilogue=epilogue,
+    dim_hints=dim_hints,
   )
 
 
@@ -1086,7 +1182,15 @@ def extract_warp_reduce_plan(s: IndexMap, m: Shape, target) -> ir.WarpRowReduceP
   return extract_warp_row_pipeline_plan(s, {}, target)
 
 
-def tiled(s: IndexMap, m: Shape, defs: dict[int, Expr], owner: Scope, tile_bytes: int, target=None) -> list:
+def tiled(
+  s: IndexMap,
+  m: Shape,
+  defs: dict[int, Expr],
+  owner: Scope,
+  tile_bytes: int,
+  target=None,
+  facts: IndexFacts | None = None,
+) -> list:
   """Rewrite a matmul-shaped ``IndexMap`` into nested :class:`IndexTile`
   operators: an outer L2 ``level="cache"`` tile over rows and columns wrapping
   an inner ``level="register"`` micro-tile (``UNROLL_I x UNROLL_J``), with an
@@ -1099,13 +1203,13 @@ def tiled(s: IndexMap, m: Shape, defs: dict[int, Expr], owner: Scope, tile_bytes
   extent = tuple(lp.tmp(d, "k") for d in m.extent)
   length = lp.tmp(iprod(extent), "len")
   itemsize = m.reduce.folds[0].a.type.bits // 8
-  shared_plan = extract_shared_tile_plan(s, m, shape, extent)
+  shared_plan = extract_shared_tile_plan(s, m, shape, extent, facts=facts, target=target)
   if target is not None and target.is_gpu and shared_plan is None:
     # On GPU, never wrap a non-contraction map-of-reduction (e.g. LayerNorm / Softmax)
     # in a CPU cache-tile loop: that would collapse thousands of parallel GPU threads
     # into a handful of serial 32x32 cache-tile threads.
     if target.supports_float64 or not any(f.a.type.name == "float64" for f in m.reduce.folds):
-      wp = extract_warp_row_pipeline_plan(s, defs, target)
+      wp = extract_warp_row_pipeline_plan(s, defs, target, facts=facts)
       if wp is not None:
         s.warp_reduce = wp
       return [s]
@@ -1169,32 +1273,37 @@ def tiled(s: IndexMap, m: Shape, defs: dict[int, Expr], owner: Scope, tile_bytes
   return out
 
 
-def tile_block(block: list, defs: dict[int, Expr], owner: Scope, tile_bytes: int, target=None) -> list:
+def tile_block(
+  block: list, defs: dict[int, Expr], owner: Scope, tile_bytes: int, target=None, facts: IndexFacts | None = None
+) -> list:
   out: list = []
   for s in block:
     if isinstance(s, If):
-      s.then[:] = tile_block(s.then, defs, owner, tile_bytes, target)
-      s.orelse[:] = tile_block(s.orelse, defs, owner, tile_bytes, target)
+      s.then[:] = tile_block(s.then, defs, owner, tile_bytes, target, facts)
+      s.orelse[:] = tile_block(s.orelse, defs, owner, tile_bytes, target, facts)
     elif isinstance(s, IndexReduce):
-      s.body[:] = tile_block(s.body, defs, s.scope, tile_bytes, target)
+      s.body[:] = tile_block(s.body, defs, s.scope, tile_bytes, target, facts)
     elif isinstance(s, (IndexMap, ForRange, ir.While, ir.ParLoop)):
-      s.body[:] = tile_block(s.body, defs, s.scope, tile_bytes, target)
+      s.body[:] = tile_block(s.body, defs, s.scope, tile_bytes, target, facts)
     m = match(s, defs)
     if m is None:
       if target is not None and target.kind == "cuda" and isinstance(s, IndexMap):
-        wp = extract_warp_row_pipeline_plan(s, defs, target)
+        wp = extract_warp_row_pipeline_plan(s, defs, target, facts=facts)
         if wp is not None:
           s.warp_reduce = wp
       out.append(s)
     else:
-      out.extend(tiled(s, m, defs, owner, tile_bytes, target))  # type: ignore[arg-type]
+      out.extend(tiled(s, m, defs, owner, tile_bytes, target, facts=facts))  # type: ignore[arg-type]
   return out
 
 
 def tiling(fn: ir.Function, options) -> None:
   """TiledMap: tile and jam every matmul-shaped map of ``fn``."""
   if options.tiling:
-    fn.body[:] = tile_block(fn.body, pure_defs(fn.body), fn.scope, options.tile_bytes, getattr(options, "target", None))
+    facts = IndexFacts.from_function(fn)
+    fn.body[:] = tile_block(
+      fn.body, pure_defs(fn.body), fn.scope, options.tile_bytes, getattr(options, "target", None), facts=facts
+    )
 
 
 __all__ = [

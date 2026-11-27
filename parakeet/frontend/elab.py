@@ -122,6 +122,7 @@ class Options:
   blas: bool = False  # hand float matrix products to the BLAS NumPy uses
   skip: tuple = ()  # middle-end passes not to run
   target: TargetProfile = field(default_factory=TargetProfile)
+  shape_specialization: bool = True  # demand-driven shape-bucket & divisibility guards
 
   def key(self) -> tuple:
     return (
@@ -133,6 +134,7 @@ class Options:
       self.blas,
       self.skip,
       self.target,
+      self.shape_specialization,
     )
 
 
@@ -244,9 +246,18 @@ def _sanitize(name: str) -> str:
 
 
 class Elaborator(ArrayMixin):
-  def __init__(self, fn: pytypes.FunctionType, arg_keys: tuple, state: ElabState, options: Options):
+  def __init__(
+    self,
+    fn: pytypes.FunctionType,
+    arg_keys: tuple,
+    state: ElabState,
+    options: Options,
+    leaf_shapes: dict[int, tuple[int, ...]] | None = None,
+  ):
     self.state = state
     self.options = options
+    self.leaf_shapes: dict[int, tuple[int, ...]] = {} if leaf_shapes is None else leaf_shapes
+    self.dim_facts: dict[int, tuple] = {}
     self.root_fn = fn
     self.arg_keys = arg_keys
     self.fn_scope = Scope("function")
@@ -691,6 +702,9 @@ class Elaborator(ArrayMixin):
       shape_vars = tuple(Var(f"{name}_n{k}", I) for k in range(rank))
       self.nonneg.update(v.uid for v in shape_vars)
       self.nonneg.add(off.uid)
+      raw_shape = self.leaf_shapes.get(leaf) if (source == "arg" and self.options.shape_specialization) else None
+      if raw_shape is not None:
+        from ..shape_lattice import classify_dim
       shape: list[Expr] = []
       for k, (v, one) in enumerate(zip(shape_vars, ones)):
         if one:
@@ -700,6 +714,8 @@ class Elaborator(ArrayMixin):
         else:
           self.not_one.add(v.uid)
           self.param_origin[v.uid] = (source, (leaf, k))
+          if raw_shape is not None and k < len(raw_shape):
+            self.dim_facts[v.uid] = (leaf, k, classify_dim(int(raw_shape[k])))
           shape.append(v)
       if layout == "C":
         stride_vars = None
@@ -950,6 +966,7 @@ class Elaborator(ArrayMixin):
     function = Function(
             _sanitize(fn.__name__), self.params, self.entry_block + self.body_block,
             self.results, self.fn_scope, src.location(),
+            dim_facts=self.dim_facts,
         )  # fmt: skip
     return Elaborated(function, spec, self.implicits, self.writes_unknown)
 

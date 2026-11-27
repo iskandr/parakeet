@@ -114,6 +114,7 @@ class Specialization:
     self.result_spec = elaborated.result_spec
     self.implicits = elaborated.implicits
     self.function = elaborated.function
+    self.dim_guards = tuple(sorted(elaborated.function.dim_guards, key=lambda g: (g[0], g[1])))
     if elaborated.writes_unknown:
       for p in self.function.params:
         if isinstance(p, ArrayParam):
@@ -626,6 +627,7 @@ class jit:  # noqa: N801 - decorator, lower-case by convention
       tile_bytes=config.tile_bytes,
       blas=config.blas,
       skip=tuple(sorted(config.skip_transforms)),
+      shape_specialization=config.shape_specialization,
     )
 
   # ---- calling -------------------------------------------------------------------
@@ -693,8 +695,14 @@ class jit:  # noqa: N801 - decorator, lower-case by convention
 
   @staticmethod
   def _match(spec: Specialization, leaves: list, fixups: list) -> list | None:
-    """Runtime parameter list for ``spec``, or None if a guard on a global
-    or closure variable no longer holds."""
+    """Runtime parameter list for ``spec``, or None if a shape guard or a guard
+    on a global/closure variable no longer holds."""
+    if spec.dim_guards:
+      for leaf_idx, axis, req in spec.dim_guards:
+        lv = leaves[leaf_idx]
+        sh = lv._host.shape if isinstance(lv, DeviceArray) else lv.shape
+        if not req.matches(int(sh[axis])):
+          return None
     passed: list = []
     pos = [0]
     for k in spec.keys[0]:
@@ -716,12 +724,21 @@ class jit:  # noqa: N801 - decorator, lower-case by convention
     return passed
 
   def _compile(self, table, type_key, names, arg_keys, cell_keys, leaves, backend, options) -> Specialization:
+    leaf_shapes = (
+      {
+        i: (lv._host.shape if isinstance(lv, DeviceArray) else lv.shape)
+        for i, lv in enumerate(leaves)
+        if isinstance(lv, (np.ndarray, DeviceArray))
+      }
+      if options.shape_specialization
+      else None
+    )
     state = ElabState(static_leaves=set(table.static.get(type_key, ())))
     while True:
       static = frozenset(state.static_leaves)
       keys = _rewrite_keys(arg_keys, cell_keys, leaves, static)
       try:
-        elaborated = Elaborator(self.fn, (names, *keys), state, options).run()
+        elaborated = Elaborator(self.fn, (names, *keys), state, options, leaf_shapes=leaf_shapes).run()
         break
       except Restart:
         state.restarts += 1
@@ -776,12 +793,21 @@ class jit:  # noqa: N801 - decorator, lower-case by convention
       device=backend.device(),
       tensor_cores=config.tensor_cores or config.fast_math,
     )
+    leaf_shapes = (
+      {
+        i: (lv._host.shape if isinstance(lv, DeviceArray) else lv.shape)
+        for i, lv in enumerate(leaves)
+        if isinstance(lv, (np.ndarray, DeviceArray))
+      }
+      if options.shape_specialization
+      else None
+    )
     state = ElabState()
     while True:
       static = frozenset(state.static_leaves)
       keys = _rewrite_keys(arg_keys, cell_keys, leaves, static)
       try:
-        elaborated = Elaborator(self.fn, (names, *keys), state, options).run()
+        elaborated = Elaborator(self.fn, (names, *keys), state, options, leaf_shapes=leaf_shapes).run()
         break
       except Restart:
         state.restarts += 1

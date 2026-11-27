@@ -559,9 +559,32 @@ class CuPyDriver:
       mod.compile()
       return [(canon, mod.get_function(f"pk_k{idx}")) for idx, (_, canon) in enumerate(chunk)]
 
-    n_workers = min(len(todo) // 4, os.cpu_count() or 1, 8) if len(todo) >= 8 else 1
-    if n_workers <= 1:
-      results = _build_chunk(todo)
+    # Partition WMMA kernels (which pull in NVIDIA's large <mma.h> header) from
+    # lightweight plain/warp/atomic kernels so non-WMMA chunks compile without
+    # parsing <mma.h>, and sort canonically for deterministic CuPy disk caching.
+    import hashlib
+
+    wmma_todo = sorted(
+      [item for item in todo if "#include <mma.h>" in item[1]],
+      key=lambda item: hashlib.sha256(item[1].encode()).hexdigest(),
+    )
+    plain_todo = sorted(
+      [item for item in todo if "#include <mma.h>" not in item[1]],
+      key=lambda item: hashlib.sha256(item[1].encode()).hexdigest(),
+    )
+
+    max_workers = min(os.cpu_count() or 1, 8)
+    chunks: list[list[tuple[KernelPlan, str]]] = []
+    if wmma_todo:
+      w_workers = min(len(wmma_todo), max(1, max_workers // 2)) if len(wmma_todo) >= 2 else 1
+      chunks.extend([wmma_todo[i::w_workers] for i in range(w_workers)])
+    if plain_todo:
+      p_workers = min(max(1, len(plain_todo) // 4), max_workers) if len(plain_todo) >= 8 else 1
+      chunks.extend([plain_todo[i::p_workers] for i in range(p_workers)])
+    chunks = [c for c in chunks if c]
+
+    if len(chunks) <= 1:
+      results = _build_chunk(chunks[0]) if chunks else []
     else:
       from concurrent.futures import ThreadPoolExecutor
 
@@ -573,14 +596,13 @@ class CuPyDriver:
         self._nvrtc_primed = True
 
       dev_id = int(self.cp.cuda.runtime.getDevice())
-      chunks = [todo[i::n_workers] for i in range(n_workers)]
 
       def _worker(chunk: list[tuple[KernelPlan, str]]):
         with self.cp.cuda.Device(dev_id):
           return _build_chunk(chunk)
 
       results = []
-      with ThreadPoolExecutor(max_workers=n_workers) as pool:
+      with ThreadPoolExecutor(max_workers=min(len(chunks), max_workers)) as pool:
         for res in pool.map(_worker, chunks):
           results.extend(res)
 
