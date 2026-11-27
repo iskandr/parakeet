@@ -543,7 +543,7 @@ def main(n_reads: int = 20_000):
 
   # 1. Verify bit-for-bit exactness of compiled parallel BGZF inflate
   got_raw = inflate_bgzf_blocks(data, cs, ce, uo, _backend="multicore")
-  assert got_raw.tobytes() == raw_fastq, "BGZF inflate mismatch!"
+  assert got_raw.tobytes() == raw_fastq, "BGZF inflate mismatch"
 
   # Warmup both kernels
   ref_qc = fastq_slab_qc(got_raw, _backend="multicore")

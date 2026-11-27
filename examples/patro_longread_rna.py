@@ -159,7 +159,7 @@ def build_unitig_sshash_index(tx_seqs: list[bytes], k: int = 15, m: int = 9):
       mv = ((mv << 2) | int(seg[i])) & mmask
       if i >= m - 1:
         m_hashes[i - m + 1] = _hash_u64_py(mv)
-    # Record minimizer per k-mer (skip consecutive duplicate minimizer positions -> sparse!)
+    # Record minimizer per k-mer, skipping consecutive duplicate minimizer positions.
     last_mpos = -1
     for pos in range(L - k + 1):
       best_h = int(m_hashes[pos])
