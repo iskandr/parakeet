@@ -2275,6 +2275,7 @@ def _flatten_contiguous_map(m: IndexMap, flat_var: Var, facts: IndexFacts) -> li
   for v in defined(body).values():
     rew.var(v)
   new_body: list[ir.Stmt] = []
+  dropped_uids: set[int] = set()
   for t in body:
     if isinstance(t, Assign) and not isinstance(t.var.type, ir.BufType) and t.var.type.kind in "iu":
       rep = _as_flat_plus_inv(t.value)
@@ -2282,9 +2283,11 @@ def _flatten_contiguous_map(m: IndexMap, flat_var: Var, facts: IndexFacts) -> li
         rew.m[t.var.uid] = rep
         continue
       if any(isinstance(x, Var) and x.uid in idx_uids for x in ir.walk_expr(t.value)):
+        dropped_uids.add(rew.var(t.var).uid)
+        dropped_uids.add(t.var.uid)
         continue
     new_body.append(rew.stmt(t))
-  if uses(new_body, idx_uids):
+  if uses(new_body, idx_uids | dropped_uids):
     return None
   return new_body
 
