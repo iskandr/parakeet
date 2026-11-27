@@ -105,20 +105,34 @@ device across calls with `par.to_device`.
 
 </div>
 
-## Same fused loop, any style
+## NumPy, comprehensions, operators, or loops
 
-NumPy expressions, comprehensions, and explicit operators compile to the same
-single-pass parallel loop with zero temporary arrays:
+Write whichever style fits your algorithm. The first three functions below
+compile to the same single-pass parallel loop with no temporary arrays; the
+explicit `for` loop compiles to a single sequential C loop:
 
 ```python
 @par.jit
-def scaled_tanh_numpy(x, alpha=0.5, beta=0.3):
+def via_numpy(x, alpha=0.5, beta=0.3):
   return np.tanh(x * alpha) + beta
 
 
 @par.jit
-def scaled_tanh_comp(x, alpha=0.5, beta=0.3):
+def via_comprehension(x, alpha=0.5, beta=0.3):
   return np.array([np.tanh(xi * alpha) + beta for xi in x])
+
+
+@par.jit
+def via_operator(x, alpha=0.5, beta=0.3):
+  return par.map(lambda xi: np.tanh(xi * alpha) + beta, x)
+
+
+@par.jit
+def via_loop(x, alpha=0.5, beta=0.3):
+  y = np.empty_like(x, dtype=float)
+  for i in range(len(x)):
+    y[i] = np.tanh(x[i] * alpha) + beta
+  return y
 ```
 
 ## Where to go next
