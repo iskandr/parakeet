@@ -241,6 +241,14 @@ def sweep(block: list, live: set[int], dead_bufs: set[int], stored_bufs: set[int
       if not s.scope.owned and all(u.buf.uid in dead_bufs for u in s.updates) and pure_writes_only(s.body, dead_bufs):
         changed = True
         continue
+    elif isinstance(s, ir.Assign):
+      if (
+        not isinstance(s.var.type, ir.BufType)
+        and s.var.uid not in live
+        and not any(isinstance(x, ir.RtCall) and not x.pure for x in ir.walk_expr(s.value))
+      ):
+        changed = True
+        continue
     elif isinstance(s, ir.Alloc):
       if s.var.uid in dead_bufs and s.var.uid not in stored_bufs:
         gone.add(s.var.uid)

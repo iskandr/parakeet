@@ -54,7 +54,7 @@ from ..syntax.ir import (
   Var,
 )
 from ..syntax.ops import ONE, ZERO, I, cast, cmp, iadd, imul
-from ..syntax.values import ArrayVal
+from ..syntax.values import CHEAP_COST, ArrayVal
 from .analysis import IndexFacts, TileInterval, tile_predicate_guards
 from .lowering import row_major_index
 
@@ -332,16 +332,22 @@ def _bwd_norm(tape, el, node, g: ArrayVal) -> None:
   tape.stale(el, node, std_val)
   tape.stale(el, node, x_hat)
   elt = x_val.elt
-  if g.buf is None:
+  if g.buf is None and g.cost > CHEAP_COST:
     g = el.as_concrete(g)
   if x_hat.buf is None:
     x_hat = el.as_concrete(x_hat)
   inv_n = el.tmp(ops.prim("div", (Const(1.0, elt), cast(x_val.shape[ax], elt)), elt), "inv_n")
   inv_std = el.apply_ufunc(UF["div"], [Const(1.0, elt), std_val])
   gx = el.apply_ufunc(UF["mul"], [g, x_hat])
-  gx_mean = el.apply_ufunc(UF["mul"], [reduce_plain(el, "add", gx, Const(ax, I), Const(0, elt), "sum", True), inv_n])
+  gx_sum = reduce_plain(el, "add", gx, Const(ax, I), Const(0, elt), "sum", True)
+  if isinstance(gx_sum, ArrayVal) and gx_sum.buf is None:
+    gx_sum = el.as_concrete(gx_sum)
+  gx_mean = el.apply_ufunc(UF["mul"], [gx_sum, inv_n])
   if is_layernorm:
-    g_mean = el.apply_ufunc(UF["mul"], [reduce_plain(el, "add", g, Const(ax, I), Const(0, elt), "sum", True), inv_n])
+    g_sum = reduce_plain(el, "add", g, Const(ax, I), Const(0, elt), "sum", True)
+    if isinstance(g_sum, ArrayVal) and g_sum.buf is None:
+      g_sum = el.as_concrete(g_sum)
+    g_mean = el.apply_ufunc(UF["mul"], [g_sum, inv_n])
     inner = el.apply_ufunc(
       UF["sub"], [el.apply_ufunc(UF["sub"], [g, g_mean]), el.apply_ufunc(UF["mul"], [x_hat, gx_mean])]
     )

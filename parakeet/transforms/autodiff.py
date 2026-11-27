@@ -58,7 +58,7 @@ from typing import Any
 from .. import prims
 from ..errors import InternalError, TypeInferenceError, UnsupportedError
 from ..ndtypes import Bool, BufType, ScalarType
-from ..syntax import ops
+from ..syntax import ir, ops
 from ..syntax.ir import (
   Assign,
   Cast,
@@ -288,6 +288,75 @@ class RootAdj:
       and all(same(x, y) for x, y in zip(v.strides, a.strides))
     )
 
+  def _whole_adjoint(self, el, v: ArrayVal, g: ArrayVal) -> ArrayVal | None:
+    """If ``v`` covers all elements of ``self.arr`` bijectively (exact layout,
+    contiguous reshape, or axis permutation of a contiguous reshape), return
+    ``g`` aligned to ``self.arr.shape`` without allocating a mutable ``adj`` buffer."""
+    if self.is_whole(el, v):
+      return g
+    a = self.arr
+    if not (a.contig and v.inj and same(v.offset, a.offset)):
+      return None
+    if v.rank == 0 or a.rank == 0 or v.rank > 6:
+      return None
+    if any(isinstance(d, Const) and d.value == 0 for d in (*v.shape, *a.shape)):
+      return None
+
+    from .analysis import IndexFacts
+
+    cache = getattr(self.tape, "_int_facts_cache", None)
+    if cache is None or cache[0] is not el.block or cache[1] > len(el.block):
+      facts = IndexFacts(el.defs)
+      start_idx = 0
+    else:
+      facts, start_idx = cache[2], cache[1]
+    for st in el.block[start_idx:]:
+      if isinstance(st, (Assign, ir.Check)):
+        facts.record_stmt(st)
+    self.tape._int_facts_cache = (el.block, len(el.block), facts)
+
+    a_total = ops.iprod(a.shape)
+    v_total = ops.iprod(v.shape)
+
+    if v.contig:
+      if not facts.same_expr(v_total, a_total):
+        return None
+      # Materialize expensive delayed producers (e.g. backward matmul) at their native 2D
+      # shape BEFORE reshaping so tiled GEMMs stay 2D and reshape becomes a zero-copy view.
+      g = settled(el, el.cast_array(g, a.elt))
+      return el.reshape(g, a.shape, checked=True)
+
+    # Check whether permuting ``v``'s axes restores row-major C strides (e.g.
+    # transpose of a contiguous reshape such as attention Q/K/V/O views).
+    expected: Expr = ONE
+    remaining = list(range(v.rank))
+    rev_perm: list[int] = []
+    while remaining:
+      pick = None
+      for p in remaining:
+        d = v.shape[p]
+        if not (isinstance(d, Const) and d.value == 1) and facts.same_expr(v.strides[p], expected):
+          pick = p
+          break
+      if pick is None:
+        for p in remaining:
+          d = v.shape[p]
+          if isinstance(d, Const) and d.value == 1:
+            pick = p
+            break
+      if pick is None:
+        return None
+      rev_perm.append(pick)
+      remaining.remove(pick)
+      expected = ops.imul(expected, v.shape[pick])
+    if not facts.same_expr(expected, a_total):
+      return None
+    perm = tuple(reversed(rev_perm))
+    g_perm = el.transpose(g, perm)
+    if g_perm.rank == a.rank and all(facts.same_expr(x, y) for x, y in zip(g_perm.shape, a.shape)):
+      return g_perm
+    return el.reshape(g_perm, a.shape, checked=True)
+
   def allocate(self, el) -> None:
     """Allocate the zero-initialized mutable adjoint buffer (and its JVP shadow if needed)."""
     if self.buf is None:
@@ -327,10 +396,12 @@ class RootAdj:
       via.touched.add(self)
       return
     at_home = el.block is self.tape.home
-    if self.buf is None and at_home and not self.mutable and self.is_whole(el, v) and isinstance(g, ArrayVal):
-      g = settled(el, el.cast_array(g, self.arr.elt))
-      self.whole = g if self.whole is None else el.apply_ufunc(UF["add"], [self.whole, g])
-      return
+    if self.buf is None and at_home and not self.mutable and isinstance(g, ArrayVal):
+      aligned = self._whole_adjoint(el, v, g)
+      if aligned is not None:
+        g = settled(el, el.cast_array(aligned, self.arr.elt))
+        self.whole = g if self.whole is None else el.apply_ufunc(UF["add"], [self.whole, g])
+        return
     accumulate(el, self.view(el, v), g)
 
   def scatter(self, el, pos: Expr, c: Expr, via: Tape) -> None:
@@ -415,13 +486,14 @@ def accumulate(el, dest: ArrayVal, g) -> None:
 class Node:
   """One recorded operator application."""
 
-  __slots__ = ("kind", "inputs", "out", "info", "g", "holder", "tick", "origin")
+  __slots__ = ("kind", "inputs", "out", "materialized_out", "info", "g", "holder", "tick", "origin")
 
   def __init__(self, kind: str, inputs: tuple, info: Any = None):
     self.kind = kind
     self.inputs = inputs
     self.info = info
     self.out: Any = None
+    self.materialized_out: Any = None
     self.tick = 0
     self.origin: Any = None  # stands in for an AST node as the origin of arrays its rule creates
     self.g: ArrayVal | None = None  # adjoint of a delayed result
@@ -668,6 +740,9 @@ class Tape:
         return
       raise _tainted(el, info)
     node = Node("alias", (arr,))
+    src = self.delayed.get(id(arr))
+    if src is not None:
+      src.materialized_out = out
     self.record(el, node)
     self.register(el, node, out)
 
@@ -1098,43 +1173,140 @@ def _elementwise(tape: Tape, el, node: Node, g: ArrayVal) -> None:
     # (the derivative of a sum reads none: x += y can be undone without the old x)
     with el.trial():
       probes = [Var("x", x.elt if isinstance(x, ArrayVal) else x.type) for x in args]
+      g_probe = Var("g", elt)
+      n_blk_before = len(el.block)
+      fwd_probe = fn(*probes)
+      pure_expr_fn = len(el.block) == n_blk_before
       seen: list[Expr] = []
       backprop(
         el,
-        fn(*probes),
-        Var("g", elt),
+        fwd_probe,
+        g_probe,
         lambda v, adj, k=k: seen.append(adj) if v is probes[k] else el.defs.get(v.uid),
         lambda *_: None,
       )
       used = _mentioned(el, seen)
-    for x, probe in zip(args, probes):
-      if id(probe) in used:
-        tape.stale(el, node, x)
+      is_identity = len(seen) == 1 and seen[0] is g_probe
+      is_neg_identity = (
+        len(seen) == 1 and isinstance(seen[0], Prim) and seen[0].op == "neg" and seen[0].args == (g_probe,)
+      )
+      out_arr = (
+        node.out
+        if isinstance(node.out, ArrayVal) and node.out.buf is not None
+        else getattr(node, "materialized_out", None)
+      )
+      out_reuse_op = (
+        fwd_probe.op
+        if n == 1
+        and pure_expr_fn
+        and isinstance(fwd_probe, Prim)
+        and fwd_probe.op in ("tanh", "exp")
+        and fwd_probe.args == (probes[0],)
+        and isinstance(out_arr, ArrayVal)
+        and out_arr.buf is not None
+        and tape.unknown_store <= node.tick
+        and not any(tape.stored_at.get(r, 0) > node.tick for r in el.get_roots(out_arr))
+        else None
+      )
+      from .analysis import expr_cost as _expr_cost
 
-    def partial(*xs, k=k, t=t):
-      *xs, gv = xs
+      deriv_cost = min(cost + 4, _expr_cost(seen[0])) if len(seen) == 1 else cost + 4
+
+    if out_reuse_op is not None:
+      assert out_arr is not None
+      if out_reuse_op == "tanh":
+        contrib = el.elementwise(
+          [out_arr, g],
+          lambda y, gv, t=t: ops.prim(
+            "mul",
+            (cast(gv, t), ops.prim("sub", (Const(1.0, t), ops.prim("mul", (cast(y, t), cast(y, t)), t)), t)),
+            t,
+          ),
+          t,
+          cost=2,
+        )
+      else:
+        contrib = el.elementwise(
+          [out_arr, g],
+          lambda y, gv, t=t: ops.prim("mul", (cast(gv, t), cast(y, t)), t),
+          t,
+          cost=1,
+        )
+      tape.add(el, a, unbroadcast(el, contrib, a))
+      continue
+
+    if not pure_expr_fn or el.tape is not None or (el.jvp is not None and not el.jvp.muted):
+      used_idxs = list(range(n))
+    else:
+      used_idxs = [i for i, probe in enumerate(probes) if id(probe) in used]
+    for i in used_idxs:
+      if id(probes[i]) in used:
+        tape.stale(el, node, args[i])
+
+    if is_identity:
+      contrib = el.cast_array(g, t) if isinstance(g, ArrayVal) else cast(g, t)
+      tape.add(el, a, unbroadcast(el, contrib, a))
+      continue
+    if is_neg_identity:
+      contrib = el.apply_ufunc(UF["neg"], [el.cast_array(g, t) if isinstance(g, ArrayVal) else cast(g, t)])
+      tape.add(el, a, unbroadcast(el, contrib, a))
+      continue
+
+    used_args = [args[i] for i in used_idxs]
+    used_pos = {orig_i: pos for pos, orig_i in enumerate(used_idxs)}
+
+    def partial(*xs, k=k, t=t, used_pos=used_pos, args=args):
+      *uxs, gv = xs
       mark = Var._counter
-      leaves = []
-      for x in xs:
-        leaf = Var("x", x.type)
-        el.block.append(Assign(leaf, x))
-        note_def(el, leaf, x)  # an enclosing gradient differentiates through this copy
+      leaves: list[Var] = []
+      for orig_i, orig_x in enumerate(args):
+        if orig_i in used_pos:
+          ux = uxs[used_pos[orig_i]]
+          leaf = Var("x", ux.type)
+          el.block.append(Assign(leaf, ux))
+          note_def(el, leaf, ux)  # an enclosing gradient differentiates through this copy
+        else:
+          # Unused by this partial derivative (verified in trial); bind a dummy probe
+          # so we never consume or bump cost/uses of unneeded inputs.
+          leaf = Var("u", orig_x.elt if isinstance(orig_x, ArrayVal) else orig_x.type)
         leaves.append(leaf)
-      r = fn(*leaves)
+      saved_block = el.block
+      scratch: list = []
+      el.block = scratch
       found: list[Expr] = []
+      try:
+        r = fn(*leaves)
 
-      def on_var(v: Var, adj: Expr):
-        if v is leaves[k]:
-          found.append(adj)
-          return None
-        if any(v is leaf for leaf in leaves):
-          return None  # another argument: a constant for this partial derivative
-        return el.defs.get(v.uid) if v.uid > mark else None
+        def on_var(v: Var, adj: Expr):
+          if v is leaves[k]:
+            found.append(adj)
+            return None
+          if any(v is leaf for leaf in leaves):
+            return None  # another argument: a constant for this partial derivative
+          return el.defs.get(v.uid) if v.uid > mark else None
 
-      backprop(el, r, cast(gv, r.type), on_var, lambda load, adj: None)
-      return cast(found[0], t) if found else Const(0.0, t)
+        backprop(el, r, cast(gv, r.type), on_var, lambda load, adj: None)
+      finally:
+        el.block = saved_block
+      if not found:
+        return Const(0.0, t)
+      res = cast(found[0], t)
+      # Emit only scratch statements that are actually needed by the derivative expression
+      if scratch:
+        need = {v.uid for v in walk_expr(res) if isinstance(v, Var)}
+        kept_rev: list = []
+        for st in reversed(scratch):
+          if isinstance(st, Assign) and st.var.uid in need:
+            kept_rev.append(st)
+            need.update(v.uid for v in walk_expr(st.value) if isinstance(v, Var))
+          elif not isinstance(st, Assign):
+            kept_rev.append(st)
+            for e in stmt_exprs(st):
+              need.update(v.uid for v in walk_expr(e) if isinstance(v, Var))
+        el.block.extend(reversed(kept_rev))
+      return res
 
-    contrib = el.elementwise([*args, g], partial, t, cost + 4)
+    contrib = el.elementwise([*used_args, g], partial, t, deriv_cost)
     tape.add(el, a, unbroadcast(el, contrib, a))
 
 

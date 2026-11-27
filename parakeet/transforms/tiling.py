@@ -386,11 +386,22 @@ def split_gpu_reduce(s: IndexMap, m: Shape, defs: dict[int, Expr], owner: Scope,
   red_shape = tuple(lp.tmp(d, "k") for d in m.extent)
   red_total = lp.tmp(iprod(red_shape), "red_n")
   min_threads = max(target.num_compute_units * 256, 4096)
+  # Only pay for a 2-pass global Split-K reduction when the outer grid truly under-fills
+  # the GPU AND the reduction is long enough to amortize a second kernel + temp buffer
+  # (e.g. backward bias/gain sum over (B, T)=4096 for C=256, NOT LayerNorm over C=256 for B*T=4096).
+  long_red = ops.prim(
+    "or",
+    (
+      cmp("ge", red_total, Const(1024, I)),
+      ops.prim("and", (cmp("ge", red_total, Const(128, I)), cmp("gt", red_total, out_total)), Bool),
+    ),
+    Bool,
+  )
   cond = ops.prim(
     "and",
     (
       ops.prim("and", (cmp("gt", out_total, ZERO), cmp("lt", out_total, Const(min_threads, I))), Bool),
-      cmp("ge", red_total, Const(128, I)),
+      long_red,
     ),
     Bool,
   )
@@ -819,6 +830,70 @@ def extract_shared_tile_plan(
   )
 
 
+def extract_warp_reduce_plan(s: IndexMap, m: Shape, target) -> ir.WarpRowReducePlan | None:
+  """Return a CUDA 1-warp-per-row coalesced reduction plan when ``s`` is a
+  non-contraction GPU ``IndexMap`` wrapping a 1-D contiguous associative
+  ``IndexReduce`` (e.g. LayerNorm ``mu``/``var``/``g_mean``+``gx_mean``,
+  softmax ``max``/``sum``, or FlashAttention ``D_i``)."""
+  if target is None or target.kind != "cuda":
+    return None
+  if not s.parallel or s.ordered or s.scope.owned or m.reduce.scope.owned:
+    return None
+  red = m.reduce
+  if len(red.shape) != 1 or not red.folds:
+    return None
+  if not all(f.op in ("add", "mul", "max", "min") and not f.combine and not f.carries for f in red.folds):
+    return None
+  if not all(f.a.type.name in ("float32", "float64", "int32", "int64") for f in red.folds):
+    return None
+  if not all(isinstance(t, (Assign, ir.Comment)) for t in (*m.before, *red.body)):
+    return None
+  if any(isinstance(t, ir.Check) for t in ir.walk_stmts(m.after)):
+    return None
+  if any(isinstance(t, (ir.Store, ir.IndexScatter)) for t in ir.walk_stmts(m.before)):
+    return None
+  # Require at least one global Load with unit stride along the reduction variable k
+  # so 32 warp lanes perform 100% coalesced 128-byte cache-line reads.
+  k_uid = red.index[0].uid
+  local_defs = {t.var.uid: t.value for t in (*m.before, *red.body) if isinstance(t, Assign)}
+
+  def _has_unit_k(e: Expr, depth: int = 10) -> bool:
+    if depth <= 0:
+      return False
+    if isinstance(e, Var):
+      if e.uid == k_uid:
+        return True
+      if e.uid in local_defs:
+        return _has_unit_k(local_defs[e.uid], depth - 1)
+      return False
+    if isinstance(e, ir.Prim):
+      if e.op in ("add", "sub"):
+        return any(_has_unit_k(a, depth - 1) for a in e.args)
+      if e.op == "mul" and len(e.args) == 2:
+        a, b = e.args
+        if isinstance(a, Const) and a.value == 1:
+          return _has_unit_k(b, depth - 1)
+        if isinstance(b, Const) and b.value == 1:
+          return _has_unit_k(a, depth - 1)
+    return False
+
+  has_coalesced_load = any(
+    isinstance(x, Load) and _has_unit_k(x.index) for st in red.body for e in ir.stmt_exprs(st) for x in ir.walk_expr(e)
+  ) or any(isinstance(x, Load) and _has_unit_k(x.index) for f in red.folds for x in ir.walk_expr(f.value))
+  if not has_coalesced_load:
+    return None
+  # Skip statically tiny reductions (< 16 elements) where 1 thread/row is already optimal
+  if isinstance(red.shape[0], Const) and int(red.shape[0].value) < 16:
+    return None
+  return ir.WarpRowReducePlan(
+    shape=s.shape,
+    index=s.index,
+    before=list(m.before),
+    reduce=red,
+    after=list(m.after),
+  )
+
+
 def tiled(s: IndexMap, m: Shape, defs: dict[int, Expr], owner: Scope, tile_bytes: int, target=None) -> list:
   """Rewrite a matmul-shaped ``IndexMap`` into nested :class:`IndexTile`
   operators: an outer L2 ``level="cache"`` tile over rows and columns wrapping
@@ -838,6 +913,9 @@ def tiled(s: IndexMap, m: Shape, defs: dict[int, Expr], owner: Scope, tile_bytes
     # in a CPU cache-tile loop: that would collapse thousands of parallel GPU threads
     # into a handful of serial 32x32 cache-tile threads.
     if target.supports_float64 or not any(f.a.type.name == "float64" for f in m.reduce.folds):
+      wp = extract_warp_reduce_plan(s, m, target)
+      if wp is not None:
+        s.warp_reduce = wp
       return [s]
   col_tile = tile_size(lp, length, itemsize, tile_bytes)
 
@@ -911,6 +989,12 @@ def tile_block(block: list, defs: dict[int, Expr], owner: Scope, tile_bytes: int
       s.body[:] = tile_block(s.body, defs, s.scope, tile_bytes, target)
     m = match(s, defs)
     if m is None:
+      if target is not None and target.kind == "cuda":
+        m1 = match(s, defs, min_rank=1)
+        if m1 is not None:
+          wp = extract_warp_reduce_plan(s, m1, target)  # type: ignore[arg-type]
+          if wp is not None:
+            s.warp_reduce = wp  # type: ignore[union-attr]
       out.append(s)
     else:
       out.extend(tiled(s, m, defs, owner, tile_bytes, target))  # type: ignore[arg-type]

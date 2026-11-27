@@ -106,6 +106,7 @@ class Loops:
     heavy=None,
     shared_tile=None,
     monoidal_tile=None,
+    warp_reduce=None,
   ):
     """A chunked parallel loop; ``body(loops, chunk, start, stop)`` fills one chunk."""
     if nchunks is None:
@@ -132,6 +133,7 @@ class Loops:
         work if kind == "map" else None,
         shared_tile=shared_tile,
         monoidal_tile=monoidal_tile,
+        warp_reduce=warp_reduce,
       )
     )
     return nchunks
@@ -252,7 +254,7 @@ def lower_map(lp: Loops, s: ir.IndexMap) -> None:
   lp.parallel(
     total,
     lambda inner, chunk, start, stop: inner.chunk(shape, s.index, start, stop, s.body, s.scope),
-    loc=s.loc, work=est, heavy=heavy,
+    loc=s.loc, work=est, heavy=heavy, warp_reduce=s.warp_reduce,
   )  # fmt: skip
 
 
@@ -1445,7 +1447,9 @@ def sink_gpu_scalar_loads(fn: ir.Function, target=None) -> None:
         nxt = block[j]
         if _touches_buf_or_impure(nxt, buf.uid):
           break
-        if isinstance(nxt, ParLoop) and nxt.shared_tile is None and nxt.monoidal_tile is None:
+        if (
+          isinstance(nxt, ParLoop) and nxt.shared_tile is None and nxt.monoidal_tile is None and nxt.warp_reduce is None
+        ):
           hdr_uses = sum(
             1
             for h in (nxt.total, nxt.nchunks, *(() if nxt.work is None else (nxt.work,)))

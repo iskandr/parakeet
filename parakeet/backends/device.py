@@ -140,6 +140,11 @@ class DevicePlanner:
         for x in ir.walk_expr(e):
           if isinstance(x, ir.Var):
             used[x.uid] = x
+    if loop.warp_reduce is not None:
+      for e in (*loop.warp_reduce.shape, *loop.warp_reduce.reduce.shape):
+        for x in ir.walk_expr(e):
+          if isinstance(x, ir.Var):
+            used[x.uid] = x
     if loop.monoidal_tile is not None:
       mp = loop.monoidal_tile
       mp_bound: set[int] = {v.uid for v in mp.batch_index}

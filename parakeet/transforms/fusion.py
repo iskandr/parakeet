@@ -441,6 +441,78 @@ def fuse_vertical_pair(
           producer.parallel = producer.parallel and consumer.parallel
           return producer, buf.uid
 
+      # Reshape-transparent epilogue fusion: producer writes row-major (e.g. matmul (B*T, N))
+      # and consumer maps over a reshaped layout of the same total size (e.g. (B, T, N)).
+      if (
+        not allow_partial
+        and not contains_reduce(consumer)
+        and _is_row_major_store(store_index, producer, facts)
+        and facts.same_expr(ops.iprod(producer.shape), ops.iprod(consumer.shape))
+        and consumer.index
+      ):
+        elem = Var("v", buf.type.elt)
+        consumer_body = [t for t in consumer.body if not (isinstance(t, ir.ReleaseScope) and t.scope is consumer.scope)]
+        c_facts = facts.fork()
+        for t in consumer_body:
+          c_facts.record_stmt(t)
+        c_row: Expr = consumer.index[0]
+        for idx_v, dim in zip(consumer.index[1:], consumer.shape[1:]):
+          c_row = ops.iadd(ops.imul(c_row, dim), idx_v)
+        c_expected_key = c_facts.expr_key(c_row)
+        rewriter = InlineBufferLoad(
+          {v.uid: v for v in defined([consumer]).values()}, buf, c_expected_key, elem, c_facts
+        )
+        # First verify every Load of buf is at row-major consumer index and rewrite to elem
+        replaced_body = rewriter.block(consumer_body)
+        if rewriter.ok and rewriter.replaced == consumer_reads:
+          # Map producer.index -> consumer.index, sharing any identical trailing dimensions
+          p_rank, c_rank = len(producer.shape), len(consumer.shape)
+          tail = 0
+          while tail < min(p_rank, c_rank) and facts.same_expr(
+            producer.shape[p_rank - 1 - tail], consumer.shape[c_rank - 1 - tail]
+          ):
+            tail += 1
+          p_lead = p_rank - tail
+          c_lead = c_rank - tail
+          c_subst: dict[int, Expr] = {}
+          for t_i in range(tail):
+            c_subst[consumer.index[c_rank - 1 - t_i].uid] = producer.index[p_rank - 1 - t_i]
+          unravel_stmts: list[ir.Stmt] = []
+          if c_lead > 0:
+            if p_lead == 0:
+              flat_lead: Expr = Const(0, ops.I)
+            else:
+              flat_lead = producer.index[0]
+              for idx_v, dim in zip(producer.index[1:p_lead], producer.shape[1:p_lead]):
+                flat_lead = ops.iadd(ops.imul(flat_lead, dim), idx_v)
+            rem = flat_lead
+            if c_lead == 1:
+              cv = Var(consumer.index[0].name, consumer.index[0].type)
+              unravel_stmts.append(Assign(cv, rem))
+              c_subst[consumer.index[0].uid] = cv
+            else:
+              c_strides: list[Expr] = [Const(1, ops.I)] * c_lead
+              for k_i in range(c_lead - 2, -1, -1):
+                c_strides[k_i] = ops.imul(c_strides[k_i + 1], consumer.shape[k_i + 1])
+              for k_i in range(c_lead - 1):
+                qv = Var(consumer.index[k_i].name, consumer.index[k_i].type)
+                rv = Var("rem", ops.I)
+                unravel_stmts.append(Assign(qv, ops.idiv(rem, c_strides[k_i])))
+                unravel_stmts.append(Assign(rv, ops.isub(rem, ops.imul(qv, c_strides[k_i]))))
+                c_subst[consumer.index[k_i].uid] = qv
+                rem = rv
+              last_v = Var(consumer.index[c_lead - 1].name, consumer.index[c_lead - 1].type)
+              unravel_stmts.append(Assign(last_v, rem))
+              c_subst[consumer.index[c_lead - 1].uid] = last_v
+          cl = Cloner(c_subst)
+          final_consumer_body = [cl.stmt(t) for t in replaced_body]
+          producer.body[:] = (
+            prefix + [Assign(elem, value)] + unravel_stmts + final_consumer_body + [ir.ReleaseScope(producer.scope)]
+          )
+          producer.scope.owned.extend(cl.scope(rewriter.scope(consumer.scope)).owned)
+          producer.parallel = producer.parallel and consumer.parallel
+          return producer, buf.uid
+
       # Generalized affine Map -> Map: transpose, shifted slice/stencil, broadcast, multi-load.
       # Never inline into a Load nested inside an inner loop/reduction of consumer (that would
       # multiply execution count and undo intentional layout copies like ``bt = b.T.copy()``).
@@ -1549,6 +1621,84 @@ def contains_reduce(s: IndexMap) -> bool:
   return any(isinstance(t, IndexReduce) for t in ir.walk_stmts(s.body))
 
 
+def _split_single_reduce_map(s: IndexMap) -> tuple[list[ir.Stmt], IndexReduce, list[ir.Stmt]] | None:
+  """Return ``(pre, red, post)`` if ``s`` has a single top-level ``IndexReduce`` and no other nested loops."""
+  body = [t for t in s.body if not (isinstance(t, ir.ReleaseScope) and t.scope is s.scope)]
+  red_pos = [idx for idx, t in enumerate(body) if isinstance(t, IndexReduce)]
+  if len(red_pos) != 1:
+    return None
+  pos = red_pos[0]
+  pre, red, post = body[:pos], body[pos], body[pos + 1 :]
+  assert isinstance(red, IndexReduce)
+  if any(
+    isinstance(t, (IndexMap, IndexReduce, ir.ForRange, ir.While))
+    for t in (*ir.walk_stmts(pre), *ir.walk_stmts(post), *ir.walk_stmts(red.body))
+  ):
+    return None
+  return pre, red, post
+
+
+def _looks_like_contraction(m: IndexMap, red: IndexReduce) -> bool:
+  """True if a 2D+ ``IndexMap(IndexReduce)`` has separable row/col loads (like matmul/allpairs/einsum)."""
+  if len(m.shape) < 2 or len(red.shape) != 1:
+    return False
+  row_uid = m.index[-2].uid
+  col_uid = m.index[-1].uid
+  has_row_only = False
+  has_col_only = False
+  for s in ir.walk_stmts([*m.body]):
+    for e in ir.stmt_exprs(s):
+      for x in ir.walk_expr(e):
+        if isinstance(x, ir.Load):
+          uids = {v.uid for v in ir.walk_expr(x.index) if isinstance(v, Var)}
+          if row_uid in uids and col_uid not in uids:
+            has_row_only = True
+          elif col_uid in uids and row_uid not in uids:
+            has_col_only = True
+  return has_row_only and has_col_only
+
+
+def fuse_reduce_maps(a: IndexMap, b: IndexMap, facts: IndexFacts, allocs: set[int] | BufferInfo) -> bool:
+  """Sibling-fuse two independent non-contraction ``IndexMap(IndexReduce)`` statements
+  over the same outer and inner shapes (e.g. LayerNorm backward ``d_bias`` + ``d_gain``
+  or ``g_mean`` + ``gx_mean``)."""
+  if a.ordered != b.ordered or a.parallel != b.parallel or not facts.same_shape(a.shape, b.shape):
+    return False
+  sa = _split_single_reduce_map(a)
+  sb = _split_single_reduce_map(b)
+  if sa is None or sb is None:
+    return False
+  a_pre, a_red, a_post = sa
+  b_pre, b_red, b_post = sb
+  # Leave 2D+ contractions (matmul/einsum/allpairs) untouched for tiling
+  if _looks_like_contraction(a, a_red) or _looks_like_contraction(b, b_red):
+    return False
+  a_reads, a_writes = buffer_accesses(a.body)
+  b_reads, b_writes = buffer_accesses(b.body)
+  if buffers_may_alias(a_writes, b_reads | b_writes, allocs) or buffers_may_alias(b_writes, a_reads | a_writes, allocs):
+    return False
+  local_allocs = allocs.local_allocs if isinstance(allocs, BufferInfo) else allocs
+  if any(isinstance(t, ir.Check) for t in ir.walk_stmts(b.body)) and any(u not in local_allocs for u in a_writes):
+    return False
+  if any(isinstance(t, (ir.Store, ir.IndexScatter)) for t in (*ir.walk_stmts(a_pre), *ir.walk_stmts(b_pre))):
+    return False
+  cloner = Cloner({v.uid: v for v in defined([b]).values()})
+  cloner.m.update({v.uid: i for v, i in zip(b.index, a.index)})
+  b_pre_c = [cloner.stmt(t) for t in b_pre]
+  b_red_c = cloner.stmt(b_red)
+  assert isinstance(b_red_c, IndexReduce)
+  b_post_c = [cloner.stmt(t) for t in b_post]
+  sub_facts = facts.fork()
+  for t in (*a_pre, *b_pre_c):
+    sub_facts.record_stmt(t)
+  if not compatible(a_red, b_red_c, sub_facts):
+    return False
+  absorb(a_red, b_red_c)
+  a.body[:] = a_pre + b_pre_c + [a_red] + a_post + b_post_c + [ir.ReleaseScope(a.scope)]
+  a.scope.owned.extend(cloner.scope(b.scope).owned)
+  return True
+
+
 def compatible_maps(
   a: IndexMap, b: IndexMap, defs: dict[int, Expr] | IndexFacts, allocs: set[int] | BufferInfo
 ) -> bool:
@@ -1832,6 +1982,14 @@ def fuse_block(block: list, defs: dict[int, Expr] | IndexFacts, allocs: set[int]
           elif isinstance(t, ir.Alloc) and not uses([t], map_outputs):
             hoist.append(t)
           elif (
+            isinstance(t, ir.Check)
+            and not uses([t], map_outputs)
+            and (a_writes <= (allocs.local_allocs if isinstance(allocs, BufferInfo) else allocs))
+            and not any(isinstance(x, (ir.Load, ir.RtCall)) for e in ir.stmt_exprs(t) for x in ir.walk_expr(e))
+          ):
+            step_facts.record_stmt(t)
+            hoist.append(t)
+          elif (
             isinstance(t, Assign)
             and not isinstance(t.var.type, ir.BufType)
             and pure(t.value)
@@ -1859,6 +2017,12 @@ def fuse_block(block: list, defs: dict[int, Expr] | IndexFacts, allocs: set[int]
               sunk.extend(sink_more)
               k = j + 1
               continue
+            if fuse_reduce_maps(s, nxt, step_facts, allocs):
+              out.extend(hoist)
+              walk_facts = step_facts
+              sunk.extend(sink_more)
+              k = j + 1
+              continue
         # Bounded lookahead: pull later independent same-shape maps (e.g. Adam's pn/mn/vn
         # separated by other parameter tensors) into s while keeping buffer count <= 20.
         if not contains_reduce(s) and not s.ordered:
@@ -1871,8 +2035,9 @@ def fuse_block(block: list, defs: dict[int, Expr] | IndexFacts, allocs: set[int]
             def_writes: set[int] = set()
             hoist_assign_idx: dict[int, int] = {}
             alloc_idx_by_uid: dict[int, tuple[int, list[int]]] = {}
+            hoist_checks: list[int] = []
             scan_facts = walk_facts.fork()
-            limit = min(len(block), k + 320)
+            limit = min(len(block), k + 2400)
             for m in range(k, limit):
               t = block[m]
               if isinstance(t, ir.Comment):
@@ -1896,9 +2061,18 @@ def fuse_block(block: list, defs: dict[int, Expr] | IndexFacts, allocs: set[int]
                 continue
               if isinstance(t, ir.Incref):
                 continue
+              if (
+                isinstance(t, ir.Check)
+                and not uses([t], def_defs | def_writes | map_outputs)
+                and (a_writes <= (allocs.local_allocs if isinstance(allocs, BufferInfo) else allocs))
+                and not any(isinstance(x, (ir.Load, ir.RtCall)) for e in ir.stmt_exprs(t) for x in ir.walk_expr(e))
+              ):
+                scan_facts.record_stmt(t)
+                hoist_checks.append(m)
+                continue
               if isinstance(t, IndexMap) and not contains_reduce(t) and not t.ordered:
                 tr, tw = buffer_accesses(t.body)
-                hoist_indices: set[int] = set()
+                hoist_indices: set[int] = set(hoist_checks)
                 hoisted_uids: set[int] = set()
                 for u in tw:
                   if u in alloc_idx_by_uid:

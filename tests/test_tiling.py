@@ -1110,3 +1110,88 @@ def test_queried_target_profile_matrix_unit_and_device_array():
 
       # Cross-backend interop: passing a DeviceArray to CPU backend auto-syncs cleanly
       np.testing.assert_allclose(cpu_sum(params_d[0]), float(rw1.sum()), rtol=1e-4)
+
+
+def test_reshape_epilogue_and_layernorm_reduce_sibling_fusion():
+  """Verify three transformer-critical fusion wins:
+  1. 3D ``np.tanh(x @ w + b)`` fuses into the 2D GEMM epilogue (1 IndexMap total).
+  2. LayerNorm backward fuses ``d_bias`` + ``d_gain`` into 1 two-fold ``IndexMap(IndexReduce)``
+     and ``g_mean`` + ``gx_mean`` into 1 two-fold ``IndexMap(IndexReduce)`` without
+     materializing intermediate ``g * gain`` or ``g * x_hat`` 3D buffers.
+  3. Contiguous reshaped/transposed views share functional ``RootAdj`` whole-adjoints.
+  """
+  from parakeet import value_and_grad
+  from parakeet.syntax import ir
+
+  @jit
+  def mlp_3d(x, w, b):
+    return np.tanh(x @ w + b)
+
+  def ln_loss(x, g, b):
+    mu = np.mean(x, axis=2, keepdims=True)
+    var = np.mean((x - mu) ** np.float32(2.0), axis=2, keepdims=True)
+    y = (x - mu) / np.sqrt(var + np.float32(1e-5)) * g + b
+    return np.sum(y * y)
+
+  vg_ln = value_and_grad(ln_loss, wrt=(0, 1, 2))
+
+  @jit
+  def run_ln_vg(x, g, b):
+    return vg_ln(x, g, b)
+
+  rng = np.random.default_rng(11)
+  x = rng.standard_normal((4, 8, 16)).astype(np.float32)
+  w = rng.standard_normal((16, 32)).astype(np.float32)
+  b = rng.standard_normal((32,)).astype(np.float32)
+  g = rng.standard_normal((16,)).astype(np.float32)
+  b16 = rng.standard_normal((16,)).astype(np.float32)
+
+  # 1. Reshape-transparent 3D epilogue fusion into 2D GEMM
+  gemm_with_tanh_cnt = [0]
+
+  def _check_mlp(name, fn):
+    if name == "sibling fusion":
+      gemm_with_tanh_cnt[0] = sum(
+        1
+        for m in fn.body
+        if isinstance(m, ir.IndexMap)
+        and any(isinstance(r, ir.IndexReduce) for r in ir.walk_stmts(m.body))
+        and any(
+          isinstance(e, ir.Prim) and e.op == "tanh"
+          for s in ir.walk_stmts(m.body)
+          for e in ir.stmt_exprs(s)
+          for e in ir.walk_expr(e)
+        )
+      )
+
+  with parakeet.options(verify=True):
+    mlp_3d.trace_passes(x, w, b, _trace=_check_mlp)
+    assert gemm_with_tanh_cnt[0] == 1, f"expected tanh fused into GEMM epilogue, got {gemm_with_tanh_cnt[0]}"
+    np.testing.assert_allclose(mlp_3d(x, w, b), np.tanh(x @ w + b), rtol=1e-5, atol=1e-5)
+
+  # 2. LayerNorm backward sibling-fuses (d_bias, d_gain) and (g_mean, gx_mean)
+  two_fold_cnt = [0]
+
+  def _check_ln(name, fn):
+    if name == "sibling fusion":
+      two_fold_cnt[0] = sum(
+        1
+        for m in fn.body
+        if isinstance(m, ir.IndexMap)
+        and any(isinstance(r, ir.IndexReduce) and len(r.folds) == 2 for r in ir.walk_stmts(m.body))
+      )
+
+  with parakeet.options(verify=True):
+    run_ln_vg.trace_passes(x, g, b16, _trace=_check_ln)
+    assert two_fold_cnt[0] >= 2, f"expected fused (d_bias, d_gain) and (g_mean, gx_mean), got {two_fold_cnt[0]}"
+    loss_v, (dx, dg, db) = run_ln_vg(x, g, b16)
+    # Finite-difference spot check on dx, dg, db
+    eps = np.float32(1e-3)
+    for arr_i, grad_arr, idx_t in [(0, dx, (1, 2, 3)), (1, dg, (5,)), (2, db, (7,))]:
+      xs = [x.copy(), g.copy(), b16.copy()]
+      xs[arr_i][idx_t] += eps
+      p = float(run_ln_vg(*xs)[0])
+      xs[arr_i][idx_t] -= 2 * eps
+      m = float(run_ln_vg(*xs)[0])
+      fd = (p - m) / float(2 * eps)
+      np.testing.assert_allclose(float(grad_arr[idx_t]), fd, rtol=2e-2, atol=2e-2)

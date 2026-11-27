@@ -818,3 +818,66 @@ def test_native_cuda_rt_thread_isolation():
   # Verify every launch matched its own thread's (fn_id, stream_id) pair!
   assert sum(1 for fn, st, _ in launched_records if fn == 0x2000 and st == 0x1000) == 3
   assert sum(1 for fn, st, _ in launched_records if fn == 0x2100 and st == 0x1100) == 4
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="the simulator needs a POSIX C++ toolchain")
+def test_cuda_double_buffered_wmma_and_warp_row_reduce_in_simulator(tmp_path):
+  """Verify shape-adaptive double-buffered cp.async WMMA (NN/NT/TN/TT + 3D
+  reshaped epilogue fusion) and 1-warp-per-row coalesced CUDA row reductions."""
+  code = """
+import numpy as np, parakeet
+from parakeet import jit
+
+@jit(backend='cuda')
+def mm_all(a, b, bt, at):
+    return a @ b, a @ bt.T, at.T @ b, at.T @ bt.T
+
+@jit(backend='cuda')
+def mlp_3d(x, w, bias):
+    return np.tanh(x @ w + bias)
+
+@jit(backend='cuda')
+def ln_and_stats(x, g, b):
+    mu = np.mean(x, axis=2, keepdims=True)
+    var = np.mean((x - mu) ** np.float32(2.0), axis=2, keepdims=True)
+    y = (x - mu) / np.sqrt(var + np.float32(1e-5)) * g + b
+    return y, np.max(x, axis=2), np.min(x, axis=2)
+
+rng = np.random.default_rng(19)
+with parakeet.options(device_threshold=1, blas=False, tensor_cores=True, verify=True):
+    a = rng.standard_normal((130, 35)).astype(np.float32) * 0.2
+    b = rng.standard_normal((35, 65)).astype(np.float32) * 0.2
+    bt = rng.standard_normal((65, 35)).astype(np.float32) * 0.2
+    at = rng.standard_normal((35, 130)).astype(np.float32) * 0.2
+    spec_mm = mm_all.specialize(a, b, bt, at)
+    src_mm = "\\n".join(spec_mm.kernels)
+    assert "pk_cp_async_16" in src_mm and "col_major" in src_mm, src_mm
+    nn, nt, tn, tt = mm_all(a, b, bt, at)
+    np.testing.assert_allclose(nn, a @ b, rtol=1e-3, atol=1e-3)
+    np.testing.assert_allclose(nt, a @ bt.T, rtol=1e-3, atol=1e-3)
+    np.testing.assert_allclose(tn, at.T @ b, rtol=1e-3, atol=1e-3)
+    np.testing.assert_allclose(tt, at.T @ bt.T, rtol=1e-3, atol=1e-3)
+
+    x3 = rng.standard_normal((3, 17, 35)).astype(np.float32) * 0.2
+    w3 = rng.standard_normal((35, 67)).astype(np.float32) * 0.2
+    bias3 = rng.standard_normal((67,)).astype(np.float32) * 0.1
+    spec_mlp = mlp_3d.specialize(x3, w3, bias3)
+    assert len(spec_mlp.kernels) == 1 and "mma_sync" in spec_mlp.kernels[0], spec_mlp.kernels
+    np.testing.assert_allclose(mlp_3d(x3, w3, bias3), np.tanh(x3 @ w3 + bias3), rtol=1e-3, atol=1e-3)
+
+    x_ln = rng.standard_normal((4, 13, 65)).astype(np.float32) * 2.0 - 1.5
+    g_ln = rng.standard_normal((65,)).astype(np.float32)
+    b_ln = rng.standard_normal((65,)).astype(np.float32)
+    spec_ln = ln_and_stats.specialize(x_ln, g_ln, b_ln)
+    assert any("pk_shfl_down" in k for k in spec_ln.kernels), spec_ln.kernels
+    y_g, mx_g, mn_g = ln_and_stats(x_ln, g_ln, b_ln)
+    mu = np.mean(x_ln, axis=2, keepdims=True)
+    var = np.mean((x_ln - mu) ** np.float32(2.0), axis=2, keepdims=True)
+    y_ref = (x_ln - mu) / np.sqrt(var + np.float32(1e-5)) * g_ln + b_ln
+    np.testing.assert_allclose(y_g, y_ref, rtol=1e-4, atol=1e-4)
+    np.testing.assert_allclose(mx_g, np.max(x_ln, axis=2), rtol=1e-5, atol=1e-5)
+    np.testing.assert_allclose(mn_g, np.min(x_ln, axis=2), rtol=1e-5, atol=1e-5)
+print("wmma-warp-ok")
+"""
+  proc = run_script(tmp_path, code, PARAKEET_CUDA_SIMULATE="1")
+  assert proc.returncode == 0 and "wmma-warp-ok" in proc.stdout, proc.stdout + proc.stderr
