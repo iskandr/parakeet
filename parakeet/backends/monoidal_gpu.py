@@ -746,11 +746,15 @@ def _generate_flash_monoid_bwd(
   dq_buf = plan.out_bufs["dq"]
   dk_buf = plan.out_bufs["dk"]
   dv_buf = plan.out_bufs["dv"]
-  lse_buf = plan.aux_exprs["lse_buf"]
-  lse_off = plan.aux_exprs["lse_offset"]
+  lse_buf = plan.aux_exprs.get("lse_buf")
+  lse_off = plan.aux_exprs.get("lse_offset")
+  m_buf = plan.aux_exprs.get("m_buf")
+  m_off = plan.aux_exprs.get("m_offset")
+  l_buf = plan.aux_exprs.get("l_buf")
+  l_off = plan.aux_exprs.get("l_offset")
   d_buf = plan.aux_exprs["d_buf"]
   d_off = plan.aux_exprs["d_offset"]
-  assert isinstance(lse_buf, Var) and isinstance(d_buf, Var)
+  assert isinstance(d_buf, Var) and (isinstance(lse_buf, Var) or (isinstance(m_buf, Var) and isinstance(l_buf, Var)))
   act_q = int(plan.aux_exprs["active_q"].value) if isinstance(plan.aux_exprs.get("active_q"), ir.Const) else 1
   act_k = int(plan.aux_exprs["active_k"].value) if isinstance(plan.aux_exprs.get("active_k"), ir.Const) else 1
   act_v = int(plan.aux_exprs["active_v"].value) if isinstance(plan.aux_exprs.get("active_v"), ir.Const) else 1
@@ -838,11 +842,19 @@ def _generate_flash_monoid_bwd(
     lines.append(f"    if ({em.expr(plan.tile_false_guard)}) continue;")
 
   # Load lse_tile[32] and D_tile[32]
+  log_fn = "logf" if is_cuda and elt.name == "float32" else "log"
   lines.append(f"    if (pk_tid < {MONOID_BM}) {{")
   lines.append("      const " + idx_t + " pk_qi = pk_i0 + pk_tid;")
   lines.append("      if (pk_qi < pk_M) {")
   lines.append(f"        const {idx_t} pk_qflat = pk_batch_id * pk_M + pk_qi;")
-  lines.append(f"        pk_sh_lse[pk_tid] = {em.data(lse_buf)}[({idx_t})({em.expr(lse_off)}) + pk_qflat];")
+  if isinstance(lse_buf, Var) and lse_off is not None:
+    lines.append(f"        pk_sh_lse[pk_tid] = {em.data(lse_buf)}[({idx_t})({em.expr(lse_off)}) + pk_qflat];")
+  else:
+    assert isinstance(m_buf, Var) and m_off is not None and isinstance(l_buf, Var) and l_off is not None
+    lines.append(
+      f"        pk_sh_lse[pk_tid] = {em.data(m_buf)}[({idx_t})({em.expr(m_off)}) + pk_qflat] + "
+      f"{log_fn}({em.data(l_buf)}[({idx_t})({em.expr(l_off)}) + pk_qflat]);"
+    )
   lines.append(f"        pk_sh_d[pk_tid] = {em.data(d_buf)}[({idx_t})({em.expr(d_off)}) + pk_qflat];")
   lines.append("      } else {")
   lines.append(f"        pk_sh_lse[pk_tid] = {zero_lit}; pk_sh_d[pk_tid] = {zero_lit};")
@@ -1654,13 +1666,21 @@ def _generate_cce_bwd(
 
   dh_buf = plan.out_bufs["dh"]
   dw_buf = plan.out_bufs["dw"]
-  lse_buf = plan.aux_exprs["lse_buf"]
-  lse_off = plan.aux_exprs["lse_offset"]
+  lse_buf = plan.aux_exprs.get("lse_buf")
+  lse_off = plan.aux_exprs.get("lse_offset")
+  m_buf = plan.aux_exprs.get("m_buf")
+  m_off = plan.aux_exprs.get("m_offset")
+  l_buf = plan.aux_exprs.get("l_buf")
+  l_off = plan.aux_exprs.get("l_offset")
   g_buf = plan.aux_exprs["g_buf"]
   g_off = plan.aux_exprs["g_offset"]
   t_buf = plan.aux_exprs["target_buf"]
   t_off = plan.aux_exprs["target_offset"]
-  assert isinstance(lse_buf, Var) and isinstance(g_buf, Var) and isinstance(t_buf, Var)
+  assert (
+    isinstance(g_buf, Var)
+    and isinstance(t_buf, Var)
+    and (isinstance(lse_buf, Var) or (isinstance(m_buf, Var) and isinstance(l_buf, Var)))
+  )
   act_h = int(plan.aux_exprs["active_h"].value) if isinstance(plan.aux_exprs.get("active_h"), ir.Const) else 1
   act_w = int(plan.aux_exprs["active_w"].value) if isinstance(plan.aux_exprs.get("active_w"), ir.Const) else 1
 
@@ -1676,11 +1696,19 @@ def _generate_cce_bwd(
   lines.append(f"  {ct} pk_dw_reg[{MAX_REG_D // 4}];")
   lines.append(f"  for (int pk_u = 0; pk_u < {MAX_REG_D // 4}; ++pk_u) pk_dw_reg[pk_u] = {zero_lit};")
 
+  log_fn = "logf" if is_cuda and elt.name == "float32" else "log"
   lines.append(f"  for ({idx_t} pk_i0 = pk_m_start; pk_i0 < pk_m_end; pk_i0 += {MONOID_BM}) {{")
   lines.append(f"    if (pk_tid < {MONOID_BM}) {{")
   lines.append("      const " + idx_t + " pk_qi = pk_i0 + pk_tid;")
   lines.append("      if (pk_qi < pk_m_end) {")
-  lines.append(f"        pk_sh_lse[pk_tid] = {em.data(lse_buf)}[({idx_t})({em.expr(lse_off)}) + pk_qi];")
+  if isinstance(lse_buf, Var) and lse_off is not None:
+    lines.append(f"        pk_sh_lse[pk_tid] = {em.data(lse_buf)}[({idx_t})({em.expr(lse_off)}) + pk_qi];")
+  else:
+    assert isinstance(m_buf, Var) and m_off is not None and isinstance(l_buf, Var) and l_off is not None
+    lines.append(
+      f"        pk_sh_lse[pk_tid] = {em.data(m_buf)}[({idx_t})({em.expr(m_off)}) + pk_qi] + "
+      f"{log_fn}({em.data(l_buf)}[({idx_t})({em.expr(l_off)}) + pk_qi]);"
+    )
   lines.append(f"        pk_sh_g[pk_tid] = {em.data(g_buf)}[({idx_t})({em.expr(g_off)}) + pk_qi];")
   lines.append(f"        {idx_t} pk_tv = ({idx_t}){em.data(t_buf)}[({idx_t})({em.expr(t_off)}) + pk_qi];")
   lines.append("        if (pk_tv < 0) pk_tv += pk_N;")

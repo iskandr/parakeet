@@ -507,17 +507,32 @@ class TileRowFold:
 
 
 @dataclass(eq=False)
-class WarpRowReducePlan:
-  """CUDA 1-warp-per-row coalesced row-reduction plan for an N-D
-  ``IndexMap`` wrapping a 1-D contiguous ``IndexReduce`` (e.g. LayerNorm
-  ``mu``/``var``/``g_mean``+``gx_mean``, softmax ``max``/``sum``, ``D_i``)."""
+class WarpRowStage:
+  """One 1-D coalesced warp-reduction stage inside a :class:`WarpRowReducePlan`."""
 
-  shape: tuple[Expr, ...]
-  index: tuple[Var, ...]
   before: list[Stmt]
   reduce: IndexReduce
   after: list[Stmt]
+  broadcast_vars: list[Var] = field(default_factory=list)
+
+
+@dataclass(eq=False)
+class WarpRowReducePlan:
+  """CUDA 1-warp-per-row coalesced row-pipeline plan: 1+ sequential 1-D
+  contiguous warp reductions over the same inner axis ``k_dim`` plus an
+  optional trailing coalesced 1-D row epilogue ``IndexMap`` over ``k_dim``
+  (e.g. fused LayerNorm forward/backward, RMSNorm, Softmax, ``D_i``)."""
+
+  shape: tuple[Expr, ...]
+  index: tuple[Var, ...]
+  k_dim: Expr
+  stages: list[WarpRowStage]
+  epilogue: IndexMap | None = None
   pre_checks: list[Check] = field(default_factory=list)
+
+  @property
+  def reduce(self) -> IndexReduce:
+    return self.stages[0].reduce
 
 
 @dataclass(eq=False)

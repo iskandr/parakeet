@@ -367,9 +367,71 @@ def should_split_gpu_reduce(s: IndexMap, m: Shape, defs: dict[int, Expr], target
   return True
 
 
-def split_gpu_reduce(s: IndexMap, m: Shape, defs: dict[int, Expr], owner: Scope, target) -> list:
-  """Rewrite a low-occupancy GPU axis reduction into a runtime-guarded 2-pass
-  Split-K reduction:
+def _match_atomic_add_after(
+  m: Shape,
+  folds: list[ir.Fold],
+  block_allocs: dict[int, Alloc],
+  store_counts: dict[int, int],
+) -> list[tuple[ir.Store, list[ir.Stmt]]] | None:
+  """Check if ``m.after`` simply stores each float32 ``add`` fold result directly
+  to a freshly allocated same-block buffer (eligible for single-pass CUDA atomicAdd)."""
+  if not all(
+    f.op == "add"
+    and f.a.type.name == "float32"
+    and (f.init is None or (isinstance(f.init, Const) and f.init.value == 0.0))
+    for f in folds
+  ):
+    return None
+  fold_by_uid = {f.result.uid: i for i, f in enumerate(folds)}
+  # Disallow any reads of the output buffers inside before/reduce/after
+  stores: list[ir.Store] = []
+  for st in m.after:
+    if isinstance(st, (Assign, ir.Comment)):
+      continue
+    if isinstance(st, Store) and st.atomic is None:
+      stores.append(st)
+      continue
+    return None
+  if len(stores) != len(folds):
+    return None
+  seen_bufs: set[int] = set()
+  seen_folds: set[int] = set()
+  for st in stores:
+    if st.buf.uid not in block_allocs or store_counts.get(st.buf.uid, 0) != 1 or st.buf.uid in seen_bufs:
+      return None
+    if not isinstance(st.value, Var) or st.value.uid not in fold_by_uid:
+      return None
+    fi = fold_by_uid[st.value.uid]
+    if fi in seen_folds:
+      return None
+    seen_bufs.add(st.buf.uid)
+    seen_folds.add(fi)
+  # Ensure none of the output buffers are read anywhere in before/reduce/after
+  for st in ir.walk_stmts([*m.before, m.reduce, *m.after]):
+    exprs = (st.index, st.value) if isinstance(st, Store) else ir.stmt_exprs(st)
+    for e in exprs:
+      for x in ir.walk_expr(e):
+        if isinstance(x, Load) and x.buf.uid in seen_bufs:
+          return None
+  return [(st, []) for st in stores]
+
+
+def split_gpu_reduce(
+  s: IndexMap,
+  m: Shape,
+  defs: dict[int, Expr],
+  owner: Scope,
+  target,
+  block_allocs: dict[int, Alloc] | None = None,
+  store_counts: dict[int, int] | None = None,
+) -> list:
+  """Rewrite a low-occupancy GPU axis reduction into a runtime-guarded Split-K
+  reduction.
+
+  On CUDA, when all folds are float32 sums stored directly into freshly
+  allocated same-block buffers, emits a **single-pass** atomic-add kernel (zero
+  temporary partial buffers and 1 kernel launch instead of 2).  Otherwise emits
+  a general 2-pass Split-K reduction:
 
   * Pass 1: parallel ``IndexMap`` over ``(split, *out_shape)`` (with
     ``out_shape[-1]`` fastest for 100% warp-coalesced HBM reads), reducing
@@ -386,8 +448,8 @@ def split_gpu_reduce(s: IndexMap, m: Shape, defs: dict[int, Expr], owner: Scope,
   red_shape = tuple(lp.tmp(d, "k") for d in m.extent)
   red_total = lp.tmp(iprod(red_shape), "red_n")
   min_threads = max(target.num_compute_units * 256, 4096)
-  # Only pay for a 2-pass global Split-K reduction when the outer grid truly under-fills
-  # the GPU AND the reduction is long enough to amortize a second kernel + temp buffer
+  # Only pay for a Split-K reduction when the outer grid truly under-fills
+  # the GPU AND the reduction is long enough to amortize it
   # (e.g. backward bias/gain sum over (B, T)=4096 for C=256, NOT LayerNorm over C=256 for B*T=4096).
   long_red = ops.prim(
     "or",
@@ -410,13 +472,22 @@ def split_gpu_reduce(s: IndexMap, m: Shape, defs: dict[int, Expr], owner: Scope,
   tlp = Loops(then_blk, defs, owner)
   want = idiv(iadd(Const(min_threads, I), isub(out_total, ONE)), out_total)
   split = tlp.tmp(imin(Const(64, I), imin(idiv(red_total, Const(32, I)), imax(want, Const(2, I)))), "split")
-  part_n = tlp.tmp(imul(split, out_total), "part_n")
+
+  use_atomic = (
+    target.kind == "cuda"
+    and block_allocs is not None
+    and store_counts is not None
+    and _match_atomic_add_after(m, folds, block_allocs, store_counts) is not None
+  )
+
   pbufs: list[Var] = []
-  for f in folds:
-    pb = Var("gpart", BufType(f.a.type.strong))
-    owner.owned.append(pb)
-    tlp.emit(Alloc(pb, part_n, zero=False))
-    pbufs.append(pb)
+  if not use_atomic:
+    part_n = tlp.tmp(imul(split, out_total), "part_n")
+    for f in folds:
+      pb = Var("gpart", BufType(f.a.type.strong))
+      owner.owned.append(pb)
+      tlp.emit(Alloc(pb, part_n, zero=False))
+      pbufs.append(pb)
 
   # Pass 1: parallel over (split, *out_shape) -> coalesced along out_shape[-1]
   p_var = Var("p", I)
@@ -470,6 +541,24 @@ def split_gpu_reduce(s: IndexMap, m: Shape, defs: dict[int, Expr], owner: Scope,
   emit_step(k_lp, r_coords, accs, init_only=False)
   k_blk.append(ir.ReleaseScope(k_scope))
   p1_lp.emit(ForRange(kf, k_start, k1, ONE, k_blk, k_scope, simd=False))
+
+  if use_atomic:
+    assert block_allocs is not None
+    after_cloner = Cloner(dict(b_cloner.m))
+    for f, acc in zip(folds, accs):
+      after_cloner.m[f.result.uid] = acc
+    for v in defined(m.after).values():
+      after_cloner.var(v)
+    for t in m.after:
+      if isinstance(t, Store):
+        block_allocs[t.buf.uid].zero = True
+        p1_body.append(Store(t.buf, after_cloner.expr(t.index), after_cloner.expr(t.value), atomic="add"))
+      else:
+        p1_body.append(after_cloner.stmt(t))
+    p1_body.append(ir.ReleaseScope(p1_scope))
+    tlp.emit(IndexMap((split, *out_shape), (p_var, *p_out_idx), p1_body, p1_scope, False, True, s.loc))
+    lp.emit(If(cond, then_blk, [s]))
+    return out
 
   out_flat1 = row_major_index(p_out_idx, out_shape)
   part_pos1 = p1_lp.tmp(iadd(imul(p_var, out_total), out_flat1), "ppos")
@@ -530,20 +619,27 @@ def split_gpu_reduce(s: IndexMap, m: Shape, defs: dict[int, Expr], owner: Scope,
   return out
 
 
-def split_gpu_reduce_block(block: list, defs: dict[int, Expr], owner: Scope, target) -> list:
+def split_gpu_reduce_block(
+  block: list, defs: dict[int, Expr], owner: Scope, target, store_counts: dict[int, int] | None = None
+) -> list:
   """Apply :func:`split_gpu_reduce` across eligible axis reductions in ``block``."""
+  block_allocs: dict[int, Alloc] = {}
   out: list = []
   for s in block:
+    if isinstance(s, Alloc):
+      block_allocs[s.var.uid] = s
+      out.append(s)
+      continue
     if isinstance(s, If):
-      s.then[:] = split_gpu_reduce_block(s.then, defs, owner, target)
-      s.orelse[:] = split_gpu_reduce_block(s.orelse, defs, owner, target)
+      s.then[:] = split_gpu_reduce_block(s.then, defs, owner, target, store_counts)
+      s.orelse[:] = split_gpu_reduce_block(s.orelse, defs, owner, target, store_counts)
     elif isinstance(s, IndexReduce):
-      s.body[:] = split_gpu_reduce_block(s.body, defs, s.scope, target)
+      s.body[:] = split_gpu_reduce_block(s.body, defs, s.scope, target, store_counts)
     elif isinstance(s, (IndexMap, ForRange, ir.While, ir.ParLoop)):
-      s.body[:] = split_gpu_reduce_block(s.body, defs, s.scope, target)
+      s.body[:] = split_gpu_reduce_block(s.body, defs, s.scope, target, store_counts)
     m = match(s, defs, min_rank=1)
     if m is not None and should_split_gpu_reduce(s, m, defs, target):  # type: ignore[arg-type]
-      out.extend(split_gpu_reduce(s, m, defs, owner, target))  # type: ignore[arg-type]
+      out.extend(split_gpu_reduce(s, m, defs, owner, target, block_allocs, store_counts))  # type: ignore[arg-type]
     else:
       out.append(s)
   return out
@@ -557,9 +653,12 @@ def interchange(fn: ir.Function, options) -> None:
   target = getattr(options, "target", None)
   tw = target.interchange_tile() if target is not None else INTERCHANGE_TILE
   if target is not None and not target.prefer_interchange:
+    from .analysis import BufferInfo
+
+    binfo = BufferInfo.analyze(fn)
     if not target.supports_float64:
       fn.body[:] = interchange_block(fn.body, pure_defs(fn.body), fn.scope, metal_f64_only=True, tile_width_val=tw)
-    fn.body[:] = split_gpu_reduce_block(fn.body, pure_defs(fn.body), fn.scope, target)
+    fn.body[:] = split_gpu_reduce_block(fn.body, pure_defs(fn.body), fn.scope, target, binfo.store_counts)
     return
   fn.body[:] = interchange_block(fn.body, pure_defs(fn.body), fn.scope, tile_width_val=tw)
 
@@ -830,32 +929,8 @@ def extract_shared_tile_plan(
   )
 
 
-def extract_warp_reduce_plan(s: IndexMap, m: Shape, target) -> ir.WarpRowReducePlan | None:
-  """Return a CUDA 1-warp-per-row coalesced reduction plan when ``s`` is a
-  non-contraction GPU ``IndexMap`` wrapping a 1-D contiguous associative
-  ``IndexReduce`` (e.g. LayerNorm ``mu``/``var``/``g_mean``+``gx_mean``,
-  softmax ``max``/``sum``, or FlashAttention ``D_i``)."""
-  if target is None or target.kind != "cuda":
-    return None
-  if not s.parallel or s.ordered or s.scope.owned or m.reduce.scope.owned:
-    return None
-  red = m.reduce
-  if len(red.shape) != 1 or not red.folds:
-    return None
-  if not all(f.op in ("add", "mul", "max", "min") and not f.combine and not f.carries for f in red.folds):
-    return None
-  if not all(f.a.type.name in ("float32", "float64", "int32", "int64") for f in red.folds):
-    return None
-  if not all(isinstance(t, (Assign, ir.Comment)) for t in (*m.before, *red.body)):
-    return None
-  if any(isinstance(t, ir.Check) for t in ir.walk_stmts(m.after)):
-    return None
-  if any(isinstance(t, (ir.Store, ir.IndexScatter)) for t in ir.walk_stmts(m.before)):
-    return None
-  # Require at least one global Load with unit stride along the reduction variable k
-  # so 32 warp lanes perform 100% coalesced 128-byte cache-line reads.
-  k_uid = red.index[0].uid
-  local_defs = {t.var.uid: t.value for t in (*m.before, *red.body) if isinstance(t, Assign)}
+def _has_unit_k_load(stmts: list[ir.Stmt], extra_exprs: list[Expr], k_uid: int, local_defs: dict[int, Expr]) -> bool:
+  """True when at least one global Load in ``stmts`` / ``extra_exprs`` has unit stride along ``k_uid``."""
 
   def _has_unit_k(e: Expr, depth: int = 10) -> bool:
     if depth <= 0:
@@ -877,21 +952,138 @@ def extract_warp_reduce_plan(s: IndexMap, m: Shape, target) -> ir.WarpRowReduceP
           return _has_unit_k(a, depth - 1)
     return False
 
-  has_coalesced_load = any(
-    isinstance(x, Load) and _has_unit_k(x.index) for st in red.body for e in ir.stmt_exprs(st) for x in ir.walk_expr(e)
-  ) or any(isinstance(x, Load) and _has_unit_k(x.index) for f in red.folds for x in ir.walk_expr(f.value))
-  if not has_coalesced_load:
+  for st in stmts:
+    for e in ir.stmt_exprs(st):
+      for x in ir.walk_expr(e):
+        if isinstance(x, Load) and _has_unit_k(x.index):
+          return True
+  for e in extra_exprs:
+    for x in ir.walk_expr(e):
+      if isinstance(x, Load) and _has_unit_k(x.index):
+        return True
+  return False
+
+
+def extract_warp_row_pipeline_plan(s: IndexMap, defs: dict[int, Expr], target) -> ir.WarpRowReducePlan | None:
+  """Return a CUDA 1-warp-per-row coalesced plan when ``s`` is a non-contraction
+  ``IndexMap`` containing 1+ sequential 1-D contiguous ``IndexReduce`` stages
+  over the same inner axis ``K`` plus an optional trailing 1-D ``IndexMap``
+  row epilogue over ``K`` (fused LayerNorm fwd/bwd, RMSNorm, Softmax, ``D_i``)."""
+  from .analysis import IndexFacts
+
+  if target is None or target.kind != "cuda":
     return None
-  # Skip statically tiny reductions (< 16 elements) where 1 thread/row is already optimal
-  if isinstance(red.shape[0], Const) and int(red.shape[0].value) < 16:
+  if not isinstance(s, IndexMap) or not s.parallel or s.ordered or s.scope.owned:
     return None
+  body = [t for t in s.body if not (isinstance(t, ir.ReleaseScope) and t.scope is s.scope)]
+  if not body:
+    return None
+
+  facts = IndexFacts(defs)
+  for t in body:
+    facts.record_stmt(t)
+
+  # Split body into sequential [before_i, IndexReduce_i, after_i] stages + optional trailing IndexMap epilogue
+  epilogue: IndexMap | None = None
+  if isinstance(body[-1], IndexMap):
+    ep = body[-1]
+    if ep.ordered or ep.scope.owned or len(ep.shape) != 1:
+      return None
+    if any(isinstance(t, (IndexMap, IndexReduce, ir.Check, ir.ForRange, ir.While)) for t in ir.walk_stmts(ep.body)):
+      return None
+    epilogue = ep
+    body = body[:-1]
+
+  red_positions = [i for i, t in enumerate(body) if isinstance(t, IndexReduce)]
+  if not red_positions:
+    return None
+
+  k_dim: Expr | None = None
+  raw_stages: list[tuple[list[ir.Stmt], IndexReduce, list[ir.Stmt]]] = []
+  prev_end = 0
+  for idx_pos, pos in enumerate(red_positions):
+    red = body[pos]
+    assert isinstance(red, IndexReduce)
+    if red.scope.owned or len(red.shape) != 1 or not red.folds:
+      return None
+    if not all(f.op in ("add", "mul", "max", "min") and not f.combine and not f.carries for f in red.folds):
+      return None
+    if not all(f.a.type.name in ("float32", "float64", "int32", "int64") for f in red.folds):
+      return None
+    if k_dim is None:
+      k_dim = red.shape[0]
+    elif not facts.same_expr(k_dim, red.shape[0]):
+      return None
+    nxt_pos = red_positions[idx_pos + 1] if idx_pos + 1 < len(red_positions) else len(body)
+    before = body[prev_end:pos] if idx_pos == 0 else []
+    after = body[pos + 1 : nxt_pos]
+    prev_end = nxt_pos
+    if not all(isinstance(t, (Assign, ir.Comment)) for t in (*before, *red.body)):
+      return None
+    if any(isinstance(t, (IndexMap, IndexReduce, ir.Check, ir.ForRange, ir.While)) for t in ir.walk_stmts(after)):
+      return None
+    if any(isinstance(t, (ir.Store, ir.IndexScatter)) for t in ir.walk_stmts(before)):
+      return None
+    local_defs = {t.var.uid: t.value for t in (*before, *red.body) if isinstance(t, Assign)}
+    if not _has_unit_k_load(red.body, [f.value for f in red.folds], red.index[0].uid, local_defs):
+      return None
+    raw_stages.append((before, red, after))
+
+  assert k_dim is not None
+  if epilogue is not None and not facts.same_expr(k_dim, epilogue.shape[0]):
+    return None
+  if isinstance(k_dim, Const) and int(k_dim.value) < 16:
+    return None
+
+  # Determine which scalar variables defined in stage i's `after` (or fold results)
+  # are read by later stages or the epilogue, so lane 0 broadcasts them to all 32 lanes.
+  stages: list[ir.WarpRowStage] = []
+  for si, (before, red, after) in enumerate(raw_stages):
+    later_stmts: list[ir.Stmt] = []
+    for sj in range(si + 1, len(raw_stages)):
+      later_stmts.extend(raw_stages[sj][0])
+      later_stmts.append(raw_stages[sj][1])
+      later_stmts.extend(raw_stages[sj][2])
+    if epilogue is not None:
+      later_stmts.append(epilogue)
+    later_used: set[int] = set()
+    for st in ir.walk_stmts(later_stmts):
+      for e in ir.stmt_exprs(st):
+        for x in ir.walk_expr(e):
+          if isinstance(x, Var):
+            later_used.add(x.uid)
+    bcast: list[Var] = []
+    seen_b: set[int] = set()
+    for f in red.folds:
+      if f.result.uid in later_used and f.result.uid not in seen_b:
+        bcast.append(f.result)
+        seen_b.add(f.result.uid)
+    for t in after:
+      if (
+        isinstance(t, Assign)
+        and not isinstance(t.var.type, BufType)
+        and t.var.uid in later_used
+        and t.var.uid not in seen_b
+      ):
+        bcast.append(t.var)
+        seen_b.add(t.var.uid)
+    stages.append(ir.WarpRowStage(before=list(before), reduce=red, after=list(after), broadcast_vars=bcast))
+
   return ir.WarpRowReducePlan(
     shape=s.shape,
     index=s.index,
-    before=list(m.before),
-    reduce=red,
-    after=list(m.after),
+    k_dim=k_dim,
+    stages=stages,
+    epilogue=epilogue,
   )
+
+
+def extract_warp_reduce_plan(s: IndexMap, m: Shape, target) -> ir.WarpRowReducePlan | None:
+  """Return a CUDA 1-warp-per-row coalesced reduction plan when ``s`` is a
+  non-contraction GPU ``IndexMap`` wrapping a 1-D contiguous associative
+  ``IndexReduce`` (e.g. LayerNorm ``mu``/``var``/``g_mean``+``gx_mean``,
+  softmax ``max``/``sum``, or FlashAttention ``D_i``)."""
+  return extract_warp_row_pipeline_plan(s, {}, target)
 
 
 def tiled(s: IndexMap, m: Shape, defs: dict[int, Expr], owner: Scope, tile_bytes: int, target=None) -> list:
@@ -913,7 +1105,7 @@ def tiled(s: IndexMap, m: Shape, defs: dict[int, Expr], owner: Scope, tile_bytes
     # in a CPU cache-tile loop: that would collapse thousands of parallel GPU threads
     # into a handful of serial 32x32 cache-tile threads.
     if target.supports_float64 or not any(f.a.type.name == "float64" for f in m.reduce.folds):
-      wp = extract_warp_reduce_plan(s, m, target)
+      wp = extract_warp_row_pipeline_plan(s, defs, target)
       if wp is not None:
         s.warp_reduce = wp
       return [s]
@@ -989,12 +1181,10 @@ def tile_block(block: list, defs: dict[int, Expr], owner: Scope, tile_bytes: int
       s.body[:] = tile_block(s.body, defs, s.scope, tile_bytes, target)
     m = match(s, defs)
     if m is None:
-      if target is not None and target.kind == "cuda":
-        m1 = match(s, defs, min_rank=1)
-        if m1 is not None:
-          wp = extract_warp_reduce_plan(s, m1, target)  # type: ignore[arg-type]
-          if wp is not None:
-            s.warp_reduce = wp  # type: ignore[union-attr]
+      if target is not None and target.kind == "cuda" and isinstance(s, IndexMap):
+        wp = extract_warp_row_pipeline_plan(s, defs, target)
+        if wp is not None:
+          s.warp_reduce = wp
       out.append(s)
     else:
       out.extend(tiled(s, m, defs, owner, tile_bytes, target))  # type: ignore[arg-type]

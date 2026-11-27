@@ -65,13 +65,16 @@ replicates / `n = 11` CPU replicates).
   PyKeOps (**1.254 ms**) and CuPy (**17.18 ms**), while `torch.compile(cdist)`
   (**0.308 ms**) and JAX `jit` (**0.602 ms**) lead.
 * **End-to-end nanoGPT training (NVIDIA L4, zero cuBLAS in Parakeet):**
-  Shape-adaptive double-buffered `cp.async` WMMA tiles, reshape-transparent
-  epilogue fusion, and 1-warp-per-row reductions cut step time from **6.83 ms to
-  4.69 ms** on the small 2-layer model (**2.06× faster** than PyTorch eager at
-  **9.67 ms**) and from **32.32 ms to 19.54 ms** (**1.65× faster**) on the
-  medium 4-layer model, matching PyTorch eager (**18.96 ms**, backed by cuBLAS
-  and cuDNN) and within **1.31×** of `torch.compile` (**14.91 ms**) while
-  compiling faster than both `torch.compile` (29.8 s) and JAX `jit` (23.5 s).
+  Shape-adaptive double-buffered `cp.async` WMMA tiles, multi-stage warp-per-row
+  LayerNorm pipelines, single-pass atomic reductions, disjoint-union horizontal
+  map batching, and alpha-canonical kernel deduplication cut launches/step by
+  **63%–66%** (`214 → 80` on `L=2`, `437 → 147` on `L=4`) and cut step time from
+  **6.83 ms to 4.57 ms** on the small 2-layer model (**1.95× faster** than
+  PyTorch eager at **8.88 ms**) and from **32.32 ms to 17.81 ms** (**1.81×
+  faster**) on the medium 4-layer model, beating PyTorch eager (**18.93 ms**,
+  backed by cuBLAS and cuDNN) and within **1.21×** of `torch.compile`
+  (**14.76 ms**) while compiling faster than both `torch.compile` (29.3 s) and
+  JAX `jit` (23.8 s) (`9.35 s` on `L=2`, `18.15 s` on `L=4`).
 
 ---
 
@@ -184,15 +187,16 @@ optimizer directly into the training step;
 [`torch.compile`](https://pytorch.org/docs/stable/generated/torch.compile.html)
 wraps the forward/loss and runs the optimizer separately. Parakeet compiles all
 GEMM, attention, LayerNorm, and Adam kernels natively via NVRTC with **zero
-cuBLAS calls** (cutting launches/step from `437` to `271` on `L=4`). FP32 loss
-curves match PyTorch to `4e-5` (`4.21668 → 3.38968` vs. `3.38972` on `L=4`), and
-TF32 loss curves match JAX's TF32 (`3.48364` vs. `3.47658`).
-[Follow the complete nanoGPT walkthrough](gallery/nanogpt.md).
+cuBLAS calls** (cutting launches/step from `437` to `147` on `L=4` and from
+`214` to `80` on `L=2`, with `429 → 44` alpha-unique NVRTC kernels on `L=4`).
+FP32 loss curves match PyTorch (`4.20043 → 1.42628` vs. `1.42628` on `L=2`;
+`4.21668 → 3.38995` vs. `3.38972` on `L=4`), and TF32 loss curves track JAX's
+TF32. [Follow the complete nanoGPT walkthrough](gallery/nanogpt.md).
 
 | Batch × context × width × layers | Parakeet FP32 | Parakeet TF32 (WMMA) | Parakeet `0dcb7d5` TF32 | PyTorch eager | `torch.compile` | JAX `jit` |
 |---|---:|---:|---:|---:|---:|---:|
-| `16 × 64 × 128 × 2` | **4.685 ms** | **4.749 ms** | 6.833 ms | 9.667 ms | 3.688 ms | 1.562 ms |
-| `32 × 128 × 256 × 4` | **37.388 ms** | **19.542 ms** | 32.317 ms | 18.956 ms | 14.913 ms | 9.167 ms |
+| `16 × 64 × 128 × 2` | **4.565 ms** | **4.670 ms** | 6.833 ms | 8.881 ms | 3.634 ms | 1.594 ms |
+| `32 × 128 × 256 × 4` | **35.238 ms** | **17.808 ms** | 32.317 ms | 18.925 ms | 14.759 ms | 9.184 ms |
 
 ---
 

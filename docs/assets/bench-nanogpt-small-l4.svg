@@ -17,22 +17,22 @@
 <text x="556.4" y="310.0" text-anchor="middle" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12" fill="#64748b">10</text>
 <text x="389.0" y="328.0" text-anchor="middle" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#64748b">Step time (ms, lower is better)</text>
 <text x="194.0" y="87.8" text-anchor="end" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="500" fill="#0f172a">JAX jit (XLA + cuBLAS)</text>
-<rect x="204.0" y="72.0" width="55.0" height="22.0" rx="3.5" fill="#2563eb" fill-opacity="0.88"/>
-<text x="584.0" y="87.8" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="500" fill="#0f172a">1.56 ms</text>
+<rect x="204.0" y="72.0" width="56.2" height="22.0" rx="3.5" fill="#2563eb" fill-opacity="0.88"/>
+<text x="584.0" y="87.8" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="500" fill="#0f172a">1.59 ms</text>
 <line x1="204.0" y1="102.0" x2="574.0" y2="102.0" stroke="#f1f5f9"/>
 <text x="194.0" y="125.8" text-anchor="end" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="500" fill="#0f172a">torch.compile (cuBLAS)</text>
-<rect x="204.0" y="110.0" width="130.0" height="22.0" rx="3.5" fill="#2563eb" fill-opacity="0.88"/>
-<text x="584.0" y="125.8" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="500" fill="#0f172a">3.69 ms</text>
+<rect x="204.0" y="110.0" width="128.1" height="22.0" rx="3.5" fill="#2563eb" fill-opacity="0.88"/>
+<text x="584.0" y="125.8" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="500" fill="#0f172a">3.63 ms</text>
 <rect x="205.0" y="142.3" width="368.0" height="33.4" rx="3" fill="#f0fdfa"/>
 <line x1="204.0" y1="140.0" x2="574.0" y2="140.0" stroke="#f1f5f9"/>
 <text x="194.0" y="163.8" text-anchor="end" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#0f766e">Parakeet FP32</text>
-<rect x="204.0" y="148.0" width="165.1" height="22.0" rx="3.5" fill="#0f766e" fill-opacity="0.88"/>
-<text x="584.0" y="163.8" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="700" fill="#0f766e">4.68 ms</text>
+<rect x="204.0" y="148.0" width="160.9" height="22.0" rx="3.5" fill="#0f766e" fill-opacity="0.88"/>
+<text x="584.0" y="163.8" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="700" fill="#0f766e">4.57 ms</text>
 <rect x="205.0" y="180.3" width="368.0" height="33.4" rx="3" fill="#f0fdfa"/>
 <line x1="204.0" y1="178.0" x2="574.0" y2="178.0" stroke="#f1f5f9"/>
 <text x="194.0" y="201.8" text-anchor="end" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#0f766e">Parakeet TF32 (WMMA)</text>
-<rect x="204.0" y="186.0" width="167.3" height="22.0" rx="3.5" fill="#0d9488" fill-opacity="0.88"/>
-<text x="584.0" y="201.8" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="700" fill="#0f766e">4.75 ms</text>
+<rect x="204.0" y="186.0" width="164.6" height="22.0" rx="3.5" fill="#0d9488" fill-opacity="0.88"/>
+<text x="584.0" y="201.8" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="700" fill="#0f766e">4.67 ms</text>
 <rect x="205.0" y="218.3" width="368.0" height="33.4" rx="3" fill="#fffbeb"/>
 <line x1="204.0" y1="216.0" x2="574.0" y2="216.0" stroke="#f1f5f9"/>
 <text x="194.0" y="239.8" text-anchor="end" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#d97706">Parakeet 0dcb7d5 TF32</text>
@@ -40,7 +40,7 @@
 <text x="584.0" y="239.8" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="700" fill="#d97706">6.83 ms</text>
 <line x1="204.0" y1="254.0" x2="574.0" y2="254.0" stroke="#f1f5f9"/>
 <text x="194.0" y="277.8" text-anchor="end" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="500" fill="#0f172a">PyTorch eager</text>
-<rect x="204.0" y="262.0" width="340.6" height="22.0" rx="3.5" fill="#64748b" fill-opacity="0.88"/>
-<text x="584.0" y="277.8" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="500" fill="#0f172a">9.67 ms</text>
+<rect x="204.0" y="262.0" width="312.9" height="22.0" rx="3.5" fill="#64748b" fill-opacity="0.88"/>
+<text x="584.0" y="277.8" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="500" fill="#0f172a">8.88 ms</text>
 <text x="20" y="340" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" fill="#64748b">Source: docs/assets/colab-l4-nanogpt.json · NVIDIA L4, median of 20 warmed steps (0 cuBLAS in Parakeet)</text>
 </svg>

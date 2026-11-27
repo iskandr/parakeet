@@ -19,8 +19,8 @@ import sys
 
 from . import toolchain
 
-MAX_SCALARS = 64
-MAX_BUFS = 32
+MAX_SCALARS = 128
+MAX_BUFS = 128
 MAX_TILED_DIMS = 8
 MAX_ERR_SLOTS = 256
 
@@ -33,8 +33,8 @@ CUDA_RT_SOURCE = r"""
 #include <pthread.h>
 
 #define PK_EXPORT __attribute__((visibility("default")))
-#define PK_MAX_SCALARS 64
-#define PK_MAX_BUFS 32
+#define PK_MAX_SCALARS 128
+#define PK_MAX_BUFS 128
 #define PK_MAX_DIMS 8
 #define PK_MAX_ERR_SLOTS 256
 #define PK_NUM_BUCKETS 64

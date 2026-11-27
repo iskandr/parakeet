@@ -961,15 +961,12 @@ def generate_warp_reduce_cuda_kernel(
   em: CFamilyEmitter,
   prelude: str,
 ) -> KernelPlan | None:
-  """Generate a CUDA 1-warp-per-row coalesced reduction kernel for
+  """Generate a CUDA 1-warp-per-row coalesced row-pipeline kernel for
   ``loop.warp_reduce`` (8 warps = 256 threads/block, 100% coalesced stride-32
-  reads, 5-step ``__shfl_down_sync`` reduction with zero shared memory)."""
+  reads, 5-step ``__shfl_down_sync`` reductions + ``__shfl_sync`` broadcasts
+  + optional trailing coalesced row epilogue, with zero shared memory)."""
   plan = loop.warp_reduce
-  if plan is None:
-    return None
-  red = plan.reduce
-  folds = red.folds
-  if len(red.shape) != 1 or not folds:
+  if plan is None or not plan.stages:
     return None
 
   scalars = [v for v in free if not isinstance(v.type, BufType)]
@@ -977,12 +974,13 @@ def generate_warp_reduce_cuda_kernel(
 
   for v in free:
     em.ctype(v.type.elt if isinstance(v.type, BufType) else v.type)
-  for e in (*plan.shape, *red.shape):
+  for e in (*plan.shape, plan.k_dim):
     for x in ir.walk_expr(e):
       if isinstance(x.type, ScalarType):
         em.ctype(x.type)
-  for f in folds:
-    em.ctype(f.a.type)
+  for st in plan.stages:
+    for f in st.reduce.folds:
+      em.ctype(f.a.type)
 
   lines: list[str] = [prelude]
   params = ["long long pk_total", "long long pk_csize"]
@@ -996,7 +994,7 @@ def generate_warp_reduce_cuda_kernel(
   lines.append("  const int pk_lane = (int)(pk_tid & 31LL);")
 
   lines.append(f"  const long long pk_N = (long long)({em.expr(plan.shape[-1])});")
-  lines.append(f"  const long long pk_K = (long long)({em.expr(red.shape[0])});")
+  lines.append(f"  const long long pk_K = (long long)({em.expr(plan.k_dim)});")
   lines.append("  const long long pk_nb_n = (pk_N + 7LL) / 8LL;")
   lines.append("  const long long pk_blk_n = pk_blk % pk_nb_n;")
   lines.append(f"  const long long {plan.index[-1].name} = pk_blk_n * 8LL + pk_wid;")
@@ -1012,7 +1010,7 @@ def generate_warp_reduce_cuda_kernel(
     lines.append(f"  const long long {plan.index[0].name} = pk_rem;")
 
   # Empty-reduction check for unseeded folds (e.g. np.max on 0-length axis)
-  empty_errs = [f.empty for f in folds if f.empty is not None]
+  empty_errs = [f.empty for st in plan.stages for f in st.reduce.folds if f.empty is not None]
   if empty_errs:
     eid = em.error_id(empty_errs[0])
     lines.append("  if (pk_K <= 0LL) {")
@@ -1020,95 +1018,127 @@ def generate_warp_reduce_cuda_kernel(
     lines.append("    return;")
     lines.append("  }")
 
-  # Uniform row setup (plan.before)
-  skip_before = {v.uid for v in plan.index}
-  _emit_decl_locals(em, plan.before, skip_before, lines, "  ")
-  em.block(plan.before, lines, 1)
+  declared_uids: set[int] = {v.uid for v in plan.index}
+  written: set[int] = set()
 
-  # Initialize per-lane fold accumulators
-  has_unseeded = any(f.op in ("max", "min") for f in folds)
-  acc_vars = [ir.Var(f"pk_acc_{fi}", f.a.type) for fi, f in enumerate(folds)]
-  for fi, f in enumerate(folds):
-    ct = em.ctype(f.a.type)
-    av = acc_vars[fi]
-    if f.op == "mul":
-      lines.append(f"  {ct} {av.name} = ({ct})1;")
-    else:
-      lines.append(f"  {ct} {av.name} = ({ct})0;")
-  if has_unseeded:
-    lines.append("  int pk_has = 0;")
+  for si, stage in enumerate(plan.stages):
+    red = stage.reduce
+    folds = red.folds
+    if stage.before:
+      _emit_decl_locals(em, stage.before, declared_uids, lines, "  ")
+      em.block(stage.before, lines, 1)
+      declared_uids |= set(defined_vars(stage.before))
 
-  # Coalesced stride-32 warp reduction loop
-  k_var = red.index[0]
-  lines.append(f"  for (long long {k_var.name} = (long long)pk_lane; {k_var.name} < pk_K; {k_var.name} += 32LL) {{")
-  _emit_decl_locals(em, red.body, {k_var.uid}, lines, "    ")
-  em.block(red.body, lines, 2)
-  for fi, f in enumerate(folds):
-    ct = em.ctype(f.a.type)
-    av = acc_vars[fi]
-    ve = em.expr(f.value)
-    if f.op == "add":
-      lines.append(f"    {av.name} += ({ct})({ve});")
-    elif f.op == "mul":
-      lines.append(f"    {av.name} *= ({ct})({ve});")
-    else:
-      v_tmp = ir.Var(f"pk_val_{fi}", f.a.type)
-      lines.append(f"    const {ct} {v_tmp.name} = ({ct})({ve});")
-      comb = em.expr(ir.Prim(f.op, (av, v_tmp), f.a.type))
-      lines.append(f"    {av.name} = pk_has ? ({comb}) : {v_tmp.name};")
-  if has_unseeded:
-    lines.append("    pk_has = 1;")
-  lines.append("  }")
+    has_unseeded = any(f.op in ("max", "min") for f in folds)
+    acc_vars = [ir.Var(f"pk_acc_{si}_{fi}", f.a.type) for fi, f in enumerate(folds)]
+    for fi, f in enumerate(folds):
+      ct = em.ctype(f.a.type)
+      av = acc_vars[fi]
+      if f.op == "mul":
+        lines.append(f"  {ct} {av.name} = ({ct})1;")
+      else:
+        lines.append(f"  {ct} {av.name} = ({ct})0;")
+    has_name = f"pk_has_{si}"
+    if has_unseeded:
+      lines.append(f"  int {has_name} = 0;")
 
-  # 5-step butterfly warp shuffle reduction (zero shared memory, zero __syncthreads!)
-  lines.append("  #pragma unroll")
-  lines.append("  for (int pk_off = 16; pk_off > 0; pk_off >>= 1) {")
-  if has_unseeded:
-    lines.append("    const int pk_ohas = pk_shfl_down(pk_has, pk_off);")
-  for fi, f in enumerate(folds):
-    ct = em.ctype(f.a.type)
-    av = acc_vars[fi]
-    o_tmp = ir.Var(f"pk_o_{fi}", f.a.type)
-    lines.append(f"    const {ct} {o_tmp.name} = pk_shfl_down({av.name}, pk_off);")
-    if f.op == "add":
-      lines.append(f"    {av.name} += {o_tmp.name};")
-    elif f.op == "mul":
-      lines.append(f"    {av.name} *= {o_tmp.name};")
-    else:
-      comb = em.expr(ir.Prim(f.op, (av, o_tmp), f.a.type))
-      lines.append(f"    if (pk_ohas) {av.name} = pk_has ? ({comb}) : {o_tmp.name};")
-  if has_unseeded:
-    lines.append("    pk_has |= pk_ohas;")
-  lines.append("  }")
+    # Coalesced stride-32 warp reduction loop
+    k_var = red.index[0]
+    lines.append(f"  for (long long {k_var.name} = (long long)pk_lane; {k_var.name} < pk_K; {k_var.name} += 32LL) {{")
+    _emit_decl_locals(em, red.body, declared_uids | {k_var.uid}, lines, "    ")
+    em.block(red.body, lines, 2)
+    for fi, f in enumerate(folds):
+      ct = em.ctype(f.a.type)
+      av = acc_vars[fi]
+      ve = em.expr(f.value)
+      if f.op == "add":
+        lines.append(f"    {av.name} += ({ct})({ve});")
+      elif f.op == "mul":
+        lines.append(f"    {av.name} *= ({ct})({ve});")
+      else:
+        v_tmp = ir.Var(f"pk_val_{si}_{fi}", f.a.type)
+        lines.append(f"    const {ct} {v_tmp.name} = ({ct})({ve});")
+        comb = em.expr(ir.Prim(f.op, (av, v_tmp), f.a.type))
+        lines.append(f"    {av.name} = {has_name} ? ({comb}) : {v_tmp.name};")
+    if has_unseeded:
+      lines.append(f"    {has_name} = 1;")
+    lines.append("  }")
 
-  # Lane 0 applies any non-identity init and runs plan.after (epilogue + stores)
-  lines.append("  if (pk_lane == 0) {")
-  for fi, f in enumerate(folds):
-    ct = em.ctype(f.a.type)
-    av = acc_vars[fi]
-    if f.init is not None:
-      is_triv_id = isinstance(f.init, ir.Const) and (
-        (f.op == "add" and f.init.value == 0) or (f.op == "mul" and f.init.value == 1)
-      )
-      if not is_triv_id:
-        init_e = em.expr(f.init)
-        if f.op == "add":
-          lines.append(f"    {av.name} = ({ct})({init_e}) + {av.name};")
-        elif f.op == "mul":
-          lines.append(f"    {av.name} = ({ct})({init_e}) * {av.name};")
-        else:
-          i_tmp = ir.Var(f"pk_init_{fi}", f.a.type)
-          lines.append(f"    const {ct} {i_tmp.name} = ({ct})({init_e});")
-          comb = em.expr(ir.Prim(f.op, (i_tmp, av), f.a.type))
-          lines.append(f"    {av.name} = pk_has ? ({comb}) : {i_tmp.name};")
-    lines.append(f"    const {ct} {f.result.name} = {av.name};")
-  skip_after = {v.uid for v in plan.index} | {f.result.uid for f in folds} | set(defined_vars(plan.before))
-  _emit_decl_locals(em, plan.after, skip_after, lines, "    ")
-  em.block(plan.after, lines, 2)
-  lines.append("  }")
+    # 5-step butterfly warp shuffle reduction (zero shared memory, zero __syncthreads!)
+    lines.append("  #pragma unroll")
+    lines.append("  for (int pk_off = 16; pk_off > 0; pk_off >>= 1) {")
+    if has_unseeded:
+      lines.append(f"    const int pk_ohas = pk_shfl_down({has_name}, pk_off);")
+    for fi, f in enumerate(folds):
+      ct = em.ctype(f.a.type)
+      av = acc_vars[fi]
+      o_tmp = ir.Var(f"pk_o_{si}_{fi}", f.a.type)
+      lines.append(f"    const {ct} {o_tmp.name} = pk_shfl_down({av.name}, pk_off);")
+      if f.op == "add":
+        lines.append(f"    {av.name} += {o_tmp.name};")
+      elif f.op == "mul":
+        lines.append(f"    {av.name} *= {o_tmp.name};")
+      else:
+        comb = em.expr(ir.Prim(f.op, (av, o_tmp), f.a.type))
+        lines.append(f"    if (pk_ohas) {av.name} = {has_name} ? ({comb}) : {o_tmp.name};")
+    if has_unseeded:
+      lines.append(f"    {has_name} |= pk_ohas;")
+    lines.append("  }")
+
+    # Declare broadcast row scalars at warp scope so all 32 lanes see them after lane 0 computes them
+    bcast_uids = {bv.uid for bv in stage.broadcast_vars}
+    for bv in stage.broadcast_vars:
+      if bv.uid not in declared_uids:
+        ct = em.ctype(bv.type)
+        lines.append(f"  {ct} {bv.name} = ({ct})0;")
+        declared_uids.add(bv.uid)
+
+    # Lane 0 applies any non-identity init and runs stage.after (scalar row math + write-through stores)
+    lines.append("  if (pk_lane == 0) {")
+    fold_res_uids: set[int] = set()
+    for fi, f in enumerate(folds):
+      ct = em.ctype(f.a.type)
+      av = acc_vars[fi]
+      if f.init is not None:
+        is_triv_id = isinstance(f.init, ir.Const) and (
+          (f.op == "add" and f.init.value == 0) or (f.op == "mul" and f.init.value == 1)
+        )
+        if not is_triv_id:
+          init_e = em.expr(f.init)
+          if f.op == "add":
+            lines.append(f"    {av.name} = ({ct})({init_e}) + {av.name};")
+          elif f.op == "mul":
+            lines.append(f"    {av.name} = ({ct})({init_e}) * {av.name};")
+          else:
+            i_tmp = ir.Var(f"pk_init_{si}_{fi}", f.a.type)
+            lines.append(f"    const {ct} {i_tmp.name} = ({ct})({init_e});")
+            comb = em.expr(ir.Prim(f.op, (i_tmp, av), f.a.type))
+            lines.append(f"    {av.name} = {has_name} ? ({comb}) : {i_tmp.name};")
+      if f.result.uid in bcast_uids:
+        lines.append(f"    {f.result.name} = {av.name};")
+      else:
+        lines.append(f"    const {ct} {f.result.name} = {av.name};")
+      fold_res_uids.add(f.result.uid)
+    _emit_decl_locals(em, stage.after, declared_uids | fold_res_uids, lines, "    ")
+    em.block(stage.after, lines, 2)
+    lines.append("  }")
+    for bv in stage.broadcast_vars:
+      lines.append(f"  {bv.name} = pk_shfl_bcast({bv.name}, 0);")
+    written |= {s.buf.uid for s in ir.walk_stmts(stage.after) if isinstance(s, ir.Store)}
+
+  # Optional trailing coalesced 1-D row epilogue over pk_K (all 32 warp lanes!)
+  if plan.epilogue is not None:
+    ep = plan.epilogue
+    ep_k = ep.index[0]
+    ep_body = [t for t in ep.body if not (isinstance(t, ir.ReleaseScope) and t.scope is ep.scope)]
+    lines.append(f"  for (long long {ep_k.name} = (long long)pk_lane; {ep_k.name} < pk_K; {ep_k.name} += 32LL) {{")
+    _emit_decl_locals(em, ep_body, declared_uids | {ep_k.uid}, lines, "    ")
+    em.block(ep_body, lines, 2)
+    lines.append("  }")
+    written |= {s.buf.uid for s in ir.walk_stmts(ep_body) if isinstance(s, ir.Store)}
+
   lines.append("}")
 
-  written = {s.buf.uid for s in ir.walk_stmts(plan.after) if isinstance(s, ir.Store)}
   raw_meta = [("c", int(d.value)) if isinstance(d, ir.Const) else ("v", d.name) for d in plan.shape]
   shape_meta = [("c", 1), raw_meta[0]] if len(raw_meta) == 1 else raw_meta
   tiled_info: dict = {

@@ -881,3 +881,116 @@ print("wmma-warp-ok")
 """
   proc = run_script(tmp_path, code, PARAKEET_CUDA_SIMULATE="1")
   assert proc.returncode == 0 and "wmma-warp-ok" in proc.stdout, proc.stdout + proc.stderr
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="the simulator needs a POSIX C++ toolchain")
+def test_cuda_row_pipeline_adam_batch_atomic_split_and_dedup_in_simulator(tmp_path):
+  """Verify multi-stage + epilogue WarpRowReducePlan (LayerNorm fwd/bwd),
+  disjoint-union horizontal map batching (heterogeneous Adam), single-pass
+  atomic split_gpu_reduce, alpha-canonical kernel dedup, and broadcast causal
+  mask FlashAttention backward in the CUDA simulator."""
+  code = """
+import numpy as np, parakeet
+from parakeet import jit, value_and_grad
+from parakeet.backends.cuda import _canonicalize_cuda_kernel
+
+def ln_loss(x, g, b):
+    mu = np.mean(x, axis=2, keepdims=True)
+    var = np.mean((x - mu) ** np.float32(2.0), axis=2, keepdims=True)
+    y = (x - mu) / np.sqrt(var + np.float32(1e-5)) * g + b
+    return np.sum(y * y)
+
+_vg_ln = value_and_grad(ln_loss, wrt=(0, 1, 2))
+
+@jit(backend='cuda')
+def ln_vg_cuda(x, g, b):
+    return _vg_ln(x, g, b)
+
+@jit(backend='c')
+def ln_vg_cpu(x, g, b):
+    return _vg_ln(x, g, b)
+
+@jit(backend='cuda')
+def adam_multi(p0, g0, m0, v0, p1, g1, m1, v1, p2, g2, m2, v2, lr):
+    b1, b2 = np.float32(0.9), np.float32(0.99)
+    def upd(p, g, m, v):
+        mn = b1 * m + (np.float32(1.0) - b1) * g
+        vn = b2 * v + (np.float32(1.0) - b2) * g * g
+        pn = p - (lr * mn) / (np.sqrt(vn) + np.float32(1e-8))
+        return pn, mn, vn
+    r0 = upd(p0, g0, m0, v0)
+    r1 = upd(p1, g1, m1, v1)
+    r2 = upd(p2, g2, m2, v2)
+    return r0, r1, r2
+
+def sdpa_loss(q, k, v, causal):
+    scores = (q @ k.transpose((0, 1, 3, 2))) * np.float32(1.0 / np.sqrt(q.shape[3]))
+    s = np.where(causal, scores, np.float32(-1e9))
+    m = np.max(s, axis=3, keepdims=True)
+    e = np.exp(s - m)
+    w = e / np.sum(e, axis=3, keepdims=True)
+    return np.sum((w @ v) ** np.float32(2.0))
+
+_vg_sdpa = value_and_grad(sdpa_loss, wrt=(0, 1, 2))
+
+@jit(backend='cuda')
+def sdpa_vg_cuda(q, k, v, causal):
+    return _vg_sdpa(q, k, v, causal)
+
+rng = np.random.default_rng(77)
+with parakeet.options(device_threshold=1, blas=False, verify=True):
+    # 1. LayerNorm fwd + bwd: single fused WarpRowReducePlan kernels (pk_shfl_bcast) + single-pass atomic d_g/d_b
+    x = rng.standard_normal((8, 16, 64)).astype(np.float32)
+    g = rng.standard_normal((64,)).astype(np.float32)
+    b = rng.standard_normal((64,)).astype(np.float32)
+    spec_ln = ln_vg_cuda.specialize(x, g, b)
+    assert any("pk_shfl_bcast" in k for k in spec_ln.kernels), spec_ln.kernels
+    assert any("atomicAdd" in k for k in spec_ln.kernels), spec_ln.kernels
+    l_g, (dx_g, dg_g, db_g) = ln_vg_cuda(x, g, b)
+    l_c, (dx_c, dg_c, db_c) = ln_vg_cpu(x, g, b)
+    np.testing.assert_allclose(float(l_g), float(l_c), rtol=1e-5, atol=1e-5)
+    np.testing.assert_allclose(dx_g, dx_c, rtol=1e-4, atol=1e-4)
+    np.testing.assert_allclose(dg_g, dg_c, rtol=1e-4, atol=1e-4)
+    np.testing.assert_allclose(db_g, db_c, rtol=1e-4, atol=1e-4)
+
+    # 2. Heterogeneous-shape Adam batches into 1 disjoint-union CUDA kernel
+    s0 = tuple(rng.standard_normal((17, 33)).astype(np.float32) for _ in range(4))
+    s1 = tuple(rng.standard_normal((11, 29)).astype(np.float32) for _ in range(4))
+    s2 = tuple(rng.standard_normal((53,)).astype(np.float32) for _ in range(4))
+    s0 = (s0[0], s0[1], np.zeros_like(s0[0]), np.zeros_like(s0[0]))
+    s1 = (s1[0], s1[1], np.zeros_like(s1[0]), np.zeros_like(s1[0]))
+    s2 = (s2[0], s2[1], np.zeros_like(s2[0]), np.zeros_like(s2[0]))
+    lr = np.float32(1e-3)
+    spec_a = adam_multi.specialize(*s0, *s1, *s2, lr)
+    assert len(spec_a.kernels) == 1, f"expected 1 batched Adam kernel, got {len(spec_a.kernels)}"
+    r0, r1, r2 = adam_multi(*s0, *s1, *s2, lr)
+    for (p, gg, m, v), (pn, mn, vn) in zip((s0, s1, s2), (r0, r1, r2)):
+        mn_r = np.float32(0.9) * m + np.float32(0.1) * gg
+        vn_r = np.float32(0.99) * v + np.float32(0.01) * gg * gg
+        pn_r = p - (lr * mn_r) / (np.sqrt(vn_r) + np.float32(1e-8))
+        np.testing.assert_allclose(pn, pn_r, rtol=1e-5, atol=1e-5)
+        np.testing.assert_allclose(mn, mn_r, rtol=1e-5, atol=1e-5)
+        np.testing.assert_allclose(vn, vn_r, rtol=1e-5, atol=1e-5)
+
+    # 3. Alpha-canonical CUDA kernel deduplication collapses IR UID differences
+    k1 = 'extern "C" __global__ void pk_kernel(long long n_10, float* arr_11_d) { arr_11_d[0] = (float)n_10; }'
+    k2 = 'extern "C" __global__ void pk_kernel(long long n_99, float* arr_42_d) { arr_42_d[0] = (float)n_99; }'
+    assert _canonicalize_cuda_kernel(k1) == _canonicalize_cuda_kernel(k2)
+
+    # 4. Batched multi-head SDPA with broadcast (1, 1, T, T) causal mask
+    q = rng.standard_normal((2, 2, 16, 16)).astype(np.float32)
+    k = rng.standard_normal((2, 2, 16, 16)).astype(np.float32)
+    v = rng.standard_normal((2, 2, 16, 16)).astype(np.float32)
+    causal = np.tril(np.ones((16, 16), dtype=bool))[None, None, :, :]
+    sc = (q @ k.transpose(0, 1, 3, 2)) * np.float32(1.0 / np.sqrt(16))
+    sm = np.where(causal, sc, np.float32(-1e9))
+    em = np.exp(sm - np.max(sm, axis=3, keepdims=True))
+    w_r = em / np.sum(em, axis=3, keepdims=True)
+    do_r = np.float32(2.0) * (w_r @ v)
+    dv_r = w_r.transpose(0, 1, 3, 2) @ do_r
+    _, (dq_g, dk_g, dv_g) = sdpa_vg_cuda(q, k, v, causal)
+    np.testing.assert_allclose(dv_g, dv_r, rtol=1e-4, atol=1e-4)
+print("fusion-sim-ok")
+"""
+  proc = run_script(tmp_path, code, PARAKEET_CUDA_SIMULATE="1")
+  assert proc.returncode == 0 and "fusion-sim-ok" in proc.stdout, proc.stdout + proc.stderr

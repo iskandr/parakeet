@@ -385,7 +385,9 @@ class HostEmitter(CFamilyEmitter):
     if s.warp_reduce is not None:
       warp_key = (
         tuple(expr_key(d) for d in s.warp_reduce.shape),
-        tuple(expr_key(d) for d in s.warp_reduce.reduce.shape),
+        expr_key(s.warp_reduce.k_dim),
+        len(s.warp_reduce.stages),
+        s.warp_reduce.epilogue is not None,
       )
     free_types = tuple(v.type for v in free)
     return (s.kind, free_types, body_key, owned_key, shared_key, monoid_key, warp_key), free

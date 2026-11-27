@@ -142,11 +142,13 @@ class IndexFacts:
     vars_by_uid: dict[int, Var] | None = None,
     bounds: dict[int, Expr] | None = None,
     guarded_eqs: list[tuple[frozenset[object], Expr, Expr]] | None = None,
+    expr_eqs: set[tuple[object, object]] | None = None,
   ) -> None:
     self.defs: dict[int, Expr] = {} if defs is None else dict(defs)
     self.vars_by_uid: dict[int, Var] = {} if vars_by_uid is None else dict(vars_by_uid)
     self.bounds: dict[int, Expr] = {} if bounds is None else dict(bounds)
     self.guarded_eqs: list[tuple[frozenset[object], Expr, Expr]] = [] if guarded_eqs is None else list(guarded_eqs)
+    self.expr_eqs: set[tuple[object, object]] = set() if expr_eqs is None else set(expr_eqs)
     self._poly_cache: dict[int, AffineExpr] = {}
 
   @classmethod
@@ -176,7 +178,7 @@ class IndexFacts:
     return cls(pure, vmap)
 
   def fork(self) -> IndexFacts:
-    return IndexFacts(self.defs, self.vars_by_uid, self.bounds, self.guarded_eqs)
+    return IndexFacts(self.defs, self.vars_by_uid, self.bounds, self.guarded_eqs, self.expr_eqs)
 
   def note_var(self, v: Var) -> None:
     self.vars_by_uid[v.uid] = v
@@ -256,6 +258,11 @@ class IndexFacts:
       if isinstance(ra, Var):
         self.vars_by_uid[ra.uid] = ra
       self._poly_cache.clear()
+    else:
+      ka, kb = self.expr_key(a), self.expr_key(b)
+      if ka != kb:
+        self.expr_eqs.add((ka, kb))
+        self.expr_eqs.add((kb, ka))
 
   def record_stmt(self, s: ir.Stmt) -> None:
     """Absorb integer definitions and checked equalities from ``s``."""
@@ -399,10 +406,42 @@ class IndexFacts:
     return self._struct_key(e)
 
   def same_expr(self, a: Expr, b: Expr) -> bool:
-    return self.expr_key(a) == self.expr_key(b)
+    ka, kb = self.expr_key(a), self.expr_key(b)
+    if ka == kb:
+      return True
+    if not self.expr_eqs:
+      return False
+    if (ka, kb) in self.expr_eqs:
+      return True
+    # Transitive closure over recorded checked expression equalities
+    seen = {ka}
+    stack = [ka]
+    while stack:
+      cur = stack.pop()
+      for x, y in self.expr_eqs:
+        if x == cur and y not in seen:
+          if y == kb:
+            return True
+          seen.add(y)
+          stack.append(y)
+    return False
 
   def same_shape(self, a: tuple[Expr, ...], b: tuple[Expr, ...]) -> bool:
     return len(a) == len(b) and all(self.same_expr(x, y) for x, y in zip(a, b))
+
+  def same_iteration_shape(self, a: tuple[Expr, ...], b: tuple[Expr, ...]) -> bool:
+    """True if two loop shapes execute the exact same index space.
+
+    Extends :meth:`same_shape` with sound factor cancellation: if ``a`` and ``b``
+    have the same rank, match on every axis except one, and ``prod(a) == prod(b)``
+    is proven, then either a shared axis is 0 (both loops execute 0 times) or all
+    shared axes are positive (proving the remaining axis equal)."""
+    if self.same_shape(a, b):
+      return True
+    if len(a) != len(b) or len(a) < 2:
+      return False
+    diffs = [i for i, (x, y) in enumerate(zip(a, b)) if not self.same_expr(x, y)]
+    return len(diffs) == 1 and self.same_expr(ops.iprod(a), ops.iprod(b))
 
   def _rebuild_expr(self, poly: AffineExpr) -> Expr | None:
     """Rebuild an :class:`Expr` from an :class:`AffineExpr` if every factor is a known Var."""

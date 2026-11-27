@@ -25,6 +25,7 @@ from ..syntax import ir, ops
 from ..syntax.clone import Cloner, defined
 from ..syntax.ir import Assign, Const, Expr, IndexFilter, IndexMap, IndexReduce, IndexScan, IndexScatter, Var
 from .analysis import (
+  _EXPENSIVE_PRIMS,
   CHEAP_FUSE_COST,
   BufferInfo,
   IndexFacts,
@@ -514,19 +515,33 @@ def fuse_vertical_pair(
           return producer, buf.uid
 
       # Generalized affine Map -> Map: transpose, shifted slice/stencil, broadcast, multi-load.
-      # Never inline into a Load nested inside an inner loop/reduction of consumer (that would
-      # multiply execution count and undo intentional layout copies like ``bt = b.T.copy()``).
+      # Never inline into a contraction reduction (which would multiply execution count and undo
+      # layout copies like ``bt = b.T.copy()``), EXCEPT allow inlining a single-reader producer
+      # into a non-contraction map-of-reduce whose combined index space matches ``producer.shape``
+      # (each element is read exactly once, e.g. ``g * gain * x_hat`` into LayerNorm backward sum).
       nested_buf_read = any(
         count_reads_in([t], buf) > 0
         for t in consumer.body
         if isinstance(t, (IndexReduce, IndexMap, ir.ForRange, ir.While))
       )
+      allow_noncontraction_reduce = False
+      if nested_buf_read and not allow_partial and readers.get(buf.uid, 0) == consumer_reads == 1:
+        sr = _split_single_reduce_map(consumer)
+        if sr is not None:
+          _, c_red, _ = sr
+          if not _looks_like_contraction(consumer, c_red) and facts.same_expr(
+            ops.iprod(producer.shape), ops.iprod((*consumer.shape, *c_red.shape))
+          ):
+            allow_noncontraction_reduce = True
       if (
-        not nested_buf_read
+        (not nested_buf_read or allow_noncontraction_reduce)
         and not any(isinstance(t, ir.Check) for t in ir.walk_stmts(prefix))
         and _is_row_major_store(store_index, producer, facts)
-        and _affine_fusion_profitable(
-          producer, consumer.shape, prefix, value, readers.get(buf.uid, consumer_reads), facts
+        and (
+          allow_noncontraction_reduce
+          or _affine_fusion_profitable(
+            producer, consumer.shape, prefix, value, readers.get(buf.uid, consumer_reads), facts
+          )
         )
       ):
         c_facts = facts.fork()
@@ -887,6 +902,48 @@ def vertical_block(
         changed = True
         continue
     if isinstance(s, IndexMap):
+      # Bounded lookahead for single-consumer producers separated from their sole
+      # consumer by independent operators (e.g. matmul backward emits dX, then dW,
+      # then activation/residual consumer of dX). Sink ``s`` down to its sole consumer
+      # and fuse them when nothing in between aliases ``s``'s reads or writes.
+      m_s = match_single_output_map(s, pair_facts, binfo.local_allocs, binfo.store_counts)
+      if m_s is not None:
+        _, s_buf, _, _, _ = m_s
+        if s_buf.uid not in binfo.escapes and binfo.readers.get(s_buf.uid, 0) >= 1 and producer_cannot_raise:
+          total_r = binfo.readers[s_buf.uid]
+          scan_facts = pair_facts.fork()
+          scan_defs: set[int] = set()
+          scan_writes: set[int] = set()
+          limit = min(len(block), k + 40)
+          found_sink = False
+          for m in range(k, limit):
+            t = block[m]
+            c_reads = count_reads_in([t], s_buf)
+            if c_reads > 0:
+              if (
+                c_reads == total_r
+                and isinstance(t, (IndexMap, IndexFilter, IndexReduce, IndexScatter))
+                and not uses([s], scan_defs)
+                and not binfo.may_alias(producer_reads, scan_writes)
+              ):
+                res = fuse_vertical_pair(s, t, binfo.readers, scan_facts, binfo, binfo.store_counts, options)
+                if res is not None:
+                  fused, dead_buf = res
+                  block[m] = fused
+                  gone.add(dead_buf)
+                  changed = True
+                  found_sink = True
+              break
+            if uses([t], producer_defs | producer_writes) or uses([s], set(defined([t]))):
+              break
+            _, tw = buffer_accesses([t])
+            if binfo.may_alias(producer_reads, tw):
+              break
+            scan_defs |= set(defined([t]))
+            scan_writes |= tw
+            scan_facts.record_stmt(t)
+          if found_sink:
+            continue
       multi = _try_fuse_multi_consumers(s, block[k:], binfo, pair_facts, options)
       if multi is not None:
         repl, consumed, dead_buf = multi
@@ -1704,7 +1761,8 @@ def compatible_maps(
 ) -> bool:
   """True if two ``IndexMap`` statements over the same shape are independent
   and safe to merge into one loop."""
-  if a.ordered != b.ordered or a.parallel != b.parallel or not same_shape(a.shape, b.shape, defs):
+  facts = defs if isinstance(defs, IndexFacts) else IndexFacts(defs)
+  if a.ordered != b.ordered or a.parallel != b.parallel or not facts.same_iteration_shape(a.shape, b.shape):
     return False
   # Leave matmul-shaped maps untouched so tiling / interchange still recognise them
   if contains_reduce(a) or contains_reduce(b):
@@ -1735,7 +1793,7 @@ def fuse_write_through_map(a: IndexMap, b: IndexMap, facts: IndexFacts, allocs: 
   local buffers written by ``a`` at the exact same index (e.g. Adam's
   ``mn, vn -> pn`` or saved forward activations).  Keeps ``a``'s stores
   (write-through) while passing the computed values directly in registers to ``b``."""
-  if a.ordered != b.ordered or a.parallel != b.parallel or not facts.same_shape(a.shape, b.shape):
+  if a.ordered != b.ordered or a.parallel != b.parallel or not facts.same_iteration_shape(a.shape, b.shape):
     return False
   if contains_reduce(a) or contains_reduce(b):
     return False
@@ -1897,7 +1955,9 @@ def _scatter_siblings(block, k, s, facts, allocs, out):
   return k
 
 
-def fuse_block(block: list, defs: dict[int, Expr] | IndexFacts, allocs: set[int] | BufferInfo) -> list:
+def fuse_block(
+  block: list, defs: dict[int, Expr] | IndexFacts, allocs: set[int] | BufferInfo, max_bufs: int = 20
+) -> list:
   """Walk ``block`` merging adjacent compatible reductions and maps."""
   facts = defs.fork() if isinstance(defs, IndexFacts) else IndexFacts(defs)
   for s in block:
@@ -1906,9 +1966,10 @@ def fuse_block(block: list, defs: dict[int, Expr] | IndexFacts, allocs: set[int]
     if isinstance(s, (IndexMap, IndexReduce)):
       sub_facts.activate_nonempty(s.shape)
     for b in ir.sub_blocks(s):
-      b[:] = fuse_block(b, sub_facts, allocs)
+      b[:] = fuse_block(b, sub_facts, allocs, max_bufs=max_bufs)
   out: list = []
   walk_facts = defs.fork() if isinstance(defs, IndexFacts) else IndexFacts(defs)
+  local_allocs = allocs.local_allocs if isinstance(allocs, BufferInfo) else allocs
   k = 0
   while k < len(block):
     s = block[k]
@@ -1984,7 +2045,7 @@ def fuse_block(block: list, defs: dict[int, Expr] | IndexFacts, allocs: set[int]
           elif (
             isinstance(t, ir.Check)
             and not uses([t], map_outputs)
-            and (a_writes <= (allocs.local_allocs if isinstance(allocs, BufferInfo) else allocs))
+            and (a_writes <= local_allocs)
             and not any(isinstance(x, (ir.Load, ir.RtCall)) for e in ir.stmt_exprs(t) for x in ir.walk_expr(e))
           ):
             step_facts.record_stmt(t)
@@ -2003,7 +2064,7 @@ def fuse_block(block: list, defs: dict[int, Expr] | IndexFacts, allocs: set[int]
         nxt = block[j] if j < len(block) else None
         if isinstance(nxt, IndexMap):
           nxt_r, nxt_w = buffer_accesses(nxt.body)
-          if len(a_reads | a_writes | nxt_r | nxt_w) <= 20:
+          if len(a_reads | a_writes | nxt_r | nxt_w) <= max_bufs:
             if compatible_maps(s, nxt, step_facts, allocs):
               out.extend(hoist)
               walk_facts = step_facts
@@ -2024,18 +2085,19 @@ def fuse_block(block: list, defs: dict[int, Expr] | IndexFacts, allocs: set[int]
               k = j + 1
               continue
         # Bounded lookahead: pull later independent same-shape maps (e.g. Adam's pn/mn/vn
-        # separated by other parameter tensors) into s while keeping buffer count <= 20.
+        # or Q/K/V backward transposes separated by matmuls) into s while keeping buffers <= max_bufs.
         if not contains_reduce(s) and not s.ordered:
           merged_ahead = False
           a_reads, a_writes = buffer_accesses(s.body)
           s_bufs = a_reads | a_writes
-          if len(s_bufs) < 20:
+          if len(s_bufs) < max_bufs:
             def_defs: set[int] = set()
             def_reads: set[int] = set()
             def_writes: set[int] = set()
             hoist_assign_idx: dict[int, int] = {}
             alloc_idx_by_uid: dict[int, tuple[int, list[int]]] = {}
             hoist_checks: list[int] = []
+            passed_effectful_map = False
             scan_facts = walk_facts.fork()
             limit = min(len(block), k + 2400)
             for m in range(k, limit):
@@ -2063,42 +2125,58 @@ def fuse_block(block: list, defs: dict[int, Expr] | IndexFacts, allocs: set[int]
                 continue
               if (
                 isinstance(t, ir.Check)
+                and not passed_effectful_map
                 and not uses([t], def_defs | def_writes | map_outputs)
-                and (a_writes <= (allocs.local_allocs if isinstance(allocs, BufferInfo) else allocs))
+                and (a_writes <= local_allocs)
                 and not any(isinstance(x, (ir.Load, ir.RtCall)) for e in ir.stmt_exprs(t) for x in ir.walk_expr(e))
               ):
                 scan_facts.record_stmt(t)
                 hoist_checks.append(m)
                 continue
-              if isinstance(t, IndexMap) and not contains_reduce(t) and not t.ordered:
+              if isinstance(t, IndexMap) and not t.ordered:
                 tr, tw = buffer_accesses(t.body)
-                hoist_indices: set[int] = set(hoist_checks)
-                hoisted_uids: set[int] = set()
-                for u in tw:
-                  if u in alloc_idx_by_uid:
-                    a_idx, dep_assigns = alloc_idx_by_uid[u]
-                    hoist_indices.add(a_idx)
-                    hoisted_uids.add(u)
-                    for da in dep_assigns:
-                      hoist_indices.add(da)
-                      hoisted_uids.add(block[da].var.uid)
-                rem_defs = def_defs - hoisted_uids
-                if (
-                  len(s_bufs | tr | tw) <= 20
-                  and not uses([t], rem_defs)
-                  and not buffers_may_alias(tr, def_writes, allocs)
-                  and not buffers_may_alias(tw, def_reads | def_writes, allocs)
-                ):
-                  is_compat = compatible_maps(s, t, scan_facts, allocs)
-                  if is_compat or fuse_write_through_map(s, t, scan_facts, allocs):
-                    if is_compat:
-                      absorb_map(s, t)
-                    for idx in sorted(hoist_indices):
-                      out.append(block[idx])
-                    for idx in sorted({m, *hoist_indices}, reverse=True):
-                      block.pop(idx)
-                    merged_ahead = True
+                if not contains_reduce(t):
+                  hoist_indices: set[int] = set(hoist_checks)
+                  hoisted_uids: set[int] = set()
+                  for u in tw:
+                    if u in alloc_idx_by_uid:
+                      a_idx, dep_assigns = alloc_idx_by_uid[u]
+                      hoist_indices.add(a_idx)
+                      hoisted_uids.add(u)
+                      for da in dep_assigns:
+                        hoist_indices.add(da)
+                        hoisted_uids.add(block[da].var.uid)
+                  rem_defs = def_defs - hoisted_uids
+                  # Do not pull a single-consumer temp map (e.g. LayerNorm inv_std) across
+                  # a reduction away from its sole consumer row-pipeline.
+                  is_single_temp = (
+                    passed_effectful_map
+                    and isinstance(allocs, BufferInfo)
+                    and len(tw) == 1
+                    and allocs.readers.get(next(iter(tw)), 0) == 1
+                    and next(iter(tw)) not in allocs.escapes
+                  )
+                  if (
+                    not is_single_temp
+                    and len(s_bufs | tr | tw) <= max_bufs
+                    and not uses([t], rem_defs)
+                    and not buffers_may_alias(tr, def_writes, allocs)
+                    and not buffers_may_alias(tw, def_reads | def_writes, allocs)
+                  ):
+                    is_compat = compatible_maps(s, t, scan_facts, allocs)
+                    if is_compat or fuse_write_through_map(s, t, scan_facts, allocs):
+                      if is_compat:
+                        absorb_map(s, t)
+                      for idx in sorted(hoist_indices):
+                        out.append(block[idx])
+                      for idx in sorted({m, *hoist_indices}, reverse=True):
+                        block.pop(idx)
+                      merged_ahead = True
+                      break
+                else:
+                  if any(isinstance(x, ir.Check) for x in ir.walk_stmts(t.body)) or not (tw <= local_allocs):
                     break
+                  passed_effectful_map = True
                 def_defs |= set(defined([t]))
                 def_reads |= tr
                 def_writes |= tw
@@ -2114,13 +2192,648 @@ def fuse_block(block: list, defs: dict[int, Expr] | IndexFacts, allocs: set[int]
   return out
 
 
+# ---------------------------------------------------------------------------
+# Disjoint-union horizontal batching of independent pure GPU maps (e.g. Adam)
+# ---------------------------------------------------------------------------
+
+
+def _flatten_contiguous_map(m: IndexMap, flat_var: Var, facts: IndexFacts) -> list[ir.Stmt] | None:
+  """If ``m`` is a pure, loop-free, check-free ``IndexMap`` whose body only uses
+  ``m.index`` through its row-major flat offset, return its body rewritten in
+  terms of 1-D ``flat_var`` (zero integer divisions/modulos)."""
+  if m.ordered or not m.parallel or m.scope.owned or not m.shape:
+    return None
+  body = [t for t in m.body if not (isinstance(t, ir.ReleaseScope) and t.scope is m.scope)]
+  if not body:
+    return None
+  if any(
+    isinstance(t, (ir.Check, ir.Alloc, ir.Release, ir.Incref, *ir.OPERATORS, ir.ForRange, ir.While))
+    for t in ir.walk_stmts(body)
+  ):
+    return None
+  if len(m.shape) == 1:
+    cl = Cloner({m.index[0].uid: flat_var})
+    for v in defined(body).values():
+      cl.var(v)
+    return [cl.stmt(t) for t in body]
+
+  # ND contiguous map: match ``base_offset + row_major(m.index, m.shape)`` and rewrite
+  # to ``base_offset + flat_var`` (handling array view offsets like ``params_off + i * N + j``).
+  rm: Expr = m.index[0]
+  for iv, d in zip(m.index[1:], m.shape[1:]):
+    rm = ops.iadd(ops.imul(rm, d), iv)
+  m_facts = facts.fork()
+  for t in body:
+    m_facts.record_stmt(t)
+  rm_aff = m_facts.affine(rm)
+  idx_uids = {v.uid for v in m.index}
+  local_int_uids = {
+    t.var.uid
+    for t in body
+    if isinstance(t, Assign) and not isinstance(t.var.type, ir.BufType) and t.var.type.kind in "iu"
+  }
+  forbidden_uids = idx_uids | local_int_uids
+
+  def _as_flat_plus_inv(e: Expr) -> Expr | None:
+    if isinstance(e.type, ir.BufType) or e.type.kind not in "iu":
+      return None
+    diff = m_facts.affine(e).add(rm_aff, -1)
+    # Every factor in diff must be loop-invariant (no m.index or local int vars)
+    for mon, _ in diff.terms:
+      for fac in mon:
+        if fac[0] == "v" and fac[1] in forbidden_uids:
+          return None
+        if fac[0] == "o":
+          return None
+    base_e = m_facts._rebuild_expr(diff)
+    if base_e is None:
+      return None
+    if isinstance(base_e, Const) and base_e.value == 0:
+      res: Expr = flat_var
+    else:
+      res = ops.iadd(base_e, flat_var)
+    return ir.Cast(res, e.type) if e.type is not res.type else res
+
+  class _FlatRewriter(Cloner):
+    def expr(self, e: Expr) -> Expr:
+      if not isinstance(e.type, ir.BufType) and e.type.kind in "iu":
+        if any(isinstance(x, Var) and x.uid in idx_uids for x in ir.walk_expr(e)):
+          rep = _as_flat_plus_inv(e)
+          if rep is not None:
+            return rep
+      if isinstance(e, ir.Prim):
+        return ir.Prim(e.op, tuple(self.expr(a) for a in e.args), e.type)
+      if isinstance(e, ir.Cast):
+        return ir.Cast(self.expr(e.arg), e.type)
+      if isinstance(e, ir.Load):
+        return ir.Load(e.buf, self.expr(e.index))
+      if isinstance(e, ir.RtCall):
+        return ir.RtCall(e.name, tuple(self.expr(a) for a in e.args), e.type, e.pure)
+      return super().expr(e)
+
+  rew = _FlatRewriter({})
+  for v in defined(body).values():
+    rew.var(v)
+  new_body: list[ir.Stmt] = []
+  for t in body:
+    if isinstance(t, Assign) and not isinstance(t.var.type, ir.BufType) and t.var.type.kind in "iu":
+      rep = _as_flat_plus_inv(t.value)
+      if rep is not None:
+        rew.m[t.var.uid] = rep
+        continue
+      if any(isinstance(x, Var) and x.uid in idx_uids for x in ir.walk_expr(t.value)):
+        continue
+    new_body.append(rew.stmt(t))
+  if uses(new_body, idx_uids):
+    return None
+  return new_body
+
+
+def _batch_maps_block(block: list, facts: IndexFacts, binfo: BufferInfo, max_maps: int = 8, max_bufs: int = 64) -> list:
+  """Horizontally batch independent pure contiguous GPU ``IndexMap``s of
+  arbitrary shapes into one flat disjoint-union ``IndexMap`` using a balanced
+  binary dispatch tree on the flat thread index."""
+  local_facts = facts.fork()
+  for s in block:
+    local_facts.record_stmt(s)
+    sub_facts = local_facts.fork()
+    for b in ir.sub_blocks(s):
+      b[:] = _batch_maps_block(b, sub_facts, binfo, max_maps=max_maps, max_bufs=max_bufs)
+
+  out: list = []
+  walk_facts = facts.fork()
+  k = 0
+  while k < len(block):
+    s = block[k]
+    k += 1
+    walk_facts.record_stmt(s)
+    if not isinstance(s, IndexMap) or s.ordered or not s.parallel or s.scope.owned:
+      out.append(s)
+      continue
+    probe_v = Var("tid", ops.I)
+    if _flatten_contiguous_map(s, probe_v, walk_facts) is None:
+      out.append(s)
+      continue
+    s_reads, s_writes = buffer_accesses(s.body)
+    group: list[IndexMap] = [s]
+    group_bufs: set[int] = s_reads | s_writes
+    group_writes: set[int] = set(s_writes)
+    group_defs: set[int] = set(defined([s]))
+    hoisted_stmts: list[ir.Stmt] = []
+    sunk_stmts: list[ir.Stmt] = []
+
+    while len(group) < max_maps and len(group_bufs) < max_bufs and k < len(block):
+      # Step over hoistable statements (allocs, pure scalar assigns, comments, increfs, checks)
+      j = k
+      step_hoist: list[ir.Stmt] = []
+      step_sink: list[ir.Stmt] = []
+      step_facts = walk_facts.fork()
+      blocked = group_defs | group_writes
+      while j < len(block):
+        t = block[j]
+        if isinstance(t, ir.Comment):
+          step_hoist.append(t)
+        elif isinstance(t, ir.Incref):
+          step_sink.append(t)
+        elif isinstance(t, ir.Alloc) and not uses([t], blocked):
+          step_hoist.append(t)
+        elif (
+          isinstance(t, ir.Check)
+          and not uses([t], blocked)
+          and (group_writes <= binfo.local_allocs)
+          and not any(isinstance(x, (ir.Load, ir.RtCall)) for e in ir.stmt_exprs(t) for x in ir.walk_expr(e))
+        ):
+          step_facts.record_stmt(t)
+          step_hoist.append(t)
+        elif (
+          isinstance(t, Assign) and not isinstance(t.var.type, ir.BufType) and pure(t.value) and not uses([t], blocked)
+        ):
+          step_facts.record_stmt(t)
+          step_hoist.append(t)
+        else:
+          break
+        j += 1
+      nxt = block[j] if j < len(block) else None
+      if not isinstance(nxt, IndexMap) or nxt.ordered or not nxt.parallel or nxt.scope.owned:
+        break
+      nr, nw = buffer_accesses(nxt.body)
+      if len(group_bufs | nr | nw) > max_bufs:
+        break
+      if buffers_may_alias(group_writes, nr | nw, binfo) or buffers_may_alias(nw, group_bufs, binfo):
+        break
+      if _flatten_contiguous_map(nxt, probe_v, step_facts) is None:
+        break
+      hoisted_stmts.extend(step_hoist)
+      sunk_stmts.extend(step_sink)
+      walk_facts = step_facts
+      group.append(nxt)
+      group_bufs |= nr | nw
+      group_writes |= nw
+      group_defs |= set(defined([nxt]))
+      k = j + 1
+
+    if len(group) == 1:
+      out.append(s)
+      continue
+
+    # Emit hoisted allocations/scalars, prefix-sum offsets, and balanced binary dispatch map
+    out.extend(hoisted_stmts)
+    offs: list[Var] = []
+    cur_off: Expr = Const(0, ops.I)
+    for gi, gm in enumerate(group):
+      sz = ops.iprod(gm.shape)
+      nv = Var(f"boff_{gi}", ops.I)
+      cur_off = sz if gi == 0 else ops.iadd(cur_off, sz)
+      out.append(Assign(nv, cur_off))
+      offs.append(nv)
+    total_v = offs[-1]
+    tid = Var("btid", ops.I)
+
+    def _emit_tree(lo: int, hi: int) -> list[ir.Stmt]:
+      if lo + 1 == hi:
+        loc_v = Var(f"bloc_{lo}", ops.I)
+        loc_expr: Expr = tid if lo == 0 else ops.isub(tid, offs[lo - 1])
+        flat_b = _flatten_contiguous_map(group[lo], loc_v, walk_facts)
+        assert flat_b is not None
+        return [Assign(loc_v, loc_expr), *flat_b]
+      mid = (lo + hi) // 2
+      cond = ops.cmp("lt", tid, offs[mid - 1])
+      return [ir.If(cond, _emit_tree(lo, mid), _emit_tree(mid, hi))]
+
+    b_scope = ir.Scope("loop")
+    b_body = _emit_tree(0, len(group)) + [ir.ReleaseScope(b_scope)]
+    out.append(IndexMap((total_v,), (tid,), b_body, b_scope, False, True, group[0].loc))
+    out.extend(sunk_stmts)
+  return out
+
+
 def fuse_siblings(fn: ir.Function, options) -> None:
   """Sibling fusion of adjacent reductions and independent maps."""
   if not options.fusion:
     return
+  target = getattr(options, "target", None)
+  max_bufs = 96 if (target is not None and target.kind == "cuda") else 20
   binfo = BufferInfo.analyze(fn)
   facts = IndexFacts.from_function(fn)
-  fn.body[:] = fuse_block(fn.body, facts, binfo)
+  fn.body[:] = fuse_block(fn.body, facts, binfo, max_bufs=max_bufs)
+  if target is not None and target.kind == "cuda":
+    binfo2 = BufferInfo.analyze(fn)
+    facts2 = IndexFacts.from_function(fn)
+    fn.body[:] = _batch_maps_block(fn.body, facts2, binfo2, max_maps=12, max_bufs=96)
+
+
+# ---------------------------------------------------------------------------
+# Multi-stage row-pipeline fusion (LayerNorm fwd/bwd, RMSNorm, Softmax)
+# ---------------------------------------------------------------------------
+
+
+def _row_major_expr(index: tuple[Var, ...], shape: tuple[Expr, ...]) -> Expr:
+  acc: Expr = index[0]
+  for iv, d in zip(index[1:], shape[1:]):
+    acc = ops.iadd(ops.imul(acc, d), iv)
+  return acc
+
+
+def _match_row_pipeline(s: IndexMap, facts: IndexFacts) -> tuple[Expr, bool] | None:
+  """If ``s`` is a non-contraction ``IndexMap(S)`` with 1+ sequential 1-D
+  associative ``IndexReduce((K,))`` stages and an optional trailing 1-D
+  ``IndexMap((K,))`` epilogue, return ``(K, has_epilogue)``."""
+  if not isinstance(s, IndexMap) or not s.parallel or s.ordered or s.scope.owned:
+    return None
+  if getattr(s, "monoidal", None) is not None:
+    return None
+  body = [t for t in s.body if not (isinstance(t, ir.ReleaseScope) and t.scope is s.scope)]
+  if not body:
+    return None
+  has_ep = False
+  if isinstance(body[-1], IndexMap):
+    ep = body[-1]
+    if ep.ordered or ep.scope.owned or len(ep.shape) != 1:
+      return None
+    if any(isinstance(t, (IndexMap, IndexReduce, ir.Check, ir.ForRange, ir.While)) for t in ir.walk_stmts(ep.body)):
+      return None
+    has_ep = True
+    ep_k = ep.shape[0]
+    body = body[:-1]
+  else:
+    ep_k = None
+
+  red_pos = [i for i, t in enumerate(body) if isinstance(t, IndexReduce)]
+  if not red_pos:
+    return None
+  lfacts = facts.fork()
+  for t in body:
+    lfacts.record_stmt(t)
+  k_dim: Expr | None = None
+  prev = 0
+  for idx_i, pos in enumerate(red_pos):
+    red = body[pos]
+    assert isinstance(red, IndexReduce)
+    if red.scope.owned or red.where is not None or len(red.shape) != 1 or not red.folds:
+      return None
+    if not all(f.op in ("add", "mul", "max", "min") and not f.combine and not f.carries for f in red.folds):
+      return None
+    if not all(f.a.type.name in ("float32", "float64", "int32", "int64") for f in red.folds):
+      return None
+    if _looks_like_contraction(s, red):
+      return None
+    if k_dim is None:
+      k_dim = red.shape[0]
+    elif not lfacts.same_expr(k_dim, red.shape[0]):
+      return None
+    before = body[prev:pos] if idx_i == 0 else []
+    nxt_p = red_pos[idx_i + 1] if idx_i + 1 < len(red_pos) else len(body)
+    after = body[pos + 1 : nxt_p]
+    prev = nxt_p
+    if not all(isinstance(t, (Assign, ir.Comment)) for t in (*before, *red.body)):
+      return None
+    if any(isinstance(t, (IndexMap, IndexReduce, ir.Check, ir.ForRange, ir.While)) for t in ir.walk_stmts(after)):
+      return None
+    if any(isinstance(t, (ir.Store, ir.IndexScatter)) for t in ir.walk_stmts(before)):
+      return None
+  assert k_dim is not None
+  if has_ep and ep_k is not None and not lfacts.same_expr(k_dim, ep_k):
+    return None
+  return k_dim, has_ep
+
+
+def _row_local_stores(s: IndexMap, facts: IndexFacts, local_allocs: set[int]) -> dict[int, ir.Store] | None:
+  """Return ``{buf.uid: store_stmt}`` for every top-level row-major local store in ``s.body``."""
+  if not s.index:
+    return None
+  body = [t for t in s.body if not (isinstance(t, ir.ReleaseScope) and t.scope is s.scope)]
+  lfacts = facts.fork()
+  for t in body:
+    lfacts.record_stmt(t)
+  rm_key = lfacts.expr_key(_row_major_expr(s.index, s.shape))
+  stores: dict[int, ir.Store] = {}
+  bad: set[int] = set()
+  for t in body:
+    if isinstance(t, ir.Store) and t.atomic is None and t.buf.uid in local_allocs:
+      if lfacts.expr_key(t.index) == rm_key and t.buf.uid not in stores and t.buf.uid not in bad:
+        stores[t.buf.uid] = t
+      else:
+        stores.pop(t.buf.uid, None)
+        bad.add(t.buf.uid)
+    else:
+      _, iw = buffer_accesses([t])
+      for u in iw:
+        stores.pop(u, None)
+        bad.add(u)
+  return stores
+
+
+def _rewrite_row_loads_in_stmts(
+  stmts: list[ir.Stmt],
+  shared_stores: dict[int, ir.Store],
+  expected_idx_key: object,
+  facts: IndexFacts,
+) -> tuple[list[ir.Stmt], dict[int, Var], dict[int, int]] | None:
+  """Replace every ``Load(buf, expected_idx)`` for ``buf`` in ``shared_stores``
+  with a fresh scalar ``Var``.  Returns ``(new_stmts, scalar_vars, replaced_counts)``
+  or ``None`` if any shared buffer is loaded at a non-matching index."""
+  cur = stmts
+  repl_vars: dict[int, Var] = {}
+  repl_counts: dict[int, int] = {}
+  for uid in sorted(shared_stores):
+    st = shared_stores[uid]
+    n_reads = count_reads_in(cur, st.buf)
+    if n_reads == 0:
+      continue
+    v = Var("rp", st.buf.type.elt)
+    c_facts = facts.fork()
+    for t in cur:
+      c_facts.record_stmt(t)
+    rew = InlineBufferLoad({x.uid: x for x in defined(cur).values()}, st.buf, expected_idx_key, v, c_facts)
+    nxt = rew.block(cur)
+    if not rew.ok or rew.replaced != n_reads:
+      return None
+    cur = nxt
+    repl_vars[uid] = v
+    repl_counts[uid] = n_reads
+  return cur, repl_vars, repl_counts
+
+
+def _commit_row_stores(
+  body: list[ir.Stmt],
+  repl_vars: dict[int, Var],
+  repl_counts: dict[int, int],
+  binfo: BufferInfo,
+  gone: set[int],
+) -> list[ir.Stmt]:
+  """Rewrite each shared ``Store(buf, idx, val)`` in ``body`` into
+  ``Assign(v, val)`` plus a write-through ``Store`` only if external readers remain."""
+  out: list[ir.Stmt] = []
+  for t in body:
+    if isinstance(t, ir.Store) and t.buf.uid in repl_vars:
+      uid = t.buf.uid
+      v = repl_vars[uid]
+      out.append(Assign(v, t.value))
+      remaining = binfo.readers.get(uid, 0) - repl_counts.get(uid, 0)
+      if remaining > 0 or uid in binfo.escapes:
+        out.append(ir.Store(t.buf, t.index, v))
+      else:
+        gone.add(uid)
+    else:
+      out.append(t)
+  return out
+
+
+def _row_pipeline_block(block: list, binfo: BufferInfo, facts: IndexFacts, gone: set[int]) -> tuple[list, bool]:
+  """Fuse sequential row reductions + trailing row epilogues + single-consumer
+  row prologues into single multi-stage row-pipeline ``IndexMap``s."""
+  changed = False
+  local_facts = facts.fork()
+  for s in block:
+    local_facts.record_stmt(s)
+    sub_facts = local_facts.fork()
+    if isinstance(s, (IndexMap, IndexReduce)):
+      sub_facts.activate_nonempty(s.shape)
+    for b in ir.sub_blocks(s):
+      b[:], inner = _row_pipeline_block(b, binfo, sub_facts, gone)
+      changed |= inner
+
+  out: list = []
+  walk_facts = facts.fork()
+  k = 0
+  while k < len(block):
+    s = block[k]
+    k += 1
+    walk_facts.record_stmt(s)
+    if not isinstance(s, IndexMap):
+      out.append(s)
+      continue
+
+    rp_s = _match_row_pipeline(s, walk_facts)
+    if rp_s is not None:
+      k_dim, has_ep = rp_s
+      if not has_ep:
+        # Step over hoistable statements to inspect the immediately following operator
+        s_reads, s_writes = buffer_accesses(s.body)
+        s_defs = set(defined([s]))
+        hoist: list = []
+        step_facts = walk_facts.fork()
+        j = k
+        while j < len(block):
+          t = block[j]
+          if isinstance(t, ir.Comment):
+            hoist.append(t)
+          elif isinstance(t, ir.Alloc) and not uses([t], s_defs | s_writes):
+            hoist.append(t)
+          elif (
+            isinstance(t, Assign)
+            and not isinstance(t.var.type, ir.BufType)
+            and pure(t.value)
+            and not uses([t], s_defs | s_writes)
+          ):
+            step_facts.record_stmt(t)
+            hoist.append(t)
+          elif (
+            isinstance(t, ir.Check)
+            and (s_writes <= binfo.local_allocs)
+            and not uses([t], s_defs | s_writes)
+            and not any(isinstance(x, (ir.Load, ir.RtCall)) for e in ir.stmt_exprs(t) for x in ir.walk_expr(e))
+          ):
+            step_facts.record_stmt(t)
+            hoist.append(t)
+          else:
+            break
+          j += 1
+        nxt = block[j] if j < len(block) else None
+        if isinstance(nxt, IndexMap) and not nxt.ordered and nxt.parallel and not nxt.scope.owned:
+          stores_s = _row_local_stores(s, step_facts, binfo.local_allocs) or {}
+          nxt_r, nxt_w = buffer_accesses(nxt.body)
+          shared_uids = set(stores_s) & nxt_r
+          if (
+            shared_uids
+            and not buffers_may_alias(nxt_w, s_reads | s_writes, binfo)
+            and not buffers_may_alias(s_writes - shared_uids, nxt_r, binfo)
+            and not any(isinstance(t, ir.Check) for t in ir.walk_stmts(nxt.body))
+          ):
+            # Rule B: Row-Pipeline(S; K) + Row-Reduce(S; K) -> Multi-stage Row-Pipeline(S; K)
+            rp_nxt = _match_row_pipeline(nxt, step_facts)
+            if (
+              rp_nxt is not None
+              and not rp_nxt[1]
+              and step_facts.same_shape(s.shape, nxt.shape)
+              and step_facts.same_expr(k_dim, rp_nxt[0])
+            ):
+              nxt_body = [t for t in nxt.body if not (isinstance(t, ir.ReleaseScope) and t.scope is nxt.scope)]
+              cl = Cloner({v.uid: u for v, u in zip(nxt.index, s.index)})
+              for v in defined(nxt_body).values():
+                cl.var(v)
+              nxt_cloned = [cl.stmt(t) for t in nxt_body]
+              rm_key = step_facts.expr_key(_row_major_expr(s.index, s.shape))
+              rew_res = _rewrite_row_loads_in_stmts(
+                nxt_cloned, {u: stores_s[u] for u in shared_uids}, rm_key, step_facts
+              )
+              if rew_res is not None:
+                nxt_rew, repl_vars, repl_counts = rew_res
+                s_body = [t for t in s.body if not (isinstance(t, ir.ReleaseScope) and t.scope is s.scope)]
+                new_s_body = _commit_row_stores(s_body, repl_vars, repl_counts, binfo, gone)
+                s.body[:] = new_s_body + nxt_rew + [ir.ReleaseScope(s.scope)]
+                out.extend(hoist)
+                walk_facts = step_facts
+                out.append(s)
+                k = j + 1
+                changed = True
+                continue
+
+            # Rule C: Row-Pipeline(S; K) + Pure Map(*S, K) -> Row-Pipeline(S; K) with trailing epilogue
+            if (
+              not contains_reduce(nxt)
+              and len(nxt.shape) == len(s.shape) + 1
+              and step_facts.same_shape(nxt.shape[:-1], s.shape)
+              and step_facts.same_expr(nxt.shape[-1], k_dim)
+              and not any(
+                isinstance(t, (IndexMap, IndexReduce, ir.Check, ir.ForRange, ir.While)) for t in ir.walk_stmts(nxt.body)
+              )
+            ):
+              nxt_body = [t for t in nxt.body if not (isinstance(t, ir.ReleaseScope) and t.scope is nxt.scope)]
+              ep_k = Var(nxt.index[-1].name, nxt.index[-1].type)
+              subst: dict[int, Expr] = {v.uid: u for v, u in zip(nxt.index[:-1], s.index)}
+              subst[nxt.index[-1].uid] = ep_k
+              cl = Cloner(subst)
+              for v in defined(nxt_body).values():
+                cl.var(v)
+              ep_cloned = [cl.stmt(t) for t in nxt_body]
+              rm_key = step_facts.expr_key(_row_major_expr(s.index, s.shape))
+              rew_res = _rewrite_row_loads_in_stmts(
+                ep_cloned, {u: stores_s[u] for u in shared_uids}, rm_key, step_facts
+              )
+              if rew_res is not None:
+                ep_rew, repl_vars, repl_counts = rew_res
+                s_body = [t for t in s.body if not (isinstance(t, ir.ReleaseScope) and t.scope is s.scope)]
+                new_s_body = _commit_row_stores(s_body, repl_vars, repl_counts, binfo, gone)
+                ep_scope = ir.Scope("loop")
+                ep_map = IndexMap(
+                  (k_dim,), (ep_k,), ep_rew + [ir.ReleaseScope(ep_scope)], ep_scope, False, False, nxt.loc
+                )
+                s.body[:] = new_s_body + [ep_map, ir.ReleaseScope(s.scope)]
+                out.extend(hoist)
+                walk_facts = step_facts
+                out.append(s)
+                k = j + 1
+                changed = True
+                continue
+
+    # Case 2: Pure single-output Map -> downstream Row-Pipeline (Rule A: (S)->(S;K), Rule D: (*S,K)->(S;K))
+    m_s = match_single_output_map(s, walk_facts, binfo.local_allocs, binfo.store_counts)
+    if (
+      m_s is not None
+      and not contains_reduce(s)
+      and not any(isinstance(t, (ir.Check, *ir.OPERATORS, ir.ForRange, ir.While)) for t in ir.walk_stmts(m_s[0]))
+    ):
+      prefix, s_buf, store_index, _, s_val = m_s
+      total_r = binfo.readers.get(s_buf.uid, 0)
+      if s_buf.uid not in binfo.escapes and total_r >= 1 and _is_row_major_store(store_index, s, walk_facts):
+        s_reads, s_writes = buffer_accesses([s])
+        s_defs = set(defined([s]))
+        scan_facts = walk_facts.fork()
+        scan_defs: set[int] = set()
+        scan_writes: set[int] = set()
+        limit = min(len(block), k + 64)
+        fused_into_rp = False
+        for m in range(k, limit):
+          t = block[m]
+          c_reads = count_reads_in([t], s_buf)
+          if c_reads > 0:
+            if (
+              c_reads == total_r
+              and isinstance(t, IndexMap)
+              and not uses([s], scan_defs)
+              and not binfo.may_alias(s_reads, scan_writes)
+              and not binfo.may_alias(s_reads, buffer_accesses([t])[1])
+            ):
+              rp_t = _match_row_pipeline(t, scan_facts)
+              if rp_t is not None:
+                tk_dim, _ = rp_t
+                # Rule A: Pure row map (S) -> Row-Pipeline (S; K) (e.g. inv_std -> LN bwd)
+                if scan_facts.same_shape(s.shape, t.shape):
+                  t_body = [st for st in t.body if not (isinstance(st, ir.ReleaseScope) and st.scope is t.scope)]
+                  rm_key = scan_facts.expr_key(_row_major_expr(t.index, t.shape))
+                  pv = Var("rpre", s_buf.type.elt)
+                  rew = InlineBufferLoad({x.uid: x for x in defined(t_body).values()}, s_buf, rm_key, pv, scan_facts)
+                  new_t_body = rew.block(t_body)
+                  if rew.ok and rew.replaced == total_r:
+                    cl = Cloner({u.uid: v for u, v in zip(s.index, t.index)})
+                    for v in defined(prefix).values():
+                      cl.var(v)
+                    inlined_pre = [cl.stmt(st) for st in prefix] + [Assign(pv, cl.expr(s_val))]
+                    t.body[:] = inlined_pre + new_t_body + [ir.ReleaseScope(t.scope)]
+                    gone.add(s_buf.uid)
+                    changed = True
+                    fused_into_rp = True
+                # Rule D: Cheap arithmetic (*S, K) map -> Row-Pipeline (S; K) (e.g. (dQ+dK+dV)*g1 -> LN1 bwd)
+                elif (
+                  len(s.shape) == len(t.shape) + 1
+                  and scan_facts.same_shape(s.shape[:-1], t.shape)
+                  and scan_facts.same_expr(s.shape[-1], tk_dim)
+                  and op_cost(prefix) + expr_cost(s_val) <= 32
+                  and not any(
+                    isinstance(x, ir.Prim) and x.op in _EXPENSIVE_PRIMS
+                    for st in (*prefix, Assign(s_buf, s_val))
+                    for e in ir.stmt_exprs(st)
+                    for x in ir.walk_expr(e)
+                  )
+                ):
+                  t_facts = scan_facts.fork()
+                  t_facts.activate_nonempty(t.shape)
+                  for v, d in zip(t.index, t.shape):
+                    t_facts.bind_index(v, d)
+                  t_body = [st for st in t.body if not (isinstance(st, ir.ReleaseScope) and st.scope is t.scope)]
+                  aff = AffineInlineBufferLoad(
+                    s, prefix, s_val, s_buf, t_facts, {x.uid: x for x in defined(t_body).values()}
+                  )
+                  new_t_body = aff.block(t_body)
+                  if aff.ok and aff.replaced == total_r:
+                    t.body[:] = new_t_body + [ir.ReleaseScope(t.scope)]
+                    gone.add(s_buf.uid)
+                    changed = True
+                    fused_into_rp = True
+            break
+          if uses([t], s_defs | s_writes) or uses([s], set(defined([t]))):
+            break
+          _, tw = buffer_accesses([t])
+          if binfo.may_alias(s_reads, tw):
+            break
+          scan_defs |= set(defined([t]))
+          scan_writes |= tw
+          scan_facts.record_stmt(t)
+        if fused_into_rp:
+          continue
+
+    out.append(s)
+  return out, changed
+
+
+def fuse_row_pipelines(fn: ir.Function, options) -> None:
+  """Fuse sequential 1-D row reductions and their trailing row epilogues /
+  leading row prologues (LayerNorm fwd/bwd, RMSNorm, Softmax) into single
+  multi-stage row-pipeline ``IndexMap``s.  Runs after ``monoidal tiling`` so
+  FlashAttention and fused Cross-Entropy are matched first."""
+  if not options.fusion:
+    return
+  target = getattr(options, "target", None)
+  if target is not None and target.kind == "metal":
+    return
+  any_changed = False
+  for _ in range(6):
+    gone: set[int] = set()
+    binfo = BufferInfo.analyze(fn)
+    facts = IndexFacts.from_function(fn)
+    fn.body[:], changed = _row_pipeline_block(fn.body, binfo, facts, gone)
+    if gone:
+      drop_buffers(fn, gone, drop_allocs=True)
+    if not changed:
+      break
+    any_changed = True
+  if any_changed:
+    # One sibling cleanup pass merges adjacent reductions newly unblocked (e.g. LN1 d_b1 + d_g1)
+    max_bufs = 96 if (target is not None and target.kind == "cuda") else 20
+    binfo = BufferInfo.analyze(fn)
+    facts = IndexFacts.from_function(fn)
+    fn.body[:] = fuse_block(fn.body, facts, binfo, max_bufs=max_bufs)
 
 
 __all__ = [
@@ -2141,6 +2854,7 @@ __all__ = [
   "filter_signature",
   "fuse_filters",
   "fuse_online_logsumexp",
+  "fuse_row_pipelines",
   "fuse_siblings",
   "fuse_vertical",
   "fuse_vertical_pair",
