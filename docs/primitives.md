@@ -50,7 +50,10 @@ Instead, elaboration **indexifies** every array expression into a
 * **Broadcasting, transposes, slices, views, comprehensions, and `allpairs`
   vanish into simple index expressions** before any middle-end pass runs.
 
-![Indexification collapses diverse array-driven Python and NumPy operations into coordinate-driven IndexMap and IndexReduce primitives](assets/diag-indexification.svg)
+<figure markdown="span">
+  ![Indexification collapses diverse array-driven Python and NumPy operations into coordinate-driven IndexMap and IndexReduce primitives](assets/diag-indexification.svg)
+  <figcaption><strong>Figure 1.</strong> Indexification normalizes broadcasting, transposes, slices, comprehensions, and explicit <code>par.*</code> calls into coordinate-driven <code>IndexMap</code> and <code>IndexReduce</code> primitives.</figcaption>
+</figure>
 
 That single normalization is why one fusion pass (`IndexMap` into `IndexReduce`)
 automatically handles `np.sum(x * x)`, `np.sum(x.T[::2])`, `a @ b.T`,
@@ -126,7 +129,10 @@ L1/L2 cache blocking, `2×4` register jamming, GPU `__shared__` /
 `threadgroup` memory, Metal `simdgroup_matrix`, and CUDA TF32 WMMA from one
 representation.
 
-![Vertical, filter-reduce, and sibling fusion collapse memory passes](assets/diag-fusion.svg)
+<figure markdown="span">
+  ![Vertical, filter-reduce, and sibling fusion collapse memory passes](assets/diag-fusion.svg)
+  <figcaption><strong>Figure 2.</strong> Algebraic fusion collapses vertical chains, boolean filter-reductions, and sibling passes into single-pass loops with zero intermediate allocations.</figcaption>
+</figure>
 
 ---
 
@@ -149,7 +155,10 @@ def causal_attention(q, k, v):
   return (e / np.sum(e, axis=-1, keepdims=True)) @ v
 ```
 
-![Causal attention compiled from 3 O(T^2) buffers to 1 tiled kernel with Law 5 block skipping](assets/diag-attention-tiling.svg)
+<figure markdown="span">
+  ![Causal attention compiled from 3 O(T^2) buffers to 1 tiled kernel with Law 5 block skipping](assets/diag-attention-tiling.svg)
+  <figcaption><strong>Figure 3.</strong> Causal attention compiled from naive NumPy into a single monoidally tiled kernel with Law 5 upper-triangular block skipping.</figcaption>
+</figure>
 
 Three general passes transform this function:
 
@@ -227,7 +236,10 @@ def nearest(x, y):
   return np.argmin(d2, axis=1)
 ```
 
-![Exact 1-NN streams 16x128 score tiles in L1/SRAM with left-to-right ordered carry merge](assets/diag-pairwise-1nn.svg)
+<figure markdown="span">
+  ![Exact 1-NN streams 16x128 score tiles in L1/SRAM with left-to-right ordered carry merge](assets/diag-pairwise-1nn.svg)
+  <figcaption><strong>Figure 4.</strong> Exact 1-NN pairwise fold tiling streams 16×128 score tiles in L1/SRAM with ordered carry merges, eliminating the Q×R distance matrix.</figcaption>
+</figure>
 
 Indexification turns the 3D broadcast `delta` and squared sum `d2` directly
 into index expressions inside `argmin`—eliminating both the `(Q, R, D)`

@@ -19,6 +19,7 @@ import parakeet as par
 def fft_radix2(x):
   """Iterative Cooley-Tukey radix-2 FFT (power-of-two length)."""
   n = len(x)
+  assert n > 0 and (n & (n - 1)) == 0, "fft_radix2 requires a power-of-two length"
   bits = 0
   tmp = n
   while tmp > 1:
@@ -38,10 +39,10 @@ def fft_radix2(x):
   while size <= n:
     half = size // 2
     angle_step = -2.0 * np.pi / size
-    for start in range(0, n, size):
-      for k in range(half):
-        ang = angle_step * k
-        w = complex(np.cos(ang), np.sin(ang))
+    for k in range(half):
+      ang = angle_step * k
+      w = complex(np.cos(ang), np.sin(ang))
+      for start in range(0, n, size):
         u = out[start + k]
         t = w * out[start + k + half]
         out[start + k] = u + t

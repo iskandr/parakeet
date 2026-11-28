@@ -19,10 +19,7 @@ def conv_3x3_numpy(x, weights):
 def conv_3x3_comp(x, weights):
   flipped = weights[::-1, ::-1]
   return np.array(
-    [
-      [np.sum(flipped * x[i - 1 : i + 2, j - 1 : j + 2]) for j in range(1, x.shape[1] - 1)]
-      for i in range(1, x.shape[0] - 1)
-    ]
+    [[np.sum(flipped * x[i : i + 3, j : j + 3]) for j in range(x.shape[1] - 2)] for i in range(x.shape[0] - 2)]
   )
 
 

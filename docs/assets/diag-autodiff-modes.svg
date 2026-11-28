@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 236" width="680" height="236" role="img" aria-label="Forward-mode JVP vs reverse-mode VJP data flow">
+<defs>
+  <marker id="arr" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+    <path d="M 1 1.5 L 9 5 L 1 8.5 z" fill="#64748b"/>
+  </marker>
+  <marker id="arr-green" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+    <path d="M 1 1.5 L 9 5 L 1 8.5 z" fill="#245744"/>
+  </marker>
+  <marker id="arr-blue" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+    <path d="M 1 1.5 L 9 5 L 1 8.5 z" fill="#176083"/>
+  </marker>
+  <marker id="arr-red" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+    <path d="M 1 1.5 L 9 5 L 1 8.5 z" fill="#dc2626"/>
+  </marker>
+  <pattern id="hatch" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+    <line x1="0" y1="0" x2="0" y2="7" stroke="#cbd5e1" stroke-width="1.5"/>
+  </pattern>
+</defs>
+<rect x="0.5" y="0.5" width="679" height="235" rx="10" fill="#ffffff" stroke="#cbd5e1"/>
+<text x="20" y="28" font-family="'Source Sans 3', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15.5" font-weight="700" fill="#0f172a">Forward Mode (JVP) vs. Reverse Mode (VJP)</text>
+<text x="20" y="46" font-family="'Source Sans 3', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#475569">Choose forward mode when outputs m &gt;&gt; inputs n, and reverse mode when inputs n &gt;&gt; outputs m.</text>
+<rect x="20.0" y="62.0" width="640.0" height="70.0" rx="7" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.2"/>
+<text x="36.0" y="84.0" text-anchor="start" font-family="'Source Sans 3', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#176083">Forward Mode  (par.jvp / par.jacfwd)</text>
+<text x="36.0" y="100.0" text-anchor="start" font-family="'Source Sans 3', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10.5" font-weight="500" fill="#475569">Cost scales with inputs n · O(1) memory, no backward tape</text>
+<rect x="340.0" y="82.0" width="82.0" height="28.0" rx="14.0" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.0"/>
+<text x="381.0" y="99.6" text-anchor="middle" font-family="'IBM Plex Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10.5" font-weight="600" fill="#176083">(x, v)</text>
+<line x1="422.0" y1="96.0" x2="450.0" y2="96.0" stroke="#176083" stroke-width="1.6" marker-end="url(#arr-blue)"/>
+<rect x="452.0" y="82.0" width="80.0" height="28.0" rx="14.0" fill="#ffffff" stroke="#93c5fd" stroke-width="1.0"/>
+<text x="492.0" y="99.6" text-anchor="middle" font-family="'IBM Plex Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10.5" font-weight="600" fill="#0f172a">f  +  df</text>
+<line x1="532.0" y1="96.0" x2="560.0" y2="96.0" stroke="#176083" stroke-width="1.6" marker-end="url(#arr-blue)"/>
+<rect x="562.0" y="82.0" width="84.0" height="28.0" rx="14.0" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.0"/>
+<text x="604.0" y="99.6" text-anchor="middle" font-family="'IBM Plex Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10.5" font-weight="600" fill="#176083">(y, J·v)</text>
+<rect x="20.0" y="144.0" width="640.0" height="78.0" rx="7" fill="#edf4ef" stroke="#86c5a8" stroke-width="1.2"/>
+<text x="36.0" y="166.0" text-anchor="start" font-family="'Source Sans 3', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#245744">Reverse Mode  (par.grad / par.vjp / par.jacrev)</text>
+<text x="36.0" y="182.0" text-anchor="start" font-family="'Source Sans 3', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10.5" font-weight="500" fill="#475569">Cost scales with outputs m · ideal for scalar training losses</text>
+<rect x="340.0" y="154.0" width="82.0" height="24.0" rx="12.0" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.0"/>
+<text x="381.0" y="169.4" text-anchor="middle" font-family="'IBM Plex Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="600" fill="#0f172a">x</text>
+<line x1="422.0" y1="166.0" x2="450.0" y2="166.0" stroke="#64748b" stroke-width="1.4" marker-end="url(#arr)"/>
+<rect x="452.0" y="154.0" width="80.0" height="24.0" rx="12.0" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.0"/>
+<text x="492.0" y="169.3" text-anchor="middle" font-family="'IBM Plex Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9.8" font-weight="600" fill="#0f172a">forward f</text>
+<line x1="532.0" y1="166.0" x2="560.0" y2="166.0" stroke="#64748b" stroke-width="1.4" marker-end="url(#arr)"/>
+<rect x="562.0" y="154.0" width="84.0" height="24.0" rx="12.0" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.0"/>
+<text x="604.0" y="169.2" text-anchor="middle" font-family="'IBM Plex Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9.5" font-weight="600" fill="#0f172a">y (+ stats)</text>
+<rect x="340.0" y="188.0" width="82.0" height="24.0" rx="12.0" fill="#ffffff" stroke="#0d9488" stroke-width="1.0"/>
+<text x="381.0" y="203.4" text-anchor="middle" font-family="'IBM Plex Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="600" fill="#245744">uᵀ · J</text>
+<line x1="450.0" y1="200.0" x2="424.0" y2="200.0" stroke="#245744" stroke-width="1.5" marker-end="url(#arr-green)"/>
+<rect x="452.0" y="188.0" width="80.0" height="24.0" rx="12.0" fill="#ffffff" stroke="#0d9488" stroke-width="1.0"/>
+<text x="492.0" y="203.3" text-anchor="middle" font-family="'IBM Plex Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9.8" font-weight="600" fill="#245744">pullback</text>
+<line x1="560.0" y1="200.0" x2="534.0" y2="200.0" stroke="#245744" stroke-width="1.5" marker-end="url(#arr-green)"/>
+<rect x="562.0" y="188.0" width="84.0" height="24.0" rx="12.0" fill="#ffffff" stroke="#0d9488" stroke-width="1.0"/>
+<text x="604.0" y="203.3" text-anchor="middle" font-family="'IBM Plex Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9.8" font-weight="600" fill="#245744">seed u</text>
+</svg>

@@ -75,6 +75,21 @@
 
 /* Tables and SVG figures */
 .md-typeset table:not([class]) { font-variant-numeric: tabular-nums; }
+.md-typeset figure {
+  margin: 1.25rem auto 1.6rem;
+  text-align: center;
+}
+.md-typeset figure img[src$=".svg"] {
+  margin: 0 auto 0.55rem;
+}
+.md-typeset figcaption {
+  max-width: 680px;
+  margin: 0 auto;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--md-default-fg-color--light);
+  text-align: left;
+}
 .md-typeset img[src$=".svg"] {
   display: block;
   width: 100%;

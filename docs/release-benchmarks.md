@@ -74,15 +74,27 @@ replicates / `n = 11` CPU replicates).
 
 ### Exact 1-NN (`1,024 × 4,096 × 32`, `float32`)
 
-![GPU exact 1-NN search latency on NVIDIA L4](assets/bench-1nn-gpu-l4.svg)
+<figure markdown="span">
+  ![GPU exact 1-NN search latency on NVIDIA L4](assets/bench-1nn-gpu-l4.svg)
+  <figcaption><strong>Figure 1.</strong> GPU exact 1-NN search latency (1,024 × 4,096 × 32, float32) on NVIDIA L4 across 21 warmed replicates.</figcaption>
+</figure>
 
-![CPU exact 1-NN search latency on 4 threads](assets/bench-1nn-cpu.svg)
+<figure markdown="span">
+  ![CPU exact 1-NN search latency on 4 threads](assets/bench-1nn-cpu.svg)
+  <figcaption><strong>Figure 2.</strong> CPU exact 1-NN search latency (1,024 × 4,096 × 32, float32) on 4 threads across 11 warmed replicates.</figcaption>
+</figure>
 
 ### Gaussian kernel regression (`1,024 × 4,096 × 32`, `float32`)
 
-![GPU Gaussian kernel regression latency on NVIDIA L4](assets/bench-rbf-gpu-l4.svg)
+<figure markdown="span">
+  ![GPU Gaussian kernel regression latency on NVIDIA L4](assets/bench-rbf-gpu-l4.svg)
+  <figcaption><strong>Figure 3.</strong> GPU Gaussian / RBF kernel regression latency (1,024 × 4,096 × 32, float32) on NVIDIA L4 across 21 warmed replicates.</figcaption>
+</figure>
 
-![CPU Gaussian kernel regression latency on 4 threads](assets/bench-rbf-cpu.svg)
+<figure markdown="span">
+  ![CPU Gaussian kernel regression latency on 4 threads](assets/bench-rbf-cpu.svg)
+  <figcaption><strong>Figure 4.</strong> CPU Gaussian / RBF kernel regression latency (1,024 × 4,096 × 32, float32) on 4 threads across 11 warmed replicates.</figcaption>
+</figure>
 
 ### Summary table (`1,024 × 4,096 × 32`, `float32`)
 
@@ -122,9 +134,15 @@ both the broadcasting NumPy form and the explicit operator form compile to the
 same tiled pairwise fold with zero host transfers and exact first-index
 tie/NaN semantics.
 
-![GPU exact 1-NN latency scaling from 1,024 to 16,384 references on NVIDIA L4](assets/bench-scaling-1nn-latency.svg)
+<figure markdown="span">
+  ![GPU exact 1-NN latency scaling from 1,024 to 16,384 references on NVIDIA L4](assets/bench-scaling-1nn-latency.svg)
+  <figcaption><strong>Figure 5.</strong> Exact 1-NN GPU latency scaling from 1,024 to 16,384 references (Q = 1,024, D = 32) on NVIDIA L4: tiled pairwise fold vs. 1.0.0 materialized baseline.</figcaption>
+</figure>
 
-![GPU exact 1-NN global scratch memory scaling from 1,024 to 16,384 references on NVIDIA L4](assets/bench-scaling-1nn-memory.svg)
+<figure markdown="span">
+  ![GPU exact 1-NN global scratch memory scaling from 1,024 to 16,384 references on NVIDIA L4](assets/bench-scaling-1nn-memory.svg)
+  <figcaption><strong>Figure 6.</strong> Exact 1-NN global scratch memory scaling from 1,024 to 16,384 references: 21× reduction (64 MiB down to 3.0 MiB + 16 KiB shared memory per block).</figcaption>
+</figure>
 
 | References (`Q = 1,024, D = 32`) | L4 `1.0.0` NumPy | L4 Tiled NumPy | L4 Tiled [`par.map`](operators.md#map) | A10G `1.0.0` NumPy | A10G Tiled NumPy | A10G Tiled [`par.map`](operators.md#map) | `1.0.0` Global Scratch | Tiled Global Scratch |
 |---:|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -154,11 +172,20 @@ transfers ([browse both programs](gallery.md#inverse-distance-smoothing)):
 
 ### Forward GPU workloads (NVIDIA L4, `n = 21` warmed calls)
 
-![GBDT histogram and best-split latency on NVIDIA L4](assets/bench-gbdt-l4.svg)
+<figure markdown="span">
+  ![GBDT histogram and best-split latency on NVIDIA L4](assets/bench-gbdt-l4.svg)
+  <figcaption><strong>Figure 7.</strong> GBDT gradient/Hessian histogram accumulation and best-split latency (262,144 × 256 bins) on NVIDIA L4.</figcaption>
+</figure>
 
-![Causal self-attention latency on NVIDIA L4](assets/bench-attn-l4.svg)
+<figure markdown="span">
+  ![Causal self-attention latency on NVIDIA L4](assets/bench-attn-l4.svg)
+  <figcaption><strong>Figure 8.</strong> Causal self-attention latency (4 × 512 × 64, float32) on NVIDIA L4.</figcaption>
+</figure>
 
-![Linear cross-entropy latency on NVIDIA L4](assets/bench-cce-l4.svg)
+<figure markdown="span">
+  ![Linear cross-entropy latency on NVIDIA L4](assets/bench-cce-l4.svg)
+  <figcaption><strong>Figure 9.</strong> Linear cross-entropy latency (512 × 128 × 2,048, float32) on NVIDIA L4.</figcaption>
+</figure>
 
 | Workload | Parakeet | PyTorch | [`torch.compile`](https://pytorch.org/docs/stable/generated/torch.compile.html) | [JAX `jit`](https://docs.jax.dev/en/latest/jit-compilation.html) | [CuPy](https://cupy.dev/) | Implementation |
 |---|---:|---:|---:|---:|---:|---|
@@ -168,9 +195,15 @@ transfers ([browse both programs](gallery.md#inverse-distance-smoothing)):
 
 ### End-to-end nanoGPT training (NVIDIA L4)
 
-![Small nanoGPT training step times on NVIDIA L4](assets/bench-nanogpt-small-l4.svg)
+<figure markdown="span">
+  ![Small nanoGPT training step times on NVIDIA L4](assets/bench-nanogpt-small-l4.svg)
+  <figcaption><strong>Figure 10.</strong> Small nanoGPT training step latency (B=16, T=64, C=128, L=2, H=4; forward + backward + Adam) on NVIDIA L4.</figcaption>
+</figure>
 
-![Medium nanoGPT training step times on NVIDIA L4](assets/bench-nanogpt-med-l4.svg)
+<figure markdown="span">
+  ![Medium nanoGPT training step times on NVIDIA L4](assets/bench-nanogpt-med-l4.svg)
+  <figcaption><strong>Figure 11.</strong> Medium nanoGPT training step latency (B=32, T=128, C=256, L=4, H=4; forward + backward + Adam) on NVIDIA L4.</figcaption>
+</figure>
 
 Each step runs the full forward pass, reverse-mode backpropagation, and Adam
 update (4 attention heads, median of 20 warmed steps in milliseconds). Parakeet
@@ -206,19 +239,37 @@ timing (`n = 11` warmed replicates).
 
 ### Sequence alignment and long-read RNA mapping
 
-![Myers 64-bit edit distance latency on Apple M1 Pro](assets/bench-bio-myers-m1pro.svg)
+<figure markdown="span">
+  ![Myers 64-bit edit distance latency on Apple M1 Pro](assets/bench-bio-myers-m1pro.svg)
+  <figcaption><strong>Figure 12.</strong> Myers 64-bit bit-vector edit distance (1,000 × 256 bp) on Apple M1 Pro (10 cores): Parakeet vs. edlib C++.</figcaption>
+</figure>
 
-![Affine-gap Gotoh alignment and traceback latency on Apple M1 Pro](assets/bench-bio-gotoh-m1pro.svg)
+<figure markdown="span">
+  ![Affine-gap Gotoh alignment and traceback latency on Apple M1 Pro](assets/bench-bio-gotoh-m1pro.svg)
+  <figcaption><strong>Figure 13.</strong> Affine-gap Gotoh global alignment with full traceback (200 × 128 bp) on Apple M1 Pro: Parakeet vs. Biopython C and Biotite Cython.</figcaption>
+</figure>
 
-![SSHash and delta-map long-read RNA mapping latency on Apple M1 Pro](assets/bench-bio-rna-m1pro.svg)
+<figure markdown="span">
+  ![SSHash and delta-map long-read RNA mapping latency on Apple M1 Pro](assets/bench-bio-rna-m1pro.svg)
+  <figcaption><strong>Figure 14.</strong> SSHash + Spearfish delta-map long-read RNA mapping (3.01 Mbp across 80 human Ensembl isoforms) on Apple M1 Pro.</figcaption>
+</figure>
 
 ### Cheminformatics, structural biology, and BAM pileup
 
-![2048-bit Tanimoto 1-NN search latency on Apple M1 Pro](assets/bench-bio-tanimoto-m1pro.svg)
+<figure markdown="span">
+  ![2048-bit Tanimoto 1-NN search latency on Apple M1 Pro](assets/bench-bio-tanimoto-m1pro.svg)
+  <figcaption><strong>Figure 15.</strong> 2048-bit Morgan fingerprint Tanimoto 1-NN search (256 × 8,192 compounds) on Apple M1 Pro: Parakeet vs. RDKit C++.</figcaption>
+</figure>
 
-![Batched Kabsch 3D protein RMSD latency on Apple M1 Pro](assets/bench-bio-kabsch-m1pro.svg)
+<figure markdown="span">
+  ![Batched Kabsch 3D protein RMSD latency on Apple M1 Pro](assets/bench-bio-kabsch-m1pro.svg)
+  <figcaption><strong>Figure 16.</strong> Batched Kabsch 3D protein superposition and RMSD (2,000 × 128 CA atoms) on Apple M1 Pro: Parakeet vs. Biotite and NumPy.</figcaption>
+</figure>
 
-![6-channel BAM pileup latency on Apple M1 Pro](assets/bench-bio-pileup-m1pro.svg)
+<figure markdown="span">
+  ![6-channel BAM pileup latency on Apple M1 Pro](assets/bench-bio-pileup-m1pro.svg)
+  <figcaption><strong>Figure 17.</strong> Single-pass 6-channel BAM alignment pileup (2M observations) on Apple M1 Pro: Parakeet fused IndexScatter vs. NumPy 6× bincount.</figcaption>
+</figure>
 
 | Workload | Parakeet (multicore) | Parakeet (`c`, 1T) | Specialist / Baseline | Speedup vs. Baseline | Implementation |
 |---|---:|---:|---:|---:|---|

@@ -29,7 +29,10 @@ PhD theses behind the original compiler:
 
 ## Fusion rules {#fusion}
 
-![Vertical, filter-reduce, and sibling fusion collapse memory passes](assets/diag-fusion.svg)
+<figure markdown="span">
+  ![Vertical, filter-reduce, and sibling fusion collapse memory passes](assets/diag-fusion.svg)
+  <figcaption><strong>Figure 1.</strong> Vertical, filter-reduce, and sibling fusion eliminate intermediate arrays and redundant DRAM passes before loop lowering.</figcaption>
+</figure>
 
 ### Vertical fusion (producer into consumer)
 

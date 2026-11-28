@@ -57,7 +57,7 @@ or SciPy.
 | Supported | Not supported |
 |---|---|
 | `bool`, `int8`–`int64`, `uint8`–`uint64`, `float32`, `float64`, `complex64`, `complex128` scalars & arrays | Native `float16` compute (widened to `float32`), object or string arrays |
-| Tuples, `NamedTuple`, fixed string-key dicts, `@dataclass` (pure methods, `@property`, `__call__`), `slice`, `range`, `zip`, `enumerate`, `itertools` | Dynamic dict keys, `set`, runtime string manipulation, arbitrary non-dataclass classes |
+| Tuples, `NamedTuple`, fixed string-key dicts, `@dataclass`, `par.nn.Module` (normal `__init__`, pure methods, `@property`, `__call__`), `par.Alphabet`, `par.Vocab`, `slice`, `range`, `zip`, `enumerate`, `itertools` | Dynamic dict keys, `set`, runtime string manipulation, arbitrary non-record classes |
 | Compile-time lists, CPU growable homogeneous lists, `par.fixed_list`, dynamic-shape array / `RaggedArray` loop rebinding | Heterogeneously typed lists mutated inside runtime loops |
 | `if`/`elif`/`else`, `for`, `while`, `break`, `continue`, early `return`, scalar `match`/`case`, closures, `*args`/`**kwargs`, `assert`, `raise` | `try`/`except`, `with`, `yield`, `global`/`nonlocal`, `import` inside `@jit`, recursion, `print` |
 | Static array rank; automatic value specialization on `axis`, `keepdims`, `dtype`, tuple length | Value-dependent output rank (e.g. `np.squeeze(x)` without `axis=`) |

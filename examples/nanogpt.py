@@ -21,7 +21,7 @@ import parakeet as par
 
 
 class NanoGPT(par.nn.Module):
-  """Two-head character-level transformer with standard Python ``__init__``."""
+  """Character-level transformer with standard Python ``__init__``."""
 
   def __init__(self, vocab: int, context: int, width: int, layers: int, *, heads: int = 2, rng=None, dtype=np.float64):
     g = np.random.default_rng(0) if rng is None else rng

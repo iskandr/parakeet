@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 import parakeet as par
 
@@ -100,3 +101,72 @@ def test_nn_module_normal_init_autodiff_and_compiled_adam():
 
   assert losses_host[-1] < losses_host[0]
   np.testing.assert_allclose(losses_jit, losses_host, rtol=1e-4, atol=1e-4)
+  assert m_host.head.weight.dtype == np.float32
+  assert m_jit.head.weight.dtype == np.float32
+
+
+def test_optim_preserves_float32_and_non_floating_buffers():
+  class MaskedLinear(par.nn.Module):
+    def __init__(self, rng):
+      self.linear = par.nn.Linear(4, 4, rng=rng, dtype=np.float32)
+      self.mask = par.nn.causal_mask(4)
+
+    def __call__(self, x):
+      return np.where(self.mask, self.linear(x), np.float32(0.0))
+
+  rng = np.random.default_rng(1)
+  mod = MaskedLinear(rng)
+  assert all(p.dtype == np.float32 for p in mod.parameters())
+  assert len(mod.parameters()) == 2  # weight + bias, NOT bool mask
+
+  x = rng.standard_normal((4, 4)).astype(np.float32)
+  vg = par.value_and_grad(lambda m, inp: np.mean(m(inp) ** 2))
+  _, grads = vg(mod, x)
+
+  # Host Adam with integer step keeps float32 and preserves bool mask
+  opt = par.optim.Adam(mod, lr=1e-2)
+  mod_h = opt.update(mod, grads)
+  assert mod_h.linear.weight.dtype == np.float32
+  assert mod_h.mask.dtype == np.bool_
+  np.testing.assert_array_equal(mod_h.mask, mod.mask)
+
+  # Compiled adam_step with integer step keeps float32 and preserves bool mask
+  @par.jit
+  def jit_adam(m, g, sm, sv, step):
+    return par.optim.adam_step(m, g, sm, sv, step, lr=1e-2)
+
+  sm, sv = par.optim.adam_init(mod)
+  mod_j, _, _ = jit_adam(mod, grads, sm, sv, 1)
+  assert mod_j.linear.weight.dtype == np.float32
+  assert mod_j.mask.dtype == np.bool_
+  np.testing.assert_array_equal(mod_j.mask, mod.mask)
+
+
+def test_tree_map_complex_and_vocab_edge_cases():
+  @par.jit
+  def shift_complex(z):
+    return par.tree_map_arrays(lambda a: a + np.complex64(1j), z)
+
+  z = np.ones(4, dtype=np.complex64)
+  out = shift_complex(z)
+  np.testing.assert_allclose(out, np.full(4, 1.0 + 1.0j, dtype=np.complex64))
+
+  dna = par.Alphabet("ACGT")
+  assert dna.encode([]).shape == (0,)
+  np.testing.assert_array_equal(dna.encode([65, 67, 71, 84]), np.array([0, 1, 2, 3], dtype=np.uint8))
+  assert dna.code("é") == dna.unknown
+
+  gc = par.Alphabet.mask("GC")
+  with pytest.raises(ValueError, match="custom indicator masks"):
+    gc.decode([0, 1])
+
+  vocab = par.Vocab.from_text("abc")
+  with pytest.raises(KeyError):
+    vocab.encode("az")
+  with pytest.raises(KeyError):
+    vocab.encode("aé")
+  with pytest.raises(IndexError):
+    vocab.decode([-1])
+
+  with pytest.raises(ValueError, match="unsupported activation"):
+    par.nn.MLP(4, activation="swish")

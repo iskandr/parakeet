@@ -147,9 +147,13 @@ streams tiles without allocating an `N × M` weight matrix:
 ### Histograms and tree splits
 
 Gradient-boosted trees accumulate gradients and Hessians into feature bins and
-pick the split with maximum gain. All four styles below lower to `O(N)`
-`IndexScatter` and fuse both histograms into one
+pick the split with maximum gain. All four styles below share the same gain
+helper and lower to `O(N)` `IndexScatter`, fusing both histograms into one
 [thread-privatized pass](algebra.md#law-6-privatized-scatter-ordered-multi-state-carries):
+
+```python
+--8<-- "examples/algebraic_gallery.py:best_split_helper"
+```
 
 === "NumPy (`_numpy`)"
 
@@ -222,10 +226,13 @@ broadcast tensor and triggers cache and register tiling:
 ### Exponential IIR filter
 
 A plain `for t in range(T):` affine recurrence `s = a[t] * s + b[t]` works for
-arbitrary `a` (including zero or negative coefficients) and rewrites via
+arbitrary `a` (including zero or negative coefficients) without numerical
+underflow and rewrites via
 [Law 4 chunkwise duality](algebra.md#law-4-chunkwise-state-space-duality) into
-a parallel prefix scan. For positive decays (`a > 0`), the closed-form prefix
-product can also be written directly with NumPy or `par.scan`:
+a division-free parallel prefix scan. For short sequences with strictly positive
+decays (`a > 0`), the closed-form prefix product can also be written directly
+in NumPy or `par.scan` (note that `b / np.cumprod(a)` underflows in `float32`
+for long sequences, and `_comp` does `O(T²)` work):
 
 === "Loop (`_loop` — arbitrary `a`, Law 4 `TileScan`)"
 
@@ -267,12 +274,13 @@ division-free chunkwise GEMMs that lower directly to CPU register tiles, Metal
 
 ### Causal attention
 
-Four lines of NumPy (or a single call to `par.nn.scaled_dot_product_attention`)
-compose [online monoidal tiling](algebra.md#law-1-rescaled-semiring-monoids)
+The `_numpy` and `_helpers` (`par.nn.scaled_dot_product_attention`) forms
+automatically compose [online monoidal tiling](algebra.md#law-1-rescaled-semiring-monoids)
 (no `T × T` matrices), [tile-interval block skipping](algebra.md#law-5-affine-tile-interval-mask-pruning)
 (upper triangle never loaded), and
 [rematerialized AD](algebra.md#law-2-algebraic-rematerialization-in-reverse-mode-ad)
-under `par.grad`, `par.jvp`, and `par.hvp`:
+under `par.grad`, `par.jvp`, and `par.hvp`. The `_comp`, `_loop`, and `_par`
+forms compute the exact same result without triggering `flash_monoid`:
 
 === "NumPy (`_numpy`)"
 
@@ -309,8 +317,10 @@ automatic `O(N · W)` sliding window.
 
 ### Linear cross-entropy
 
-Tiles `h @ w` and `logsumexp` over the vocabulary `V` without allocating an
-`M × V` logit matrix (forward and backward):
+The `_numpy` and `_helpers` (`par.nn.cross_entropy(h @ w, targets)`) forms tile
+`h @ w` and `logsumexp` over the vocabulary `V` without allocating an `M × V`
+logit matrix (forward and backward); `_comp`, `_loop`, and `_par` show the
+equivalent row-wise spellings:
 
 === "NumPy (`_numpy`)"
 

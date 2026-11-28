@@ -33,7 +33,7 @@ from parakeet import value_and_grad
 
 # --8<-- [start:squared_distance]
 def squared_distance(query, reference):
-  return np.sum((query - reference) ** np.float32(2))
+  return np.sum((query - reference) ** 2)
 
 
 # --8<-- [end:squared_distance]
@@ -43,7 +43,7 @@ def squared_distance(query, reference):
 @par.jit
 def nearest_numpy(queries, references):
   delta = queries[:, None, :] - references[None, :, :]
-  return np.argmin(np.sum(delta ** np.float32(2), axis=2), axis=1)
+  return np.argmin(np.sum(delta**2, axis=2), axis=1)
 
 
 # --8<-- [end:nearest_numpy]
@@ -123,7 +123,7 @@ nearest_fold = nearest_par
 def smooth_numpy(queries, references, observations):
   values = observations.reshape(references.shape[0])
   delta = queries[:, None, :] - references[None, :, :]
-  weights = np.float32(1) / (np.float32(1) + np.sum(delta ** np.float32(2), axis=2))
+  weights = 1.0 / (1.0 + np.sum(delta**2, axis=2))
   return np.sum(weights * values, axis=1) / np.sum(weights, axis=1)
 
 
@@ -136,7 +136,7 @@ def smooth_comp(queries, references, observations):
   values = observations.reshape(references.shape[0])
 
   def smooth_one(q):
-    w = np.array([np.float32(1) / (np.float32(1) + squared_distance(q, r)) for r in references])
+    w = np.array([1.0 / (1.0 + squared_distance(q, r)) for r in references])
     return np.sum(w * values) / np.sum(w)
 
   return np.array([smooth_one(q) for q in queries])
@@ -149,12 +149,12 @@ def smooth_comp(queries, references, observations):
 @par.jit
 def smooth_loop(queries, references, observations):
   values = observations.reshape(references.shape[0])
-  out = np.empty(len(queries), dtype=np.float32)
+  out = np.empty(len(queries), dtype=queries.dtype)
   for i in range(len(queries)):
-    w_sum = np.float32(0)
-    wv_sum = np.float32(0)
+    w_sum = 0.0
+    wv_sum = 0.0
     for j in range(len(references)):
-      w = np.float32(1) / (np.float32(1) + squared_distance(queries[i], references[j]))
+      w = 1.0 / (1.0 + squared_distance(queries[i], references[j]))
       w_sum += w
       wv_sum += w * values[j]
     out[i] = wv_sum / w_sum
@@ -223,7 +223,8 @@ def rbf_regression_helpers(x_query, x_train, y_train, neg_gamma):
 def rbf_regression_comp(x_query, x_train, y_train, neg_gamma):
   def predict_one(q):
     s = np.array([squared_distance(q, x) * neg_gamma for x in x_train])
-    return par.nn.softmax(s, axis=0) @ y_train
+    e = np.exp(s - np.max(s))
+    return (e / np.sum(e)) @ y_train
 
   return np.array([predict_one(q) for q in x_query])
 
@@ -236,14 +237,14 @@ def rbf_regression_comp(x_query, x_train, y_train, neg_gamma):
 def rbf_regression_loop(x_query, x_train, y_train, neg_gamma):
   n_q = len(x_query)
   n_tr = len(x_train)
-  out = np.zeros((n_q, y_train.shape[1]), dtype=np.float32)
+  out = np.zeros((n_q, y_train.shape[1]), dtype=x_query.dtype)
   for i in range(n_q):
-    m = np.float32(-1e30)
+    m = -np.inf
     for j in range(n_tr):
       s = squared_distance(x_query[i], x_train[j]) * neg_gamma
       if s > m:
         m = s
-    denom = np.float32(0)
+    denom = 0.0
     for j in range(n_tr):
       w = np.exp(squared_distance(x_query[i], x_train[j]) * neg_gamma - m)
       denom += w
@@ -258,8 +259,9 @@ def rbf_regression_loop(x_query, x_train, y_train, neg_gamma):
 # --8<-- [start:rbf_regression_par]
 @par.jit
 def rbf_regression_par(x_query, x_train, y_train, neg_gamma):
-  scores = par.allpairs(squared_distance, x_query, x_train) * neg_gamma
-  return par.nn.softmax(scores, axis=-1) @ y_train
+  s = par.allpairs(squared_distance, x_query, x_train) * neg_gamma
+  e = np.exp(s - np.max(s, axis=-1, keepdims=True))
+  return (e / np.sum(e, axis=-1, keepdims=True)) @ y_train
 
 
 # --8<-- [end:rbf_regression_par]
@@ -272,6 +274,7 @@ rbf_kernel_regression = rbf_regression_numpy
 # ---------------------------------------------------------------------------
 
 
+# --8<-- [start:best_split_helper]
 def _best_split_from_histograms(g_hist, h_hist, nbins, reg_lambda):
   g_left = np.cumsum(g_hist)
   h_left = np.cumsum(h_hist)
@@ -280,6 +283,9 @@ def _best_split_from_histograms(g_hist, h_hist, nbins, reg_lambda):
   gain = (g_left * g_left) / (h_left + reg_lambda) + (g_right * g_right) / (h_right + reg_lambda)
   best_bin = np.argmax(gain)
   return best_bin, gain[best_bin]
+
+
+# --8<-- [end:best_split_helper]
 
 
 # --8<-- [start:gbdt_split_numpy]
@@ -500,12 +506,14 @@ def causal_attention_helpers(q, k, v):
 @par.jit
 def causal_attention_comp(q, k, v):
   T = q.shape[-2]
+  idx = np.arange(T)
+  mask = idx[:, None] >= idx[None, :]
   scale = np.float32(1.0 / np.sqrt(np.float32(q.shape[-1])))
-  mask = par.nn.causal_mask(T)
 
   def one_head(qh, kh, vh):
     s = np.where(mask, (qh @ kh.T) * scale, np.float32(-1e9))
-    return par.nn.softmax(s, axis=-1) @ vh
+    e = np.exp(s - np.max(s, axis=-1, keepdims=True))
+    return (e / np.sum(e, axis=-1, keepdims=True)) @ vh
 
   return np.array([[one_head(q[b, h], k[b, h], v[b, h]) for h in range(q.shape[1])] for b in range(q.shape[0])])
 
@@ -518,16 +526,16 @@ def causal_attention_comp(q, k, v):
 def causal_attention_loop(q, k, v):
   B, H, T, D = q.shape
   scale = np.float32(1.0 / np.sqrt(np.float32(D)))
-  out = np.zeros((B, H, T, v.shape[-1]), dtype=np.float32)
+  out = np.zeros((B, H, T, v.shape[-1]), dtype=q.dtype)
   for b in range(B):
     for h in range(H):
       for i in range(T):
-        m = np.float32(-1e30)
+        m = -np.inf
         for j in range(i + 1):
           score = np.sum(q[b, h, i] * k[b, h, j]) * scale
           if score > m:
             m = score
-        denom = np.float32(0)
+        denom = 0.0
         for j in range(i + 1):
           w = np.exp(np.sum(q[b, h, i] * k[b, h, j]) * scale - m)
           denom += w
@@ -542,12 +550,17 @@ def causal_attention_loop(q, k, v):
 # --8<-- [start:causal_attention_par]
 @par.jit
 def causal_attention_par(q, k, v):
-  mask = par.nn.causal_mask(q.shape[-2])
+  T = q.shape[-2]
+  idx = np.arange(T)
+  mask = idx[:, None] >= idx[None, :]
+  scale = np.float32(1.0 / np.sqrt(np.float32(q.shape[-1])))
 
-  def one_batch(qb, kb, vb):
-    return par.map(lambda qh, kh, vh: par.nn.scaled_dot_product_attention(qh, kh, vh, mask=mask), qb, kb, vb)
+  def one_head(qh, kh, vh):
+    s = np.where(mask, (qh @ kh.T) * scale, np.float32(-1e9))
+    e = np.exp(s - np.max(s, axis=-1, keepdims=True))
+    return (e / np.sum(e, axis=-1, keepdims=True)) @ vh
 
-  return par.map(one_batch, q, k, v)
+  return par.map(lambda qb, kb, vb: par.map(one_head, qb, kb, vb), q, k, v)
 
 
 # --8<-- [end:causal_attention_par]
@@ -600,6 +613,7 @@ def gqa_attention(q, k, v):
 
 
 # --8<-- [start:cross_entropy_numpy]
+@par.jit
 def cross_entropy_numpy(h, w, targets):
   logits = h @ w
   m = np.max(logits, axis=-1, keepdims=True)
@@ -613,6 +627,7 @@ def cross_entropy_numpy(h, w, targets):
 
 
 # --8<-- [start:cross_entropy_helpers]
+@par.jit
 def cross_entropy_helpers(h, w, targets):
   return par.nn.cross_entropy(h @ w, targets)
 
@@ -628,7 +643,7 @@ def cross_entropy_comp(h, w, targets):
     z = logits - np.max(logits)
     return np.log(np.sum(np.exp(z))) - z[tgt]
 
-  return np.mean(np.array([row_loss(h[i], targets[i]) for i in range(len(targets))]))
+  return np.mean(np.array([row_loss(row, tgt) for row, tgt in zip(h, targets)]))
 
 
 # --8<-- [end:cross_entropy_comp]
@@ -637,12 +652,12 @@ def cross_entropy_comp(h, w, targets):
 # --8<-- [start:cross_entropy_loop]
 @par.jit
 def cross_entropy_loop(h, w, targets):
-  total = np.float32(0)
+  total = 0.0
   for i in range(len(targets)):
     logits = h[i] @ w
     z = logits - np.max(logits)
     total += np.log(np.sum(np.exp(z))) - z[targets[i]]
-  return total / np.float32(len(targets))
+  return total / len(targets)
 
 
 # --8<-- [end:cross_entropy_loop]
@@ -748,10 +763,10 @@ def main():
   h = rng.standard_normal((64, 32)).astype(np.float32) * 0.2
   w = rng.standard_normal((32, 256)).astype(np.float32) * 0.2
   tgt = rng.integers(0, 256, size=(64,), dtype=np.int64)
-  ref_ce = float(cross_entropy_numpy(h, w, tgt))
+  ref_ce = float(cross_entropy_numpy(h, w, tgt, _backend="python"))
   for fn in (
-    par.jit(cross_entropy_numpy),
-    par.jit(cross_entropy_helpers),
+    cross_entropy_numpy,
+    cross_entropy_helpers,
     cross_entropy_comp,
     cross_entropy_loop,
     cross_entropy_par,

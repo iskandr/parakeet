@@ -79,8 +79,8 @@ Kernels are zero-header CUDA C++ (TF32 Tensor Cores use inline PTX
 * **`"nvrtc"` (default):** compiles via NVRTC with LLVM IR optimizations and
   caches CUBINs on disk. Requires only an NVIDIA driver and matching CuPy wheel.
 * **`"ptx"`:** emits PTX 7.8 directly from Parakeet's flat `ParLoop` IR for
-  elementwise, loop, atomic, and warp-reduce kernels (loaded through
-  `cuModuleLoadDataEx`), falling back to NVRTC for tiled GEMMs and libm ops.
+  elementwise, loop, atomic, and warp-reduce kernels (loaded through the CUDA
+  driver JIT), falling back to NVRTC for tiled GEMMs and libm ops.
 * **`"nvcc"`:** compiles via standalone `nvcc --cubin -O3` when installed on
   `PATH`.
 

@@ -106,7 +106,7 @@ device across calls with `par.to_device`.
 
 </div>
 
-## Four recurring styles
+## Recurring styles
 
 Throughout the docs and [gallery](gallery.md), examples use consistent suffixes
 so you can recognize each style at a glance:

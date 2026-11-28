@@ -105,6 +105,11 @@ def mse_loss(model, x, y):
   return np.mean((model(x) - y) ** 2)
 
 
+rng = np.random.default_rng(0)
+model = TwoLayerMLP(width=32, hidden=64, rng=rng)
+x = rng.standard_normal((128, 32), dtype=np.float32)
+y = rng.standard_normal((128, 32), dtype=np.float32)
+
 loss_and_grad = par.value_and_grad(mse_loss)
 opt = par.optim.Adam(model, lr=1e-3)
 loss_val, grads = loss_and_grad(model, x, y)

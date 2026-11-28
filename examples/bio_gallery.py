@@ -41,7 +41,7 @@ def encode_canonical_kmers_and_gc(reads, quals, k):
 
   def encode_read(seq, qual):
     codes = DNA[seq]
-    gc = np.mean(GC[seq]).astype(np.float32)
+    gc = np.mean(GC[seq].astype(np.float32))
     mean_q = np.mean(qual.astype(np.float32) - 33.0)
     out = np.empty(len(seq) - k + 1, dtype=np.uint64)
     fwd = np.uint64(0)

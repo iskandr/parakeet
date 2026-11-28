@@ -19,7 +19,7 @@ def matmult_comp(X, Y):
 
 @par.jit
 def matmult_loop(X, Y):
-  out = np.zeros((X.shape[0], Y.shape[1]))
+  out = np.zeros((X.shape[0], Y.shape[1]), dtype=X.dtype)
   for i in range(X.shape[0]):
     for j in range(Y.shape[1]):
       for k in range(X.shape[1]):

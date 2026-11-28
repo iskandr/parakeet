@@ -57,7 +57,10 @@ m = max(m₁, m₂)<br>
 Because `⊕` is associative, tiles can be reduced in cache or GPU shared memory
 and merged in any grouping without materializing the full score matrix:
 
-![Causal attention compiled from naive O(T^2) buffers to tiled monoid with block skipping](assets/diag-attention-tiling.svg)
+<figure markdown="span">
+  ![Causal attention compiled from naive O(T^2) buffers to tiled monoid with block skipping](assets/diag-attention-tiling.svg)
+  <figcaption><strong>Figure 1.</strong> Law 1 + Law 5: naive causal attention materializes three O(T²) buffers, while Parakeet streams (m, l, o) tiles on-chip and skips upper-triangular blocks before loading K or V.</figcaption>
+</figure>
 
 **Where it fires:**
 
@@ -83,7 +86,10 @@ cross-entropy.
 substitutes sufficient-statistic adjoints that save only compact `O(T · D)`
 tensors and recompute score tiles on-chip during backpropagation:
 
-![Algebraic rematerialization saves only (Q, K, V, O, lse) and recomputes score tiles on-chip](assets/diag-autodiff.svg)
+<figure markdown="span">
+  ![Algebraic rematerialization saves only (Q, K, V, O, lse) and recomputes score tiles on-chip](assets/diag-rematerialization.svg)
+  <figcaption><strong>Figure 2.</strong> Law 2: algebraic rematerialization replaces O(T²) attention tapes and O(M·V) logit tapes with O(T·D) sufficient statistics, recomputing score tiles on-chip during backpropagation.</figcaption>
+</figure>
 
 **Where it fires:**
 
@@ -153,7 +159,10 @@ have `O(T)` serial depth and leave multi-core CPUs and GPUs idle.
 rewrites both scalar affine loops (EMA, IIR, Kalman) and bilinear matrix-state
 loops (Mamba-2 / gated linear attention) into a division-free parallel scan:
 
-![Law 4 rewrites an O(T) serial recurrence into 4 parallel chunked steps](assets/diag-chunkwise-scan.svg)
+<figure markdown="span">
+  ![Law 4 rewrites an O(T) serial recurrence into 4 parallel chunked steps](assets/diag-chunkwise-scan.svg)
+  <figcaption><strong>Figure 3.</strong> Law 4: chunkwise state-space duality splits an O(T) serial recurrence into parallel intra-chunk matmuls, a 64× shorter inter-chunk scan, and parallel state readout.</figcaption>
+</figure>
 
 <div class="pk-xform" markdown>
 <div class="pk-xform-col pk-xform-col--before" markdown>
@@ -222,7 +231,10 @@ Welford variance, `par.fold`).
   tiles, eliminating `O(Q · R)` distance matrices in both broadcasting NumPy and
   nested-map 1-NN:
 
-![Exact 1-NN tiled pairwise fold preserves first-index tie semantics in 8 KiB L1 / 16 KiB SRAM](assets/diag-pairwise-1nn.svg)
+<figure markdown="span">
+  ![Exact 1-NN tiled pairwise fold preserves first-index tie semantics in 8 KiB L1 / 16 KiB SRAM](assets/diag-pairwise-1nn.svg)
+  <figcaption><strong>Figure 4.</strong> Law 6: pairwise fold tiling streams 16×128 score tiles in L1/SRAM and merges multi-field (min_dist, idx) carries in strict left-to-right order to preserve first-index tie and NaN rules.</figcaption>
+</figure>
 
 ---
 

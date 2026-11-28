@@ -25,9 +25,8 @@ def fasta_gc_and_scores(fasta_buf, score_csv_buf):
   lines = par.split_bytes(fasta_buf, ord("\n"), skip_empty=True)
   gc_total = 0
   base_total = 0
-  for k in range(len(lines)):
-    line = lines[k]
-    if len(line) > 0 and line[0] != ">":
+  for line in lines:
+    if len(line) > 0 and line[0] != ord(">"):
       base_total += len(line)
       gc_total += np.sum(GC[line].astype(np.int64))
   scores = par.parse_float32(par.split_bytes(score_csv_buf, ord(","), skip_empty=True))

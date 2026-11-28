@@ -20,7 +20,7 @@ def tanh_rescale_comp(x, alpha=0.5, beta=0.3):
 
 @par.jit
 def tanh_rescale_loop(x, alpha=0.5, beta=0.3):
-  y = np.empty_like(x, dtype=float)
+  y = np.empty_like(x)
   for i in range(len(x)):
     y[i] = np.tanh(x[i] * alpha) + beta
   return y

@@ -3,9 +3,9 @@
 Provides two closely related abstractions backed by 256-entry lookup tables:
 
 - :class:`Alphabet`: encodes ASCII character sequences (DNA, RNA, proteins,
-  bitmasks) into compact ``uint8`` code arrays.  Works identically in Python
+  bitmasks) into compact ``uint8`` code arrays. Works identically in Python
   and inside ``@par.jit`` via ``DNA.encode(seq)`` or ``DNA[seq]`` (compiling to
-  a single L1-resident LUT gather with zero ``IntEnum`` or dict boilerplate).
+  a single L1-resident LUT gather).
 - :class:`Vocab`: character-level vocabulary for language models, built from a
   corpus with ``Vocab.from_text(text)`` and supporting ``encode`` / ``decode``.
 """
@@ -23,12 +23,16 @@ def _to_byte_array(seq):
   if isinstance(seq, (bytes, bytearray, memoryview)):
     return np.frombuffer(seq, dtype=np.uint8)
   if isinstance(seq, list):
-    raw = [s.encode("ascii") if isinstance(s, str) else bytes(s) for s in seq]
-    lens = {len(b) for b in raw}
-    if len(lens) == 1:
-      n = next(iter(lens))
-      return np.frombuffer(b"".join(raw), dtype=np.uint8).reshape(len(raw), n).copy()
-    return RaggedArray.from_sequences([np.frombuffer(b, dtype=np.uint8).copy() for b in raw])
+    if not seq:
+      return np.empty(0, dtype=np.uint8)
+    if all(isinstance(s, (str, bytes, bytearray, memoryview)) for s in seq):
+      raw = [s.encode("ascii") if isinstance(s, str) else bytes(s) for s in seq]
+      lens = {len(b) for b in raw}
+      if len(lens) == 1:
+        n = next(iter(lens))
+        return np.frombuffer(b"".join(raw), dtype=np.uint8).reshape(len(raw), n).copy()
+      return RaggedArray.from_sequences([np.frombuffer(b, dtype=np.uint8).copy() for b in raw])
+    return np.asarray(seq, dtype=np.uint8)
   return np.asarray(seq, dtype=np.uint8)
 
 
@@ -41,7 +45,7 @@ class Alphabet:
       codes = DNA.encode("ACGTACGT")        # array([0, 1, 2, 3, 0, 1, 2, 3], dtype=uint8)
       codes = DNA[read_bytes]               # also works inside @par.jit!
       GC = par.Alphabet.mask("GC", ignore_case=True)
-      gc_frac = np.mean(GC[read_bytes])
+      gc_frac = np.mean(GC[read_bytes].astype(np.float32))
   """
 
   __parakeet_record__ = True
@@ -76,6 +80,7 @@ class Alphabet:
     self.lut = lut
     self.symbols = symbols
     self.unknown = int(unknown)
+    self._has_custom_mapping = mapping is not None
 
   @classmethod
   def mask(cls, symbols: str, *, ignore_case: bool = True) -> Alphabet:
@@ -89,8 +94,11 @@ class Alphabet:
     return f"Alphabet({self.symbols!r}, unknown={self.unknown})"
 
   def code(self, ch: str) -> int:
-    """Return the integer code for a single character."""
-    return int(self.lut[ord(ch)])
+    """Return the integer code for a single character (or ``self.unknown`` if out of ASCII range)."""
+    if len(ch) != 1:
+      raise ValueError(f"Alphabet.code() expects a single character, got {ch!r}")
+    o = ord(ch)
+    return int(self.lut[o]) if o < 256 else self.unknown
 
   def __getitem__(self, seq):
     """Map a ``uint8`` byte or array through the 256-byte LUT (compiles inside ``@par.jit``)."""
@@ -111,6 +119,8 @@ class Alphabet:
 
   def decode(self, codes, *, unknown_char: str = "?") -> str:
     """Decode a 1D integer code array back into a Python string."""
+    if self._has_custom_mapping:
+      raise ValueError("decode() is only defined for positional Alphabet(symbols), not custom indicator masks")
     syms = self.symbols
     return "".join(syms[int(c)] if 0 <= int(c) < len(syms) else unknown_char for c in np.asarray(codes).ravel())
 
@@ -129,8 +139,6 @@ class Vocab:
 
   def __init__(self, chars: str | list[str] | tuple[str, ...]):
     self.chars = "".join(chars) if not isinstance(chars, str) else chars
-    self._char_to_id = {ch: i for i, ch in enumerate(self.chars)}
-    # Fast 256-entry LUT when all vocabulary characters are ASCII
     lut = np.full(256, -1, dtype=np.int64)
     for i, ch in enumerate(self.chars):
       if ord(ch) < 256:
@@ -156,13 +164,29 @@ class Vocab:
     """Encode a Python string or ASCII bytes into a 1D token ID array."""
     if isinstance(text, (bytes, bytearray)):
       arr = np.frombuffer(text, dtype=np.uint8)
-      return self.lut[arr].astype(dtype, copy=False)
+      ids = self.lut[arr]
+      if np.any(ids < 0):
+        bad = int(arr[int(np.argmax(ids < 0))])
+        raise KeyError(chr(bad))
+      return ids.astype(dtype, copy=False)
     if text.isascii():
       arr = np.frombuffer(text.encode("ascii"), dtype=np.uint8)
-      return self.lut[arr].astype(dtype, copy=False)
-    return np.array([self._char_to_id[ch] for ch in text], dtype=dtype)
+      ids = self.lut[arr]
+      if np.any(ids < 0):
+        bad = int(arr[int(np.argmax(ids < 0))])
+        raise KeyError(chr(bad))
+      return ids.astype(dtype, copy=False)
+    char_to_id = {ch: i for i, ch in enumerate(self.chars)}
+    return np.array([char_to_id[ch] for ch in text], dtype=dtype)
 
   def decode(self, ids) -> str:
     """Decode a 1D sequence of token IDs back into a Python string."""
     chars = self.chars
-    return "".join(chars[int(i)] for i in np.asarray(ids).ravel())
+    n = len(chars)
+    out = []
+    for raw in np.asarray(ids).ravel():
+      idx = int(raw)
+      if idx < 0 or idx >= n:
+        raise IndexError(f"token id {idx} out of range for Vocab(size={n})")
+      out.append(chars[idx])
+    return "".join(out)

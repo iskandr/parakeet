@@ -1,38 +1,46 @@
 """Minimal, JIT-compilable optimizers for Parakeet models and parameter trees.
 
 Both functional update steps (:func:`sgd_step`, :func:`adam_step`) and a
-stateful :class:`Adam` helper are provided.  Functional steps work identically
-in plain Python and inside ``@par.jit`` via :func:`parakeet.tree_map_arrays`,
-leaving static module attributes (such as ``heads`` or ``eps``) untouched.
+stateful :class:`Adam` helper are provided. Functional steps work identically
+in plain Python and inside ``@par.jit`` via :func:`parakeet.tree.tree_map_floating`,
+leaving static module attributes and non-floating buffers (such as boolean
+masks or integer lookup tables) untouched while preserving each parameter's
+exact floating-point dtype (e.g. ``float32`` stays ``float32``).
 """
 
 from __future__ import annotations
 
 import numpy as np
 
-from .tree import tree_map_arrays
+from .tree import tree_map_floating
 
 
 def sgd_step(params, grads, lr=1e-2):
-  """One SGD update step over any parameter tree (Python or inside ``@par.jit``)."""
-  return tree_map_arrays(lambda p, g: p - lr * g, params, grads)
+  """One SGD update step over floating parameter leaves (Python or inside ``@par.jit``)."""
+  return tree_map_floating(lambda p, g: (p - lr * g).astype(p.dtype), params, grads)
 
 
 def adam_init(params):
-  """Create zero-initialized ``(m, v)`` moment trees matching ``params``."""
-  return tree_map_arrays(np.zeros_like, params), tree_map_arrays(np.zeros_like, params)
+  """Create zero-initialized ``(m, v)`` moment trees matching floating leaves of ``params``."""
+  return tree_map_floating(np.zeros_like, params), tree_map_floating(np.zeros_like, params)
 
 
 def adam_step(params, grads, m, v, step, lr=3e-3, b1=0.9, b2=0.99, eps=1e-8):
   """One Adam update step returning ``(new_params, new_m, new_v)``.
 
-  Works both in plain Python and inside ``@par.jit`` (e.g. fused with
+  Preserves each parameter leaf's dtype (``float32`` stays ``float32``) and
+  works both in plain Python and inside ``@par.jit`` (e.g. fused with
   ``par.value_and_grad`` for zero-round-trip GPU training steps).
   """
-  m_next = tree_map_arrays(lambda mi, g: b1 * mi + (1.0 - b1) * g, m, grads)
-  v_next = tree_map_arrays(lambda vi, g: b2 * vi + (1.0 - b2) * g * g, v, grads)
+  m_next = tree_map_floating(lambda mi, g: (b1 * mi + (1.0 - b1) * g).astype(mi.dtype), m, grads)
+  v_next = tree_map_floating(lambda vi, g: (b2 * vi + (1.0 - b2) * g * g).astype(vi.dtype), v, grads)
   scale = lr * np.sqrt(1.0 - b2**step) / (1.0 - b1**step)
-  params_next = tree_map_arrays(lambda p, mi, vi: p - scale * mi / (np.sqrt(vi) + eps), params, m_next, v_next)
+  params_next = tree_map_floating(
+    lambda p, mi, vi: p - (scale * mi / (np.sqrt(vi) + eps)).astype(p.dtype),
+    params,
+    m_next,
+    v_next,
+  )
   return params_next, m_next, v_next
 
 

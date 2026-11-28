@@ -18,20 +18,36 @@ from ..ndtypes import Int64
 from ..syntax import ops
 from ..syntax.ir import Const, Expr, Var
 from ..syntax.ops import ZERO, I, cast, cmp
+from ..syntax.records import ComplexArray, StructuredView
 from ..syntax.records import record_type as _record_type
 from ..syntax.values import CHEAP_COST, ArrayVal, RangeVal, describe
 from ..tree import tree_map as _py_tree_map
 from ..tree import tree_map_arrays as _py_tree_map_arrays
+from ..tree import tree_map_floating as _py_tree_map_floating
 from . import core
 from .core import FUNCTIONS, NAMES, along_axis, build_map, norm_axis, reduce_arrays, reduce_values, scan_values
 
 
-def _elab_tree_map(el, fn, *trees, arrays_only: bool = False):
+def _is_ir_array(val) -> bool:
+  return isinstance(val, (ArrayVal, ComplexArray, StructuredView))
+
+
+def _is_ir_floating_array(val) -> bool:
+  if isinstance(val, ComplexArray):
+    return True
+  return isinstance(val, ArrayVal) and val.elt.kind == "f"
+
+
+def _elab_tree_map(el, fn, *trees, arrays_only: bool = False, floating_only: bool = False):
   if not trees:
     raise el.error(TypeInferenceError, "tree_map() expects at least one tree argument")
 
   def _walk(nodes):
     first = nodes[0]
+    if _is_ir_array(first):
+      if floating_only and not _is_ir_floating_array(first):
+        return first
+      return el.call(fn, list(nodes), {})
     if isinstance(first, tuple) and not hasattr(first, "_fields"):
       if any(not isinstance(n, tuple) or len(n) != len(first) for n in nodes):
         raise el.error(TypeInferenceError, "tree_map() arguments must have matching tuple structure")
@@ -41,7 +57,7 @@ def _elab_tree_map(el, fn, *trees, arrays_only: bool = False):
         raise el.error(TypeInferenceError, f"tree_map() arguments must have matching {rec.cls.__name__} structure")
       cols = [rec.values(n) for n in nodes]
       return rec.build(tuple(_walk(parts) for parts in zip(*cols, strict=True)))
-    if arrays_only and not isinstance(first, ArrayVal):
+    if arrays_only or floating_only:
       return first
     return el.call(fn, list(nodes), {})
 
@@ -52,6 +68,8 @@ FUNCTIONS[_py_tree_map] = lambda el, fn, *trees: _elab_tree_map(el, fn, *trees, 
 NAMES[_py_tree_map] = "tree_map"
 FUNCTIONS[_py_tree_map_arrays] = lambda el, fn, *trees: _elab_tree_map(el, fn, *trees, arrays_only=True)
 NAMES[_py_tree_map_arrays] = "tree_map_arrays"
+FUNCTIONS[_py_tree_map_floating] = lambda el, fn, *trees: _elab_tree_map(el, fn, *trees, floating_only=True)
+NAMES[_py_tree_map_floating] = "tree_map_floating"
 
 
 class LibFunction:
