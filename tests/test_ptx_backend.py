@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import sys
+
 import numpy as np
 import pytest
+
+_SKIP_WIN32_SIM = pytest.mark.skipif(sys.platform == "win32", reason="CUDA simulator requires POSIX C++")
 
 import parakeet as par
 from parakeet.backends.cuda import _canonicalize_cuda_kernel
@@ -29,6 +33,7 @@ def _cuda_plans(fn, *args, **opts):
   return [k.device for k in spec.module.kernels if k.device is not None]
 
 
+@_SKIP_WIN32_SIM
 def test_ptx_plain_elementwise_sqrt_and_where(monkeypatch):
   monkeypatch.setenv("PARAKEET_CUDA_SIMULATE", "1")
   from parakeet.backends.cuda import CudaDevice
@@ -58,6 +63,7 @@ def test_ptx_plain_elementwise_sqrt_and_where(monkeypatch):
     CudaDevice._instance = None
 
 
+@_SKIP_WIN32_SIM
 def test_ptx_integer_ops_and_bounds_check(monkeypatch):
   monkeypatch.setenv("PARAKEET_CUDA_SIMULATE", "1")
   from parakeet.backends.cuda import CudaDevice
@@ -89,6 +95,7 @@ def test_ptx_integer_ops_and_bounds_check(monkeypatch):
     CudaDevice._instance = None
 
 
+@_SKIP_WIN32_SIM
 def test_ptx_atomic_scatter_and_split_reduce(monkeypatch):
   monkeypatch.setenv("PARAKEET_CUDA_SIMULATE", "1")
   from parakeet.backends.cuda import CudaDevice
@@ -113,6 +120,7 @@ def test_ptx_atomic_scatter_and_split_reduce(monkeypatch):
     CudaDevice._instance = None
 
 
+@_SKIP_WIN32_SIM
 def test_ptx_warp_row_reduce_layernorm_and_max(monkeypatch):
   monkeypatch.setenv("PARAKEET_CUDA_SIMULATE", "1")
   from parakeet.backends.cuda import CudaDevice
@@ -158,6 +166,7 @@ def test_ptx_warp_row_reduce_layernorm_and_max(monkeypatch):
     CudaDevice._instance = None
 
 
+@_SKIP_WIN32_SIM
 def test_ptx_fallback_on_libm_and_tiled_gemm(monkeypatch):
   monkeypatch.setenv("PARAKEET_CUDA_SIMULATE", "1")
   from parakeet.backends.cuda import CudaDevice
@@ -247,6 +256,7 @@ def test_ptx_check_catches_invalid_ptx():
     verify_ptx(bad_op)
 
 
+@_SKIP_WIN32_SIM
 def test_ptx_nanogpt_coverage_and_bundled_module(monkeypatch):
   monkeypatch.setenv("PARAKEET_CUDA_SIMULATE", "1")
   from parakeet.backends.cuda import CudaDevice
