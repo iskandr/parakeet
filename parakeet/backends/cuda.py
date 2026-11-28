@@ -42,6 +42,7 @@ from .device import (
   untouched_regions,
 )
 from .monoidal_gpu import generate_monoidal_gpu_kernel
+from .ptx import bundle_ptx_module, emit_ptx_entry_body, verify_ptx
 from .tiled_gpu import BLOCK_THREADS, generate_tiled_gpu_kernel, generate_warp_reduce_cuda_kernel
 
 BLOCK = 256
@@ -583,6 +584,82 @@ class CuPyDriver:
     arch_tag = f"sm_{maj}{minor}" if maj > 0 else "sm_70"
     nvrtc_tag = self._nvrtc_version_tag(cupy)
     self._binary_cache = _CudaBinaryCache(arch_tag, nvrtc_tag)
+    self._nvcc_path = shutil.which("nvcc")
+    self._nvcc_cache = _CudaBinaryCache(arch_tag, self._nvcc_version_tag(self._nvcc_path))
+    self._ptx_arch = "sm_80" if (maj, minor) >= (8, 0) else ("sm_75" if (maj, minor) >= (7, 5) else "sm_70")
+    self.ptx_compiled_count = 0
+    self.nvrtc_compiled_count = 0
+    self.nvcc_compiled_count = 0
+    self.last_ptx_error: str | None = None
+    self.last_nvcc_error: str | None = None
+
+  @staticmethod
+  def _nvcc_version_tag(nvcc_path: str | None) -> str:
+    if not nvcc_path:
+      return "nvcc_none"
+    try:
+      import subprocess
+
+      out = subprocess.run([nvcc_path, "--version"], capture_output=True, text=True, timeout=10, check=False).stdout
+      m = re.search(r"release\s+(\d+\.\d+)", out)
+      return f"nvcc_{m.group(1).replace('.', '_')}" if m else "nvcc_unknown"
+    except Exception:  # noqa: BLE001
+      return "nvcc_unknown"
+
+  def _effective_compiler(self) -> str:
+    if config.cuda_compiler == "nvcc":
+      return "nvcc"
+    if config.cuda_compiler == "ptx" or config.cuda_ptx:
+      return "ptx"
+    return "nvrtc"
+
+  def _compile_nvcc_binary(self, code: str) -> bytes | None:
+    """Compile zero-header CUDA C++ with ``nvcc --cubin -O3`` and cache on disk."""
+    if not self._nvcc_path:
+      self.last_nvcc_error = "nvcc executable not found on PATH"
+      return None
+    key = self._nvcc_cache.key_for(code)
+    cached = self._nvcc_cache.get(key)
+    if cached is not None:
+      return cached
+    try:
+      import subprocess
+      import tempfile
+      from pathlib import Path
+
+      maj, minor = self.profile.compute_capability
+      arch = f"sm_{maj}{minor}" if maj > 0 else "sm_70"
+      with tempfile.TemporaryDirectory(prefix="pk_nvcc_") as td:
+        src = Path(td) / "pk_kernel.cu"
+        out = Path(td) / "pk_kernel.cubin"
+        src.write_text(code, encoding="utf-8")
+        proc = subprocess.run(
+          [self._nvcc_path, "--cubin", "-O3", f"-arch={arch}", "-w", str(src), "-o", str(out)],
+          capture_output=True,
+          text=True,
+          timeout=180,
+          check=False,
+        )
+        if proc.returncode != 0 or not out.exists():
+          self.last_nvcc_error = (proc.stderr or proc.stdout or f"nvcc exit {proc.returncode}")[:800]
+          return None
+        binary = out.read_bytes()
+      self._nvcc_cache.put(key, binary)
+      return binary
+    except Exception as e:  # noqa: BLE001
+      self.last_nvcc_error = f"{type(e).__name__}: {e}"
+      return None
+
+  def _load_ptx_entries(self, entry_bodies: list[str], entry_names: list[str]):
+    """Validate and load a batched PTX module directly via CUDA driver JIT."""
+    try:
+      ptx_text = bundle_ptx_module(entry_bodies, arch=self._ptx_arch)
+      verify_ptx(ptx_text)
+      mod = self._load_binary_module(ptx_text.encode("utf-8") + b"\x00")
+      return [mod.get_function(name) for name in entry_names]
+    except Exception as e:  # noqa: BLE001
+      self.last_ptx_error = f"{type(e).__name__}: {e}"
+      return None
 
   @staticmethod
   def _nvrtc_version_tag(cupy) -> str:
@@ -697,10 +774,29 @@ class CuPyDriver:
     )
 
   def compile(self, plan: KernelPlan):
+    mode = self._effective_compiler()
     canon = _canonicalize_cuda_kernel(plan.source)
-    cached = self._compiled_cache.get(canon)
+    cache_key = f"{mode}:{canon}"
+    cached = self._compiled_cache.get(cache_key)
     if cached is not None:
       return cached
+    if mode == "ptx":
+      ptx_body = emit_ptx_entry_body(plan, entry_name="pk_kernel")
+      if ptx_body is not None:
+        loaded = self._load_ptx_entries([ptx_body], ["pk_kernel"])
+        if loaded is not None:
+          kernel = loaded[0]
+          self._compiled_cache[cache_key] = kernel
+          self.ptx_compiled_count += 1
+          return kernel
+    if mode == "nvcc":
+      binary = self._compile_nvcc_binary(canon)
+      if binary is not None:
+        mod = self._load_binary_module(binary)
+        kernel = mod.get_function("pk_kernel")
+        self._compiled_cache[cache_key] = kernel
+        self.nvcc_compiled_count += 1
+        return kernel
     binary = self._compile_nvrtc_binary(canon)
     if binary is not None:
       mod = self._load_binary_module(binary)
@@ -708,91 +804,139 @@ class CuPyDriver:
     else:
       kernel = self.cp.RawKernel(canon, "pk_kernel")
       kernel.compile()  # surface compilation problems here, not at first launch
-    self._compiled_cache[canon] = kernel
+    self._compiled_cache[cache_key] = kernel
+    self.nvrtc_compiled_count += 1
     return kernel
 
   def compile_module(self, plans: list[KernelPlan]) -> None:
-    """Compile all alpha-unique uncompiled CUDA kernels of a module via batched,
-    multi-threaded zero-header NVRTC modules with persistent CUBIN disk caching."""
+    """Compile all alpha-unique uncompiled CUDA kernels of a module.
+
+    Depending on ``config.cuda_compiler`` (``"ptx"``, ``"nvrtc"``, ``"nvcc"``):
+    - ``"ptx"``: emits eligible kernels directly to PTX 7.8 in a single driver
+      JIT load and routes remaining kernels through headerless NVRTC chunks.
+    - ``"nvrtc"``: compiles all chunks via headerless NVRTC + CUBIN disk cache.
+    - ``"nvcc"``: compiles chunks via ``nvcc --cubin -O3`` + CUBIN disk cache
+      (falling back to NVRTC if ``nvcc`` is unavailable).
+    """
     import hashlib
 
-    todo: list[tuple[KernelPlan, str]] = []
-    seen_canon: set[str] = set()
-    plan_canons: list[tuple[KernelPlan, str]] = []
+    mode = self._effective_compiler()
+    todo: list[tuple[KernelPlan, str, str]] = []
+    seen_keys: set[str] = set()
+    plan_keys: list[tuple[KernelPlan, str]] = []
     for p in plans:
       if p.compiled is not None:
         continue
       canon = _canonicalize_cuda_kernel(p.source)
-      plan_canons.append((p, canon))
-      cached = self._compiled_cache.get(canon)
+      ckey = f"{mode}:{canon}"
+      plan_keys.append((p, ckey))
+      cached = self._compiled_cache.get(ckey)
       if cached is not None:
         p.compiled = cached
         continue
-      if canon not in seen_canon:
-        seen_canon.add(canon)
-        todo.append((p, canon))
-    if len(todo) <= 1:
-      for p, _canon in todo:
-        p.compiled = self.compile(p)
-      for p, canon in plan_canons:
+      if ckey not in seen_keys:
+        seen_keys.add(ckey)
+        todo.append((p, canon, ckey))
+
+    if not todo:
+      for p, ckey in plan_keys:
         if p.compiled is None:
-          p.compiled = self._compiled_cache.get(canon)
+          p.compiled = self._compiled_cache.get(ckey)
       return
+
+    # 1. Direct PTX batch for all PTX-eligible kernels (single driver JIT load)
+    ptx_todo: list[tuple[KernelPlan, str, str, str, str]] = []
+    c_todo: list[tuple[KernelPlan, str, str]] = []
+    if mode == "ptx":
+      for idx, (p, canon, ckey) in enumerate(todo):
+        ename = f"pk_ptx_{idx}"
+        body = emit_ptx_entry_body(p, entry_name=ename)
+        if body is not None:
+          ptx_todo.append((p, canon, ckey, ename, body))
+        else:
+          c_todo.append((p, canon, ckey))
+    else:
+      c_todo = list(todo)
+
+    if ptx_todo:
+      loaded = self._load_ptx_entries([b for _, _, _, _, b in ptx_todo], [n for _, _, _, n, _ in ptx_todo])
+      if loaded is not None:
+        for (_, _, ckey, _, _), fn in zip(ptx_todo, loaded):
+          self._compiled_cache[ckey] = fn
+        self.ptx_compiled_count += len(ptx_todo)
+      else:
+        c_todo.extend((p, canon, ckey) for p, canon, ckey, _, _ in ptx_todo)
+
+    if len(c_todo) <= 1:
+      for p, _canon, _ckey in c_todo:
+        p.compiled = self.compile(p)
+      for p, ckey in plan_keys:
+        if p.compiled is None:
+          p.compiled = self._compiled_cache.get(ckey)
+      return
+
     marker = _KERNEL_MARKER
-    for _, canon in todo:
+    for _, canon, _ in c_todo:
       if canon.find(marker) < 0:
-        for q, _ in todo:
+        for q, _, _ in c_todo:
           q.compiled = self.compile(q)
-        for p, c in plan_canons:
+        for p, ck in plan_keys:
           if p.compiled is None:
-            p.compiled = self._compiled_cache.get(c)
+            p.compiled = self._compiled_cache.get(ck)
         return
 
-    def _build_chunk(chunk: list[tuple[KernelPlan, str]]) -> list[tuple[str, object]]:
+    def _build_chunk(chunk: list[tuple[KernelPlan, str, str]]) -> tuple[str, list[tuple[str, object]]]:
       parts: list[str] = [PRELUDE]
-      for idx, (_, canon) in enumerate(chunk):
+      for idx, (_, canon, _) in enumerate(chunk):
         pos = canon.find(marker)
         parts.append(canon[pos:].replace(marker, f'extern "C" __global__ void pk_k{idx}(', 1))
       code = "\n".join(parts)
-      binary = self._compile_nvrtc_binary(code)
+      used_kind = "nvrtc"
+      binary = None
+      if mode == "nvcc":
+        binary = self._compile_nvcc_binary(code)
+        if binary is not None:
+          used_kind = "nvcc"
+      if binary is None:
+        binary = self._compile_nvrtc_binary(code)
       if binary is not None:
         mod = self._load_binary_module(binary)
       else:
         mod = self.cp.RawModule(code=code)
         mod.compile()
-      return [(canon, mod.get_function(f"pk_k{idx}")) for idx, (_, canon) in enumerate(chunk)]
+      return used_kind, [(ckey, mod.get_function(f"pk_k{idx}")) for idx, (_, _, ckey) in enumerate(chunk)]
 
     # Sort canonically for deterministic chunk CUBIN disk caching across runs.
-    # Because Tensor Core kernels emit inline PTX mma.sync with zero #include <mma.h>,
-    # all kernels compile uniformly in lightweight headerless chunks.
-    sorted_todo = sorted(todo, key=lambda item: hashlib.sha256(item[1].encode()).hexdigest())
+    sorted_todo = sorted(c_todo, key=lambda item: hashlib.sha256(item[1].encode()).hexdigest())
     max_workers = min(os.cpu_count() or 1, 8)
     n_workers = min(max(1, len(sorted_todo) // 4), max_workers) if len(sorted_todo) >= 8 else 1
     chunks = [sorted_todo[i::n_workers] for i in range(n_workers)]
     chunks = [c for c in chunks if c]
 
     if len(chunks) <= 1:
-      results = _build_chunk(chunks[0]) if chunks else []
+      chunk_outs = [_build_chunk(chunks[0])] if chunks else []
     else:
       from concurrent.futures import ThreadPoolExecutor
 
       dev_id = int(self.cp.cuda.runtime.getDevice())
 
-      def _worker(chunk: list[tuple[KernelPlan, str]]):
+      def _worker(chunk: list[tuple[KernelPlan, str, str]]):
         with self.cp.cuda.Device(dev_id):
           return _build_chunk(chunk)
 
-      results = []
       with ThreadPoolExecutor(max_workers=min(len(chunks), max_workers)) as pool:
-        for res in pool.map(_worker, chunks):
-          results.extend(res)
+        chunk_outs = list(pool.map(_worker, chunks))
 
-    for canon, fn in results:
-      self._compiled_cache[canon] = fn
-    # Attach compiled functions to all plans (including alpha-equivalent duplicates)
-    for p, canon in plan_canons:
+    for used_kind, pairs in chunk_outs:
+      for ckey, fn in pairs:
+        self._compiled_cache[ckey] = fn
+      if used_kind == "nvcc":
+        self.nvcc_compiled_count += len(pairs)
+      else:
+        self.nvrtc_compiled_count += len(pairs)
+    for p, ckey in plan_keys:
       if p.compiled is None:
-        p.compiled = self._compiled_cache.get(canon)
+        p.compiled = self._compiled_cache.get(ckey)
 
   def to_device(self, host: np.ndarray):
     return self.cp.asarray(host)

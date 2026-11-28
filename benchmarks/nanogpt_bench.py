@@ -299,6 +299,7 @@ def bench_parakeet(
   variant: str = "batched",
   backend: str = "cuda",
   tensor_cores: bool = False,
+  cuda_compiler: str = "nvrtc",
   steps: int = 20,
 ) -> dict:
   def sync():
@@ -313,7 +314,14 @@ def bench_parakeet(
   b1 = np.float32(0.9)
   b2 = np.float32(0.99)
 
-  opts = dict(backend=backend, device_threshold=1, device_fallback="silent", verify=False, tensor_cores=tensor_cores)
+  opts = dict(
+    backend=backend,
+    device_threshold=1,
+    device_fallback="silent",
+    verify=False,
+    tensor_cores=tensor_cores,
+    cuda_compiler=cuda_compiler,
+  )
   with par.options(**opts):
     model = tree_map(np.copy, initial)
     m = tree_map(np.zeros_like, initial)
@@ -373,6 +381,11 @@ def bench_parakeet(
       out["uploads_per_step"] = round((dev.uploads - u0) / steps, 2)
       out["downloads_per_step"] = round((dev.downloads - d0) / steps, 2)
       out["launches_per_step"] = round((dev.launches - l0) / steps, 1)
+      drv = dev.driver
+      out["cuda_compiler"] = cuda_compiler
+      out["ptx_kernels"] = getattr(drv, "ptx_compiled_count", 0)
+      out["nvrtc_kernels"] = getattr(drv, "nvrtc_compiled_count", 0)
+      out["nvcc_kernels"] = getattr(drv, "nvcc_compiled_count", 0)
     return out
 
 
@@ -631,6 +644,7 @@ def run_benchmark(
   steps: int = 20,
   include_host_adam: bool = True,
   include_mapped: bool = True,
+  compare_cuda_compilers: bool = False,
 ) -> dict:
   pk_backend = "cuda" if device == "cuda" else "multicore"
   prof = str(par.target_profile(pk_backend))
@@ -645,50 +659,80 @@ def run_benchmark(
     targets = rng.integers(0, cfg.vocab, size=(cfg.batch, cfg.context), dtype=np.int64)
     causal = np.tril(np.ones((cfg.context, cfg.context), dtype=bool))
 
-    runners = [
-      (
-        "parakeet_batched_fp32",
-        lambda c=cfg, ini=initial, tk=tokens, tg=targets, cs=causal: bench_parakeet(
-          c, ini, tk, tg, cs, variant="batched", backend=pk_backend, tensor_cores=False, steps=steps
-        ),
-      ),
-    ]
-    if device == "cuda":
-      runners.append(
-        (
-          "parakeet_batched_tf32",
-          lambda c=cfg, ini=initial, tk=tokens, tg=targets, cs=causal: bench_parakeet(
-            c, ini, tk, tg, cs, variant="batched", backend="cuda", tensor_cores=True, steps=steps
-          ),
+    runners = []
+    if device == "cuda" and compare_cuda_compilers:
+      import tempfile
+
+      def _fresh_compiler(c, ini, tk, tg, cs, comp, tc):
+        from parakeet.backends.cuda import CudaDevice
+
+        prev_cache = par.config.cache_dir
+        try:
+          with tempfile.TemporaryDirectory() as td:
+            par.config.cache_dir = td
+            CudaDevice._instance = None
+            par.api._backends.pop("cuda", None)
+            par.api._tables.pop(step_batched_compiled.fn.__code__, None)
+            return bench_parakeet(
+              c, ini, tk, tg, cs, variant="batched", backend="cuda", tensor_cores=tc, cuda_compiler=comp, steps=steps
+            )
+        finally:
+          par.config.cache_dir = prev_cache
+
+      for comp in ("ptx", "nvrtc", "nvcc"):
+        runners.append(
+          (
+            f"parakeet_tf32_{comp}",
+            lambda c=cfg, ini=initial, tk=tokens, tg=targets, cs=causal, cp=comp: _fresh_compiler(
+              c, ini, tk, tg, cs, cp, True
+            ),
+          )
         )
-      )
-    if include_mapped:
+    else:
       runners.append(
         (
-          "parakeet_mapped_fp32",
+          "parakeet_batched_fp32",
           lambda c=cfg, ini=initial, tk=tokens, tg=targets, cs=causal: bench_parakeet(
-            c, ini, tk, tg, cs, variant="mapped", backend=pk_backend, tensor_cores=False, steps=steps
+            c, ini, tk, tg, cs, variant="batched", backend=pk_backend, tensor_cores=False, steps=steps
           ),
         )
       )
       if device == "cuda":
         runners.append(
           (
-            "parakeet_mapped_tf32",
+            "parakeet_batched_tf32",
             lambda c=cfg, ini=initial, tk=tokens, tg=targets, cs=causal: bench_parakeet(
-              c, ini, tk, tg, cs, variant="mapped", backend="cuda", tensor_cores=True, steps=steps
+              c, ini, tk, tg, cs, variant="batched", backend="cuda", tensor_cores=True, steps=steps
             ),
           )
         )
-    if include_host_adam:
-      runners.append(
-        (
-          "parakeet_host_adam_fp32",
-          lambda c=cfg, ini=initial, tk=tokens, tg=targets, cs=causal: bench_parakeet(
-            c, ini, tk, tg, cs, variant="host_adam", backend=pk_backend, tensor_cores=False, steps=steps
-          ),
+      if include_mapped:
+        runners.append(
+          (
+            "parakeet_mapped_fp32",
+            lambda c=cfg, ini=initial, tk=tokens, tg=targets, cs=causal: bench_parakeet(
+              c, ini, tk, tg, cs, variant="mapped", backend=pk_backend, tensor_cores=False, steps=steps
+            ),
+          )
         )
-      )
+        if device == "cuda":
+          runners.append(
+            (
+              "parakeet_mapped_tf32",
+              lambda c=cfg, ini=initial, tk=tokens, tg=targets, cs=causal: bench_parakeet(
+                c, ini, tk, tg, cs, variant="mapped", backend="cuda", tensor_cores=True, steps=steps
+              ),
+            )
+          )
+      if include_host_adam:
+        runners.append(
+          (
+            "parakeet_host_adam_fp32",
+            lambda c=cfg, ini=initial, tk=tokens, tg=targets, cs=causal: bench_parakeet(
+              c, ini, tk, tg, cs, variant="host_adam", backend=pk_backend, tensor_cores=False, steps=steps
+            ),
+          )
+        )
 
     runners.extend(
       [
@@ -772,6 +816,11 @@ def main(argv=None):
   parser.add_argument("--steps", type=int, default=20)
   parser.add_argument("--no-mapped", action="store_true", help="Skip the per-sequence par.map variant")
   parser.add_argument("--no-host-adam", action="store_true", help="Skip the plain-Python Adam variant")
+  parser.add_argument(
+    "--compare-cuda-compilers",
+    action="store_true",
+    help="Benchmark Parakeet TF32 across direct PTX, NVRTC, and nvcc with fresh caches",
+  )
   parser.add_argument("--output", type=Path, default=None)
   args = parser.parse_args(argv)
 
@@ -781,6 +830,7 @@ def main(argv=None):
     steps=args.steps,
     include_mapped=not args.no_mapped,
     include_host_adam=not args.no_host_adam,
+    compare_cuda_compilers=args.compare_cuda_compilers,
   )
   encoded = json.dumps(results, indent=2) + "\n"
   if args.output is not None:

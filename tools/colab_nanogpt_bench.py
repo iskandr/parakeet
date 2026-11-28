@@ -14,20 +14,22 @@ import sys
 from runplz import App, Image
 
 GPU = os.environ.get("PK_COLAB_GPU", "L4")
+NANOGPT_ARGS = os.environ.get("PK_NANOGPT_ARGS", "")
 app = App("parakeet-nanogpt-bench")
 image = Image.from_registry("python:3.12")
 
 
 @app.function(image=image, gpu=GPU, timeout=30 * 60)
-def run_bench():
+def run_bench(extra_args: str = ""):
   repo = pathlib.Path(__file__).resolve().parents[1]
   py = sys.executable
   subprocess.run(["bash", "-c", "nvidia-smi; nproc; python --version"], check=False)
   subprocess.run([py, "-m", "pip", "install", "-q", "-e", "."], cwd=repo, check=True)
+  extra = extra_args.split()
   env = dict(os.environ, PYTHONPATH=str(repo))
-  subprocess.run([py, "-m", "benchmarks.nanogpt_bench", "--device", "cuda"], cwd=repo, env=env, check=True)
+  subprocess.run([py, "-m", "benchmarks.nanogpt_bench", "--device", "cuda", *extra], cwd=repo, env=env, check=True)
 
 
 @app.local_entrypoint()
 def main():
-  run_bench.remote()
+  run_bench.remote(extra_args=NANOGPT_ARGS)
