@@ -99,6 +99,6 @@ def train_step(model, m, v, step, tokens, targets, mask):
 ```
 
 That compiles forward, backward, and Adam into a single zero-round-trip device
-step. See the [nanoGPT GPU benchmarks](../release-benchmarks.md#end-to-end-nanogpt-training-nvidia-l4)
+step. See the [nanoGPT GPU benchmarks](../release-benchmarks.md#end-to-end-nanogpt-training-nvidia-a100)
 for full timings comparing Parakeet FP32/TF32, PyTorch (`eager`, `SDPA`,
 `torch.compile`), and JAX.

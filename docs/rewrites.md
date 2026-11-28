@@ -1,8 +1,7 @@
-# Rewrite rules catalog
+# Rewrite rules & thesis lineage
 
-This reference catalogs the algebraic rewrites Parakeet applies between Python
-source and native loops, and notes how Parakeet 1.x compares with the two NYU
-PhD theses behind the original compiler:
+This reference maps each algebraic rewrite to its compiler pass and shows how
+Parakeet 1.x builds on the two NYU PhD theses behind the original compiler:
 
 * **[R]** [Alex Rubinsteyn](https://rubinsteyn.com/),
   [*Runtime Compilation of Array-Oriented Python Programs*](https://cs.nyu.edu/media/publications/rubinsteyn_alex.pdf)
@@ -12,18 +11,21 @@ PhD theses behind the original compiler:
   (NYU, 2013; [arXiv:1304.1835](https://arxiv.org/abs/1304.1835)) — cache/register
   tiling and loop interchange over operator trees.
 
-*(For conceptual motivation and visual walkthroughs, start with
+*(For the cohesive conceptual story behind these passes, read
 [Operators & compilation walkthrough](primitives.md) and
-[Algebraic laws](algebra.md).)*
+[Algebraic optimization](algebra.md) first.)*
 
-## Two rewrite stages
+---
 
-1. **During elaboration:** array expressions remain *delayed* (index-to-value
+## Where rewrites run
+
+1. **During elaboration:** array expressions stay *delayed* (index-to-value
    functions), so simple producer-consumer chains fuse on construction.
 2. **In the middle end:** 12 passes in `parakeet.transforms.pipeline.PASSES`
    rewrite the emitted operator IR (`IndexMap`, `IndexReduce`, `IndexScan`,
    `IndexFilter`, `IndexExpand`, `IndexScatter`, `IndexWavefront`) before loop
-   lowering.
+   lowering. Inspect what fired on any function with
+   `par.show_rewrite(fn, *args).summary()`.
 
 ---
 
@@ -34,138 +36,229 @@ PhD theses behind the original compiler:
   <figcaption><strong>Figure 1.</strong> Vertical, filter-reduce, and sibling fusion eliminate intermediate arrays and redundant DRAM passes before loop lowering.</figcaption>
 </figure>
 
-### Vertical fusion (producer into consumer)
+### Producer-consumer (vertical) fusion (`[R]` Fig. 6.1)
 
-| Rule (`[R]` Fig. 6.1) | Python example | Implementation notes |
-|---|---|---|
-| `Map(g, Map(f, X))` → `Map(g ∘ f, X)` | `np.tanh(x * a) + b` | Elaboration + middle end; includes affine coordinate inversion for transpose, shifted-slice, and stencil fusion |
-| `Map(g, IndexMap(f, σ))` → `IndexMap(g ∘ f, σ)` | `par.imap(...) * 2` | Elaboration + middle end |
-| `OuterMap(g, Map(f, X₁), X₂)` → fused `OuterMap` | `par.allpairs(d, x*s, y)` | Elaboration |
-| `Reduce(g, ⊕, Map(f, X))` → `Reduce(g ∘ f, ⊕, X)` | `np.sum(x * x)` | Elaboration + middle end |
-| `Scatter(⊕, idx, Map(f, X))` → fused `IndexScatter` | `np.bincount(idx, weights=w*s)` | `transforms/fusion.py` |
-| `Scan(g, ⊕, ε, Map(f, X))` → fused `Scan` | `np.cumsum(x * 2)` | Elaboration + middle end |
-| `Map(g, Scan(f, ⊕, ε, X))` → `Scan(f, ⊕, g ∘ ε, X)` | `np.cumsum(x) * 2 + 1` | Consumer fuses into `IndexScan.emit` (`transforms/fusion.py`) |
-| `Filter(g, p, Map(f, X))` → `Filter(g ∘ f, p ∘ f, X)` | `(x * 2)[x * 2 > 0]` | Predicate and values share fused map |
-| `Reduce(g, ⊕, Filter(f, p, X))` → `FilterReduce` | `np.sum(x[x > 0])` | Guarded `IndexReduce`, zero index allocation (`transforms/fusion.py`) |
-| `Filter(q, Filter(p, X))` → `Filter(p ∧ q, X)` | `x[x > 0][x[x > 0] < 1]` | Single short-circuiting compaction (`transforms/fusion.py`) |
+<div class="pk-xform" markdown>
+<div class="pk-xform-col pk-xform-col--before" markdown>
+<div class="pk-xform-title">Chained operators <span class="pk-xform-badge">separate passes</span></div>
 
-**Safety guards (extending `[R]`):**
+```python
+Map(g, Map(f, X))  # np.tanh(x * a) + b
+Reduce(g, +, Map(f, X))  # np.sum(x * x)
+Scatter(+, idx, Map(f, X))  # np.bincount(idx, weights=w * s)
+Map(g, Scan(f, +, X))  # np.cumsum(x) * 2 + 1
+Reduce(g, +, Filter(p, X))  # np.sum(x[x > 0])
+Filter(q, Filter(p, X))  # x[x > 0][x[x > 0] < 1]
+```
+</div>
+<div class="pk-xform-col pk-xform-col--after" markdown>
+<div class="pk-xform-title">Fused operator <span class="pk-xform-badge">1 pass · 0 temporaries</span></div>
 
-* **Alias safety:** every delayed array snapshots the store counter when
-  created; if a potentially aliasing store occurs before consumption,
-  elaboration restarts with that expression materialized eagerly.
-* **Duplication guard:** `[R]` has no multi-use guard. Here, an expensive
-  delayed array may be fused at most once; a second consumer or a use inside a
-  loop restarts and evaluates it once.
-* **Filter-reduce guards:** requires single use of the compacted indices and an
-  explicit identity `init` (so `np.min(x[mask])` still raises `ValueError` on an
-  empty mask). Inside the fused loop, the gather bounds check is eliminated.
+```python
+Map(g ∘ f, X)  # + affine inversion for transpose/slices
+Reduce(g ∘ f, +, X)
+IndexScatter(+, idx, f)
+IndexScan(f, +, emit=g)  # fused into scan's emit block
+FilterReduce(g, +, p, X)  # guarded loop, no index buffer
+Filter(p ∧ q, X)  # single short-circuit compaction
+```
+</div>
+</div>
 
-### Nested and horizontal (sibling) fusion
+**Safety guards added in 1.x (extending `[R]`):**
 
-| Category | Rule (`[R]` Figs. 6.2–6.3) | Python example | Notes |
-|---|---|---|---|
-| **Nested maps** | `IndexMap(λi. IndexMap(f, σ₂), σ₁)` → `IndexMap(f, σ₁ ++ σ₂)` | `[[f(x, y) for y in Y] for x in X]` | Flattens independent inner shapes in elaboration (cheap bodies) or `CombineNestedMaps` (expensive bodies) to expose full N-D parallelism |
-| **Sibling reductions** | `Reduce(f, ⊕₁, X); Reduce(g, ⊕₂, X)` → fused 2-fold `Reduce` | `x.min(), x.max()` | Same index space, same seed status, both stay vectorizable (e.g. float `sum` and `max` stay separate to protect SIMD) |
-| **Sibling maps** | `Map(f, X); Map(g, X)` → fused 2-output `Map` | `np.sin(x), np.cos(x)` | Single memory read; on CUDA, independent contiguous maps of differing sizes also batch horizontally into one disjoint-union kernel (e.g. Adam steps) |
-| **Sibling scatters** | Two `IndexScatter`s sharing `idx` → fused multi-bin `IndexScatter` | GBDT grad + hess histograms | Single traversal over `idx` (`transforms/fusion.py`) |
-| **Online fusion** | `m = max(x); s = sum(exp(x - m))` → 1-pass `(m, s)` fold | `logsumexp`, `softmax` | Uses `Fold.carries` (`fuse_online_logsumexp`) |
+* **Alias safety:** every delayed array snapshots the store counter; a
+  potentially aliasing store before consumption restarts elaboration with that
+  array materialized eagerly.
+* **Multi-use duplication guard:** `[R]` had no cost guard; 1.x fuses an
+  expensive delayed array at most once so repeated uses or loop bodies never
+  recompute it.
+* **Empty-mask semantics:** `FilterReduce` requires single use of compacted
+  indices and an explicit identity `init` (so `np.min(x[mask])` still raises
+  `ValueError` on an empty mask).
+
+### Nested and sibling (horizontal) fusion (`[R]` Figs. 6.2–6.3)
+
+<div class="pk-xform" markdown>
+<div class="pk-xform-col pk-xform-col--before" markdown>
+<div class="pk-xform-title">Separate or nested passes</div>
+
+```python
+# Nested independent maps
+[[f(x, y) for y in Y] for x in X]
+
+# Sibling maps / reductions / scatters
+a, b = np.sin(x), np.cos(x)
+lo, hi = np.min(x), np.max(x)
+gh = par.scatter_add(B, idx, g)
+hh = par.scatter_add(B, idx, h)
+
+# Two-pass logsumexp / softmax
+m = np.max(x)
+s = np.sum(np.exp(x - m))
+```
+</div>
+<div class="pk-xform-col pk-xform-col--after" markdown>
+<div class="pk-xform-title">Merged operator</div>
+
+```python
+# Single flattened N-D IndexMap (full parallelism)
+IndexMap(f, shape=(len(X), len(Y)))
+
+# Single traversal over x (or idx)
+a, b = IndexMap2(sin, cos, x)
+lo, hi = IndexReduce2(min, max, x)
+gh, hh = IndexScatter2(B, idx, g, h)
+
+# Single-pass online (m, s) carry fold
+m, s = OnlineLogSumExp(x)
+```
+</div>
+</div>
+
+On CUDA, independent contiguous elementwise maps of differing sizes (such as
+updating dozens of parameter tensors in an Adam step) also batch horizontally
+into one disjoint-union kernel to cut launch overhead.
 
 ---
 
-## Reductions, scans, and linear algebra
+## Tiling, locality, and shape specialization (`[H]` & `[R]` §6.4)
 
-* **Associativity:** reductions parallelize and vectorize only when the combiner
-  is recognizably one of `+`, `*`, `min`, `max`, `and`, `or`, `&`, `|`, `^`
-  (however written). Any other user function folds strictly left-to-right.
-* **Multi-axis reductions:** reduced axes are transposed last (zero-copy view)
-  and folded in one pass per outer coordinate.
-* **Parallel scans & filters:** associative scans use 3-stage chunk fold →
-  prefix chunk totals → chunk scan; boolean filters use 3-stage count → prefix
-  offsets → parallel scatter.
-* **Matrix products & `einsum`:** `a @ b` lowers to `Map((i, j) ↦ Reduce(+, a[i, :] * b[:, j]))`,
-  so prologues and epilogues fuse directly. Contiguous stride-1 inner loops are
-  ensured by transposing `b` once when needed (`transpose(transpose(x)) → x`).
-  Stacked `A @ B` reshapes to a single tall product. Standalone CPU float
-  `A @ B` dispatches to NumPy's `cblas_?gemm` unless `config.blas = False`.
+<div class="pk-prim-grid" markdown>
 
----
+<div class="pk-prim-card" markdown>
+<div class="pk-prim-head"><strong>Generalized <code>IndexTile</code> + <code>TileStage</code></strong></div>
 
-## Tiling and locality
+Extends `[H]`'s `TiledMap` to any rank `≥ 2` `IndexMap` wrapping one
+`IndexReduce` (arbitrary folds, `Carry` states, and prologues/epilogues) —
+driving CPU L1/L2 cache tiles, `2×4` register jamming, GPU `__shared__` /
+`threadgroup` staging, Metal `simdgroup_matrix`, and CUDA TF32 `mma.sync` from
+one IR.
+</div>
 
-| `[H]` thesis concept | Parakeet 1.x implementation |
-|---|---|
-| `PermuteReductions` (interchange strided inner reduction with stride-1 outer map) | **Target-aware reduction interchange** (`transforms/tiling.py`): on CPU, hoists strided associative inner reductions (`np.sum(X, axis=0)`) outside L1-sized output strips; skipped on GPU so warps coalesce across columns |
-| `TiledMap` over nested adverbs | **Generalized `IndexTile` + `TileStage`** (`transforms/tiling.py`, `backends/tiled_gpu.py`): handles any rank `≥ 2` `IndexMap` wrapping one `IndexReduce` (arbitrary folds, `Carry` states, and prologues/epilogues) → cache + register tiles on CPU, `__shared__` / `threadgroup` tiles on CUDA and Metal |
-| Register tiling & unrolling | **N-D register jamming** (`lowering.jam_register_tile`, `2×4` interior + exact remainder faces on CPU) and `4×4` / `2×2` per-thread register tiles on CUDA/Metal |
-| Hardware matrix units | Automatic FP32 `simdgroup_matrix` on Apple Metal; opt-in TF32 `nvcuda::wmma` on CUDA `sm_80+` (`config.tensor_cores = True`) with double-buffered `cp.async` |
-| `TiledReduce` / `TiledScan` | L1 column-strip `PermuteReductions`, invariant row hoisting (`normalize`), and chunkwise `TileScan` for affine/bilinear recurrences (general cache-tiled arbitrary `TiledScan` is not implemented) |
-| Online tile-size search | Analytical compile-time sizing from `TargetProfile` (`parakeet/target.py`) and `config.tile_bytes` |
+<div class="pk-prim-card" markdown>
+<div class="pk-prim-head"><strong>Target-aware reduction interchange</strong></div>
 
-*(Stencils are not maps of reductions over two distinct operands, so they are
-never tiled—matching `[H]`'s finding that tiling slows down blur stencils.)*
+Implements `[H]`'s `PermuteReductions` selectively via `TargetProfile`: on CPU,
+hoists strided associative inner reductions (`np.sum(X, axis=0)`) outside
+L1-sized output strips; skipped on GPU so warps stay coalesced across columns.
+Stencils are never tiled (matching `[H]`'s finding that tiling slows blur
+stencils).
+</div>
 
----
+<div class="pk-prim-card" markdown>
+<div class="pk-prim-head"><strong>Associativity &amp; linear algebra</strong></div>
 
-## Scalars, views, and shape-bucket specialization
+Reductions parallelize and vectorize only when the combiner is provably
+associative (`+`, `*`, `min`, `max`, `and`, `or`, `&`, `|`, `^`); arbitrary
+user folds keep strict left-to-right order. `a @ b` lowers to `Map(Reduce(+))`
+so prologues/epilogues fuse, while standalone CPU float `a @ b` dispatches to
+NumPy's `cblas_?gemm` unless `config.blas = False`.
+</div>
 
-Built on the fly during IR construction (leaving CSE, LICM, unrolling, and SIMD
-vectorization to the system C/CUDA/Metal compiler):
+<div class="pk-prim-card" markdown>
+<div class="pk-prim-head"><strong>Value &amp; shape-bucket specialization</strong></div>
 
-* **Algebraic scalar simplifications:** constant folding (NumPy semantics),
-  `x + 0`, `x * 1`, `x // 1 → x`, integer `x * 0 → 0` (not floats, preserving
-  `-0.0`/`nan`), `x ** 2 → x * x`, `x ** 0.5 → sqrt(x)`, constant `select` /
-  boolean short-circuiting.
-* **Zero-copy views:** slices of slices, transposes, contiguous `reshape`, and
-  `expand_dims` reduce purely to offset/stride arithmetic.
-* **Redundant check elimination:** dimensions already proven equal by a prior
-  broadcast check are not re-checked; loop-bounded indices omit bounds checks.
-* **Value & shape-bucket specialization (`[R]` §6.4 extended):**
-  - Size-1 dimensions are always static constants (fixing `[R]`'s
-    `200×1 + 1×300` broadcasting corner case statically).
-  - Arguments required at compile time (`axis=`, `keepdims=`, tuple lengths)
-    specialize automatically.
-  - Tiled/GPU passes propagate finite power-of-2 shape buckets and divisibility
-    (`DimInfo(lo, hi, align)` via `config.shape_specialization`), guarding only
-    queried dimensions so aligned sizes (`128, 256, 512, 1024, 4096`) share one
-    branchless fast-path specialization.
+Extends `[R]` §6.4: size-1 broadcast dimensions are always static constants,
+compile-time arguments (`axis`, `keepdims`, tuple lengths) specialize
+automatically, and tiled/GPU passes propagate finite power-of-2 shape buckets
+and divisibility (`DimInfo(lo, hi, align)`) so aligned sizes
+(`128, 256, 512, 1024, 4096`) share one branchless fast-path binary.
+</div>
+
+</div>
+
+Scalar algebraic simplifications (`x + 0`, `x * 1`, `x ** 2 → x * x`, zero-copy
+view arithmetic, and redundant broadcast/bounds check elimination) happen on
+the fly during IR construction, delegating low-level CSE, LICM, unrolling, and
+SIMD codegen to `clang`/`gcc`/NVRTC/Metal.
 
 ---
 
 ## Operator differentiation rules
 
-`par.grad` attaches one reverse rule per operator (see
-[Automatic differentiation](autodiff.md) and [Law 2](algebra.md#law-2-algebraic-rematerialization-in-reverse-mode-ad)):
+`par.grad` attaches one reverse rule per algebraic operator (rather than
+differentiating flattened loops). See [Automatic differentiation](autodiff.md)
+and [Law 2: Algebraic rematerialization](algebra.md#law-2-algebraic-rematerialization-in-reverse-mode-ad).
 
-| Operator | Adjoint given output cotangent `ȳ` |
-|---|---|
-| `Map(f, X)` element-wise | `Map(∂f/∂x · ȳ, X)`, summed over broadcast axes |
-| `Reduce(+, X)` | `ȳ` broadcast to `X` |
-| `Reduce(max, X)` | `ȳ` where `X == result`, split equally across ties |
-| `Reduce(*, X)` | Zero-safe `ȳ · result / X` |
-| `Reduce(f, X)` (arbitrary `f`) | `O(√N)` checkpointed reverse replay |
-| `Scan(+, X)` | Reverse `Scan(+)` of `ȳ` |
-| `A @ B` | `ȳ @ Bᵀ` and `Aᵀ @ ȳ` |
-| View (slice, transpose, reshape) | Matching view of `ȳ` |
-| Gather `X[idx]` / Scatter `scatter_add` | `scatter_add(ȳ, idx)` / gather `ȳ[idx]` |
-| `sort(X)` | Scatter `ȳ` by the inverse sorting permutation |
-| `Map(f, X)` (general `f`) | Per-element differentiated `f` with thread-privatized adjoints |
-| Runtime `if c: A else: B` | Both pure branches evaluated; values and adjoints selected by `c` |
+<div class="pk-xform" markdown>
+<div class="pk-xform-col pk-xform-col--before" markdown>
+<div class="pk-xform-title">Forward operator</div>
+
+```python
+Map(f, X)  # elementwise
+Reduce(+, X)  # sum reduction
+Reduce(max, X)  # max reduction
+Reduce(*, X)  # product reduction
+Scan(+, X)  # prefix sum
+A @ B  # matrix product
+X[idx]  # gather
+par.scatter_add(n, idx, v)  # scatter-add
+np.sort(X)  # sort
+```
+</div>
+<div class="pk-xform-col pk-xform-col--after" markdown>
+<div class="pk-xform-title">Reverse adjoint given output cotangent <code>ȳ</code></div>
+
+```python
+Map(∂f / ∂x * ȳ, X)  # summed over broadcast axes
+broadcast(ȳ, X.shape)
+ȳ * (X == result) / tie_count
+zero_safe(ȳ * result / X)
+ReverseScan(+, ȳ)
+ȳ @ B.T, A.T @ ȳ
+par.scatter_add(len(X), idx, ȳ)
+ȳ[idx]  # gather
+scatter(ȳ, inverse_permutation)
+```
+</div>
+</div>
+
+Arbitrary non-elementary reductions use `O(√N)` checkpointed reverse replay,
+general `par.map` bodies differentiate per element with thread-privatized
+adjoints, and runtime `if c: A else: B` evaluates both pure branches and
+selects values and adjoints by `c`.
 
 ---
 
-## Summary vs. the 2013–2014 theses
+## Evolution from the 2013–2014 NYU theses
 
-| Added in Parakeet 1.x | Present in `[R]` / `[H]` only |
-|---|---|
-| Composable forward/reverse/higher-order AD + Law 2 rematerialization | IR-to-IR differentiation pass over lowered loops (1.x uses an algebraic tape during elaboration) |
-| Rescaled-monoid tiling (attention, CCE, RBF), Law 3 reassociation, Law 4 chunkwise scans, Law 5 interval pruning, Law 6 scatter & pairwise folds | Recursive tiling of arbitrary deeper adverb nests and general `TiledScan` for arbitrary non-affine scans |
-| Alias & duplication safety guards on fusion; static size-1 broadcast specialization; `DimInfo` shape-bucket specialization | Online runtime tile-size search |
-| Parallel scans, filters, `RaggedArray` expand, wavefront DP, `einsum`, and runtime bounds/shape exceptions | Custom low-level scalar optimizer (1.x delegates scalar opts to clang/gcc/NVRTC/MSL) |
-| Unified CPU + Apple Metal + NVIDIA CUDA with device residency and hardware matrix units | — |
+<div class="pk-xform" markdown>
+<div class="pk-xform-col pk-xform-col--after" markdown>
+<div class="pk-xform-title">Added in Parakeet 1.x <span class="pk-xform-badge">new capabilities</span></div>
+
+* **Composable AD + Law 2 rematerialization:** forward (`jvp`), reverse
+  (`grad`/`vjp`), higher-order (`hvp`/`hessian`), and zero-tape attention/CCE
+  adjoints.
+* **Algebraic Laws 1–6:** rescaled-monoid tiling (attention, CCE, RBF),
+  contraction reassociation (MLA/GQA), chunkwise state-space scans (IIR,
+  Mamba-2), `TileInterval` mask pruning, and ordered pairwise folds / fused
+  histograms.
+* **Soundness &amp; specialization:** alias and multi-use duplication guards on
+  fusion, static size-1 broadcasts, `DimInfo` shape-bucket specialization, and
+  checked runtime `IndexError`/`ValueError` exceptions.
+* **Modern targets &amp; surface:** unified multi-core CPU, Apple Metal
+  (`simdgroup_matrix`), and NVIDIA CUDA (TF32 `mma.sync`, NVRTC/PTX/`nvcc`,
+  device residency), plus `RaggedArray`, wavefront DP, `einsum`, `par.nn`, and
+  `par.Alphabet`/`par.Vocab`.
+</div>
+<div class="pk-xform-col pk-xform-col--before" markdown>
+<div class="pk-xform-title">In <code>[R]</code> / <code>[H]</code> only <span class="pk-xform-badge">deliberately replaced or omitted</span></div>
+
+* **IR-to-IR loop AD:** replaced by an operator-level algebraic tape during
+  elaboration so adjoints undergo full fusion and tiling.
+* **Recursive arbitrary-depth tiling &amp; general `TiledScan`:** 1.x focuses
+  `IndexTile` on rank `≥ 2` map-of-reduce nests and `TileScan` on affine and
+  bilinear recurrences.
+* **Online runtime tile-size autotuning:** replaced by analytical compile-time
+  sizing from `TargetProfile` and `config.tile_bytes`.
+* **Custom low-level scalar optimizer:** delegated to `clang`/`gcc`, NVRTC,
+  `nvcc`, and the Metal compiler.
+</div>
+</div>
 
 ---
 
-**Next:** [Compiler architecture](internals.md) walks through how elaboration,
-all 12 middle-end passes, lowered loop IR, and C/Metal/CUDA codegen fit
-together.
+**Next:** [Compiler architecture](internals.md) walks through specialization,
+elaboration, all 12 middle-end passes, lowered loop IR, and C/Metal/CUDA
+codegen.

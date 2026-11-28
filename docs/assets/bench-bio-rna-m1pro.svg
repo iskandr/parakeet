@@ -1,7 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 186" width="680" height="186" role="img" aria-label="SSHash + Delta-Map Long-Read RNA (3.01 Mbp)">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 186" width="680" height="186" role="img" aria-label="SSHash + delta-map long-read RNA (3.01 Mbp, 80 isoforms)">
 <rect x="0.5" y="0.5" width="679" height="185" rx="10" fill="#ffffff" stroke="#cbd5e1"/>
-<text x="20" y="28" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#0f172a">SSHash + Delta-Map Long-Read RNA (3.01 Mbp)</text>
-<text x="20" y="48" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#475569">80 human Ensembl isoforms, 9.70× unitig collapse, 92.2% hash-probe skip.</text>
+<text x="20" y="28" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#0f172a">SSHash + delta-map long-read RNA (3.01 Mbp, 80 isoforms)</text>
+<text x="20" y="48" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#475569">Unitig collapse + SSHash fast-path k-mer extension + delta-map.</text>
 <rect x="224.0" y="64.0" width="288.0" height="80.0" rx="5" fill="#fafbfc" stroke="#e2e8f0"/>
 <rect x="225.0" y="66.4" width="286.0" height="35.2" rx="3" fill="#f0fdfa"/>
 <text x="214.0" y="88.8" text-anchor="end" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#0f766e">Parakeet (multicore)</text>

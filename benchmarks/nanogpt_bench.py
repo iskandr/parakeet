@@ -258,6 +258,50 @@ _vg_batched = par.value_and_grad(loss_batched)
 _vg_mapped = par.value_and_grad(loss_mapped)
 
 
+def _init_nn_module_from(cfg: GPTConfig, initial: NanoGPT):
+  from examples.nanogpt import NanoGPT as NNModuleGPT
+
+  mod = NNModuleGPT(cfg.vocab, cfg.context, cfg.width, cfg.layers, heads=cfg.heads, dtype=np.float32)
+  mod.wte.weight = initial.wte.copy()
+  mod.wpe = initial.wpe.copy()
+  for dst, src in zip(mod.blocks, initial.blocks):
+    dst.ln1.gain = src.ln1.gain.copy()
+    dst.ln1.bias = src.ln1.bias.copy()
+    dst.attn.wq.weight = src.wq.copy()
+    dst.attn.wk.weight = src.wk.copy()
+    dst.attn.wv.weight = src.wv.copy()
+    dst.attn.wo.weight = src.wo.copy()
+    dst.ln2.gain = src.ln2.gain.copy()
+    dst.ln2.bias = src.ln2.bias.copy()
+    dst.mlp.fc1.weight = src.w1.copy()
+    dst.mlp.fc1.bias = src.b1.copy()
+    dst.mlp.fc2.weight = src.w2.copy()
+    dst.mlp.fc2.bias = src.b2.copy()
+  mod.ln_f.gain = initial.ln_f.gain.copy()
+  mod.ln_f.bias = initial.ln_f.bias.copy()
+  mod.head.weight = initial.head.copy()
+  return mod
+
+
+def _loss_nn_module(model, tokens, targets, causal):
+  return par.nn.cross_entropy(model(tokens, mask=causal), targets)
+
+
+_vg_nn_module = par.value_and_grad(_loss_nn_module)
+
+
+@par.jit
+def step_nn_module_compiled(model, m, v, tokens, targets, causal, lr, b1, b2, bc1, bc2):
+  loss_val, grads = _vg_nn_module(model, tokens, targets, causal)
+  one = np.float32(1.0)
+  m_next = par.tree_map_arrays(lambda mi, g: b1 * mi + (one - b1) * g, m, grads)
+  v_next = par.tree_map_arrays(lambda vi, g: b2 * vi + (one - b2) * g * g, v, grads)
+  model_next = par.tree_map_arrays(
+    lambda p, mi, vi: p - (lr * mi / bc1) / (np.sqrt(vi / bc2) + np.float32(1e-8)), model, m_next, v_next
+  )
+  return loss_val, model_next, m_next, v_next
+
+
 @par.jit
 def step_batched_compiled(model, m, v, tokens, targets, causal, n_head, lr, b1, b2, bc1, bc2):
   loss_val, grads = _vg_batched(model, tokens, targets, causal, n_head)
@@ -323,9 +367,13 @@ def bench_parakeet(
     cuda_compiler=cuda_compiler,
   )
   with par.options(**opts):
-    model = tree_map(np.copy, initial)
-    m = tree_map(np.zeros_like, initial)
-    v = tree_map(np.zeros_like, initial)
+    if variant == "nn_module":
+      model = _init_nn_module_from(cfg, initial)
+      m, v = par.optim.adam_init(model)
+    else:
+      model = tree_map(np.copy, initial)
+      m = tree_map(np.zeros_like, initial)
+      v = tree_map(np.zeros_like, initial)
     tok, tgt, cas = tokens, targets, causal
 
     if backend == "cuda" and variant != "host_adam":
@@ -341,6 +389,11 @@ def bench_parakeet(
       def run_step(step_idx, cur_model, cur_m, cur_v):
         bc1, bc2 = _adam_bias_correction(step_idx)
         return step_batched_compiled(cur_model, cur_m, cur_v, tok, tgt, cas, cfg.heads, lr, b1, b2, bc1, bc2)
+    elif variant == "nn_module":
+
+      def run_step(step_idx, cur_model, cur_m, cur_v):
+        bc1, bc2 = _adam_bias_correction(step_idx)
+        return step_nn_module_compiled(cur_model, cur_m, cur_v, tok, tgt, cas, lr, b1, b2, bc1, bc2)
     elif variant == "mapped":
 
       def run_step(step_idx, cur_model, cur_m, cur_v):
@@ -703,6 +756,23 @@ def run_benchmark(
             "parakeet_batched_tf32",
             lambda c=cfg, ini=initial, tk=tokens, tg=targets, cs=causal: bench_parakeet(
               c, ini, tk, tg, cs, variant="batched", backend="cuda", tensor_cores=True, steps=steps
+            ),
+          )
+        )
+        runners.append(
+          (
+            "parakeet_nn_module_tf32",
+            lambda c=cfg, ini=initial, tk=tokens, tg=targets, cs=causal: bench_parakeet(
+              c, ini, tk, tg, cs, variant="nn_module", backend="cuda", tensor_cores=True, steps=steps
+            ),
+          )
+        )
+      else:
+        runners.append(
+          (
+            "parakeet_nn_module_fp32",
+            lambda c=cfg, ini=initial, tk=tokens, tg=targets, cs=causal: bench_parakeet(
+              c, ini, tk, tg, cs, variant="nn_module", backend=pk_backend, tensor_cores=False, steps=steps
             ),
           )
         )

@@ -132,7 +132,7 @@ def _make_single_dot_svg(
   plot_h = len(arms) * row_h
   h = int(header_h + plot_h + footer_h)
 
-  label_w = 188.0
+  label_w = 200.0
   val_w = 128.0
   plot_x0 = 18.0 + label_w
   plot_w = w - 36.0 - label_w - val_w
@@ -153,11 +153,22 @@ def _make_single_dot_svg(
     f'<text x="20" y="48" font-family="{FONT}" font-size="12.5" fill="{MUTED}">{_esc(subtitle)}</text>',
   ]
 
-  # Clean legend row underneath subtitle (never collides with title)
+  # Clean dynamic legend row underneath subtitle matching the actual colors plotted
+  used_colors = {c for _, _, c, _ in arms}
   legend_items = [(PK_MAIN, "Parakeet")]
   if show_legacy_legend:
     legend_items.append((PK_LEGACY, "Parakeet 1.0.0"))
-  legend_items.extend([(BASE_BLUE, "Compiled / Specialist"), (BASE_SLATE, "NumPy / CuPy")])
+  elif PK_LEGACY in used_colors:
+    legend_items.append((PK_LEGACY, "Parakeet ablation / PTX"))
+  if BASE_BLUE in used_colors:
+    legend_items.append((BASE_BLUE, "Compiled / Specialist"))
+  if BASE_PURPLE in used_colors:
+    legend_items.append((BASE_PURPLE, "JAX jit"))
+  if BASE_SLATE in used_colors:
+    slate_lbl = (
+      "PyTorch eager" if any("PyTorch eager" in n for n, _, c, _ in arms if c == BASE_SLATE) else "NumPy / CuPy"
+    )
+    legend_items.append((BASE_SLATE, slate_lbl))
   lx = 20.0
   for color, lbl in legend_items:
     out.append(f'<circle cx="{lx + 5:.1f}" cy="66" r="4.5" fill="{color}"/>')
@@ -548,42 +559,43 @@ def _make_nanogpt_single_svg(
   return "\n".join(out) + "\n"
 
 
-def make_bio_individual_svgs(bio_data: dict) -> list[tuple[str, str]]:
+def make_bio_individual_svgs(bio_data: dict, *, suffix: str = "m1pro") -> list[tuple[str, str]]:
   """Render one dedicated 680px SVG per bioinformatics workload (always 2 Parakeet variants)."""
   workloads = bio_data["workloads"]
+  rna_label = workloads.get("patro_longread_rna", {}).get("label", "SSHash + Delta-Map Long-Read RNA")
   specs = [
     (
-      "bench-bio-myers-m1pro.svg",
+      f"bench-bio-myers-{suffix}.svg",
       "edit_distance_1000x256",
       "Myers 64-Bit Edit Distance (1,000 × 256 bp)",
       "Exact bit-parallel Levenshtein distance vs. C++ edlib.",
     ),
     (
-      "bench-bio-gotoh-m1pro.svg",
+      f"bench-bio-gotoh-{suffix}.svg",
       "gotoh_align_200x128",
       "Affine-Gap Gotoh Alignment + Traceback (200 × 128 bp)",
       "Full 3-state traceback + RLE CIGAR vs. Biopython (score-only) & Biotite.",
     ),
     (
-      "bench-bio-rna-m1pro.svg",
+      f"bench-bio-rna-{suffix}.svg",
       "patro_longread_rna",
-      "SSHash + Delta-Map Long-Read RNA (3.01 Mbp)",
-      "80 human Ensembl isoforms, 9.70× unitig collapse, 92.2% hash-probe skip.",
+      rna_label,
+      "Unitig collapse + SSHash fast-path k-mer extension + delta-map.",
     ),
     (
-      "bench-bio-tanimoto-m1pro.svg",
+      f"bench-bio-tanimoto-{suffix}.svg",
       "tanimoto_256x8192",
       "2048-Bit Tanimoto 1-NN Search (256 × 8,192)",
       "Tiled POPCNT bit-vector search vs. C++ RDKit BulkTanimoto.",
     ),
     (
-      "bench-bio-kabsch-m1pro.svg",
+      f"bench-bio-kabsch-{suffix}.svg",
       "kabsch_rmsd_2000x128",
       "Batched Kabsch 3D Protein RMSD (2,000 × 128 CA)",
       "Compiled 3×3 SVD + determinant vs. Biotite (f32) & NumPy batched SVD (f64).",
     ),
     (
-      "bench-bio-pileup-m1pro.svg",
+      f"bench-bio-pileup-{suffix}.svg",
       "bam_pileup_2m",
       "6-Channel BAM Pileup (2,000,000 Alignments)",
       "Single-pass fused multi-channel scatter vs. 6× NumPy bincount.",
@@ -678,6 +690,621 @@ def make_bio_individual_svgs(bio_data: dict) -> list[tuple[str, str]]:
     )
     lines.append("</svg>")
     outputs.append((fname, "\n".join(lines) + "\n"))
+  return outputs
+
+
+def _index_flat_rows(rows: list[dict]) -> dict[tuple[str, str, str], dict]:
+  out: dict[tuple[str, str, str], dict] = {}
+  for r in rows:
+    if "samples_ms" not in r:
+      continue
+    shapes = r["shapes"]
+    if r["task"] in ("nn", "rbf"):
+      if shapes[0][0] == 256:
+        size = "small"
+      elif shapes[0][0] == 16384:
+        size = "xlarge"
+      else:
+        size = "large"
+    else:
+      size = "default"
+    out[(r["task"], size, r["method"])] = r
+  return out
+
+
+def _build_arms(row_map: dict, task: str, size: str, spec: list[tuple[str, str, str, bool]]):
+  arms = []
+  for method, label, color, is_pk in spec:
+    r = row_map.get((task, size, method))
+    if r is not None and r.get("samples_ms"):
+      arms.append((label, r["samples_ms"], color, is_pk))
+  arms.sort(key=lambda item: median(item[1]))
+  return arms
+
+
+def _make_epyc24_svgs(assets_dir: Path) -> list[tuple[str, str]]:
+  outputs: list[tuple[str, str]] = []
+  rel_path = assets_dir / "colab-epyc24-release.json"
+  if rel_path.exists():
+    d = json.loads(rel_path.read_text())
+    rm = _index_flat_rows(d["rows"])
+    footer = f"Source: docs/assets/colab-epyc24-release.json · {d['cpu']} ({d['threads']} threads), n=11 replicates"
+
+    nn_arms = _build_arms(
+      rm,
+      "nn",
+      "large",
+      [
+        ("pk-par", "Parakeet (_par)", PK_MAIN, True),
+        ("pk-numpy", "Parakeet (_numpy)", PK_MAIN, True),
+        ("pk-comp", "Parakeet (_comp)", PK_ALT, True),
+        ("pk-map", "Parakeet (par.map)", PK_ALT, True),
+        ("pk-loop", "Parakeet (_loop, 1T)", PK_LEGACY, True),
+        ("sklearn-brute", "scikit-learn brute", BASE_BLUE, False),
+        ("numba-parallel", "Numba parallel", BASE_BLUE, False),
+        ("faiss-flat", "Faiss IndexFlatL2", BASE_BLUE, False),
+        ("keops", "PyKeOps Genred", BASE_BLUE, False),
+        ("scipy-tree", "SciPy cKDTree", BASE_BLUE, False),
+        ("numpy", "NumPy broadcasting", BASE_SLATE, False),
+      ],
+    )
+    if nn_arms:
+      outputs.append(
+        (
+          "bench-1nn-cpu-epyc24.svg",
+          _make_single_dot_svg(
+            title="CPU Exact 1-NN on 24-Core AMD EPYC (1,024 × 4,096 × 32)",
+            subtitle="All parallel Parakeet styles (_par, _numpy, _comp, par.map) vs. specialist libraries.",
+            footer=footer,
+            arms=nn_arms,
+            vmin=1.0,
+            vmax=400.0,
+          ),
+        )
+      )
+
+    rbf_arms = _build_arms(
+      rm,
+      "rbf",
+      "large",
+      [
+        ("pk-comp", "Parakeet (_comp)", PK_MAIN, True),
+        ("pk-numpy", "Parakeet (_numpy)", PK_MAIN, True),
+        ("pk-par", "Parakeet (_par)", PK_ALT, True),
+        ("pk-helpers", "Parakeet (_helpers)", PK_ALT, True),
+        ("pk-loop", "Parakeet (_loop, 1T)", PK_LEGACY, True),
+        ("numba-parallel", "Numba parallel", BASE_BLUE, False),
+        ("keops", "PyKeOps Genred", BASE_BLUE, False),
+        ("numpy", "NumPy broadcasting", BASE_SLATE, False),
+      ],
+    )
+    if rbf_arms:
+      outputs.append(
+        (
+          "bench-rbf-cpu-epyc24.svg",
+          _make_single_dot_svg(
+            title="CPU Gaussian / RBF Regression on 24-Core AMD EPYC (1,024 × 4,096 × 32)",
+            subtitle="Single-pass online monoidal tiles vs. Numba, PyKeOps, and NumPy.",
+            footer=footer,
+            arms=rbf_arms,
+            vmin=3.0,
+            vmax=1000.0,
+          ),
+        )
+      )
+
+    split_arms = _build_arms(
+      rm,
+      "split",
+      "default",
+      [
+        ("pk-par", "Parakeet (_par)", PK_MAIN, True),
+        ("pk-numpy", "Parakeet (_numpy)", PK_MAIN, True),
+        ("pk-loop", "Parakeet (_loop)", PK_ALT, True),
+        ("pk-comp", "Parakeet (_comp)", PK_ALT, True),
+        ("numba", "Numba @njit", BASE_BLUE, False),
+        ("numpy", "NumPy add.at", BASE_SLATE, False),
+      ],
+    )
+    if split_arms:
+      outputs.append(
+        (
+          "bench-split-cpu-epyc24.svg",
+          _make_single_dot_svg(
+            title="CPU GBDT Histogram Split on 24-Core AMD EPYC (262,144 × 256)",
+            subtitle="All four Parakeet styles fuse to the same privatized IndexScatter pass.",
+            footer=footer,
+            arms=split_arms,
+            vmin=0.15,
+            vmax=1.0,
+          ),
+        )
+      )
+
+  bio_path = assets_dir / "colab-epyc24-bio.json"
+  if bio_path.exists():
+    outputs.extend(make_bio_individual_svgs(json.loads(bio_path.read_text()), suffix="epyc24"))
+
+  return outputs
+
+
+def _make_a100_compiler_svgs(assets_dir: Path) -> list[tuple[str, str]]:
+  comp_path = assets_dir / "colab-a100-nanogpt-compilers.json"
+  if not comp_path.exists():
+    return []
+  data = json.loads(comp_path.read_text())
+  cfgs = data["configs"]
+  footer = (
+    "Source: docs/assets/colab-a100-nanogpt-compilers.json · NVIDIA A100-SXM4-40GB, 20 warmed steps (fresh cache)"
+  )
+
+  def _arms_for(cfg_d: dict):
+    spec = [
+      ("parakeet_tf32_nvrtc", "Parakeet NVRTC (TF32)", PK_MAIN, True),
+      ("parakeet_tf32_nvcc", "Parakeet nvcc -O3 (TF32)", PK_ALT, True),
+      ("parakeet_tf32_ptx", "Parakeet PTX (TF32)", PK_LEGACY, True),
+      ("torch_eager_fp32", "PyTorch eager (FP32)", BASE_SLATE, False),
+      ("torch_compile_fp32", "torch.compile (FP32)", BASE_BLUE, False),
+      ("torch_compile_tf32", "torch.compile (TF32)", BASE_BLUE, False),
+      ("torch_sdpa_compile_tf32", "torch.compile SDPA (TF32)", BASE_BLUE, False),
+      ("jax_jit_fp32", "JAX jit (FP32)", BASE_PURPLE, False),
+      ("jax_jit_tf32", "JAX jit (TF32)", BASE_PURPLE, False),
+    ]
+    arms = []
+    for key, label, color, is_pk in spec:
+      entry = cfg_d.get(key)
+      if entry and entry.get("samples_ms"):
+        arms.append((label, entry["samples_ms"], color, is_pk))
+    arms.sort(key=lambda item: median(item[1]))
+    return arms
+
+  outputs: list[tuple[str, str]] = []
+  if "small_B16_T64_C128_L2" in cfgs:
+    outputs.append(
+      (
+        "bench-a100-compilers-small.svg",
+        _make_single_dot_svg(
+          title="CUDA Compiler Comparison on A100 — Small nanoGPT (16×64×128×2L)",
+          subtitle="Direct PTX vs. NVRTC vs. standalone nvcc -O3 (fresh cache) + PyTorch & JAX.",
+          footer=footer,
+          arms=_arms_for(cfgs["small_B16_T64_C128_L2"]),
+          vmin=1.2,
+          vmax=12.0,
+          show_legacy_legend=False,
+        ),
+      )
+    )
+  if "med_B32_T128_C256_L4" in cfgs:
+    outputs.append(
+      (
+        "bench-a100-compilers-med.svg",
+        _make_single_dot_svg(
+          title="CUDA Compiler Comparison on A100 — Medium nanoGPT (32×128×256×4L)",
+          subtitle="NVRTC matches nvcc -O3 (13.66 vs 13.68 ms); direct PTX compiles 13.4% faster (16.0 ms).",
+          footer=footer,
+          arms=_arms_for(cfgs["med_B32_T128_C256_L4"]),
+          vmin=4.0,
+          vmax=22.0,
+          show_legacy_legend=False,
+        ),
+      )
+    )
+  return outputs
+
+
+def _make_a100_suite_svgs(assets_dir: Path) -> list[tuple[str, str]]:
+  outputs: list[tuple[str, str]] = []
+
+  # 1. Release scale (1,024 x 4,096 x 32 etc.) on A100
+  rel_path = assets_dir / "colab-a100-release.json"
+  if rel_path.exists():
+    d = json.loads(rel_path.read_text())
+    rm = _index_flat_rows(d["rows"])
+    footer = "Source: docs/assets/colab-a100-release.json · NVIDIA A100-SXM4-40GB, TF32 enabled, n=21 replicates"
+
+    nn_arms = _build_arms(
+      rm,
+      "nn",
+      "large",
+      [
+        ("pk-numpy", "Parakeet (_numpy)", PK_MAIN, True),
+        ("pk-comp", "Parakeet (_comp)", PK_MAIN, True),
+        ("pk-par", "Parakeet (_par)", PK_ALT, True),
+        ("pk-map", "Parakeet (par.map)", PK_ALT, True),
+        ("faiss-flat", "Faiss GpuIndexFlatL2", BASE_BLUE, False),
+        ("torch-cdist", "PyTorch cdist", BASE_BLUE, False),
+        ("torch-compile", "torch.compile (cdist)", BASE_BLUE, False),
+        ("torch-compile-broadcast", "torch.compile (bcast)", BASE_BLUE, False),
+        ("jax-jit", "JAX jit", BASE_PURPLE, False),
+        ("keops", "PyKeOps Genred", BASE_BLUE, False),
+        ("cupy", "CuPy broadcasting", BASE_SLATE, False),
+      ],
+    )
+    if nn_arms:
+      outputs.append(
+        (
+          "bench-1nn-gpu-a100.svg",
+          _make_single_dot_svg(
+            title="GPU Exact 1-NN on NVIDIA A100 (1,024 × 4,096 × 32)",
+            subtitle="All four parallel Parakeet styles vs. Faiss, PyTorch, JAX, PyKeOps, and CuPy.",
+            footer=footer,
+            arms=nn_arms,
+            vmin=0.1,
+            vmax=15.0,
+          ),
+        )
+      )
+
+    rbf_arms = _build_arms(
+      rm,
+      "rbf",
+      "large",
+      [
+        ("pk-numpy", "Parakeet (_numpy)", PK_MAIN, True),
+        ("pk-helpers", "Parakeet (_helpers)", PK_MAIN, True),
+        ("pk-par", "Parakeet (_par)", PK_ALT, True),
+        ("torch-compile", "torch.compile (cdist)", BASE_BLUE, False),
+        ("torch-cdist", "PyTorch cdist", BASE_BLUE, False),
+        ("torch-compile-broadcast", "torch.compile (bcast)", BASE_BLUE, False),
+        ("jax-jit", "JAX jit", BASE_PURPLE, False),
+        ("keops", "PyKeOps Genred", BASE_BLUE, False),
+        ("cupy", "CuPy broadcasting", BASE_SLATE, False),
+      ],
+    )
+    if rbf_arms:
+      outputs.append(
+        (
+          "bench-rbf-gpu-a100.svg",
+          _make_single_dot_svg(
+            title="GPU Gaussian / RBF Regression on NVIDIA A100 (1,024 × 4,096 × 32)",
+            subtitle="Zero N × M materialization vs. PyTorch, JAX, PyKeOps, and CuPy.",
+            footer=footer,
+            arms=rbf_arms,
+            vmin=0.2,
+            vmax=15.0,
+          ),
+        )
+      )
+
+  # 2. Large scale (16,384 x 65,536 x 32, 4x16x4096x64, 10M x 256) on A100
+  lg_path = assets_dir / "colab-a100-large.json"
+  if lg_path.exists():
+    d = json.loads(lg_path.read_text())
+    rm = _index_flat_rows(d["rows"])
+    footer = (
+      "Source: docs/assets/colab-a100-large.json · NVIDIA A100-SXM4-40GB, TF32, n=21 (CuPy OOMs 137 GB on 1-NN/RBF)"
+    )
+
+    nn_lg = _build_arms(
+      rm,
+      "nn",
+      "xlarge",
+      [
+        ("pk-numpy", "Parakeet (_numpy)", PK_MAIN, True),
+        ("pk-comp", "Parakeet (_comp)", PK_MAIN, True),
+        ("pk-par", "Parakeet (_par)", PK_ALT, True),
+        ("pk-map", "Parakeet (par.map)", PK_ALT, True),
+        ("torch-compile", "torch.compile (cdist)", BASE_BLUE, False),
+        ("faiss-flat", "Faiss GpuIndexFlatL2", BASE_BLUE, False),
+        ("keops", "PyKeOps Genred", BASE_BLUE, False),
+        ("torch-cdist", "PyTorch cdist", BASE_BLUE, False),
+        ("torch-compile-broadcast", "torch.compile (bcast)", BASE_BLUE, False),
+        ("jax-jit", "JAX jit", BASE_PURPLE, False),
+      ],
+    )
+    if nn_lg:
+      outputs.append(
+        (
+          "bench-1nn-large-a100.svg",
+          _make_single_dot_svg(
+            title="Large-Scale Exact 1-NN on NVIDIA A100 (16,384 × 65,536 × 32)",
+            subtitle="1.07 billion pairs (CuPy OOMs at 137 GB); Parakeet 4.7× faster than JAX jit.",
+            footer=footer,
+            arms=nn_lg,
+            vmin=5.0,
+            vmax=100.0,
+          ),
+        )
+      )
+
+    rbf_lg = _build_arms(
+      rm,
+      "rbf",
+      "xlarge",
+      [
+        ("pk-numpy", "Parakeet (_numpy)", PK_MAIN, True),
+        ("pk-helpers", "Parakeet (_helpers)", PK_MAIN, True),
+        ("pk-par", "Parakeet (_par)", PK_ALT, True),
+        ("keops", "PyKeOps Genred", BASE_BLUE, False),
+        ("torch-compile-broadcast", "torch.compile (bcast)", BASE_BLUE, False),
+        ("torch-cdist", "PyTorch cdist", BASE_BLUE, False),
+        ("jax-jit", "JAX jit", BASE_PURPLE, False),
+      ],
+    )
+    if rbf_lg:
+      outputs.append(
+        (
+          "bench-rbf-large-a100.svg",
+          _make_single_dot_svg(
+            title="Large-Scale RBF Regression on NVIDIA A100 (16,384 × 65,536 × 32)",
+            subtitle="CuPy OOMs at 137 GB; Parakeet beats torch.compile (bcast), PyTorch cdist, and JAX.",
+            footer=footer,
+            arms=rbf_lg,
+            vmin=15.0,
+            vmax=100.0,
+          ),
+        )
+      )
+
+    attn_lg = _build_arms(
+      rm,
+      "causal",
+      "default",
+      [
+        ("pk-numpy", "Parakeet (_numpy)", PK_MAIN, True),
+        ("pk-helpers", "Parakeet (_helpers)", PK_ALT, True),
+        ("torch-sdpa", "PyTorch SDPA (cuDNN)", BASE_BLUE, False),
+        ("torch-compile", "torch.compile (SDPA)", BASE_BLUE, False),
+        ("jax-jit", "JAX jit", BASE_PURPLE, False),
+        ("cupy", "CuPy", BASE_SLATE, False),
+      ],
+    )
+    if attn_lg:
+      outputs.append(
+        (
+          "bench-attn-large-a100.svg",
+          _make_single_dot_svg(
+            title="Large-Scale Causal Attention on NVIDIA A100 (4 × 16 × 4,096 × 64)",
+            subtitle="Online monoidal tiling + Law 5 causal block skipping vs. SDPA, JAX, and CuPy.",
+            footer=footer,
+            arms=attn_lg,
+            vmin=4.0,
+            vmax=80.0,
+          ),
+        )
+      )
+
+    split_lg = _build_arms(
+      rm,
+      "split",
+      "default",
+      [
+        ("pk-par", "Parakeet (_par)", PK_MAIN, True),
+        ("pk-comp", "Parakeet (_comp)", PK_MAIN, True),
+        ("pk-numpy", "Parakeet (_numpy)", PK_ALT, True),
+        ("pk-loop", "Parakeet (_loop)", PK_ALT, True),
+        ("jax-jit", "JAX jit", BASE_PURPLE, False),
+        ("torch-compile", "torch.compile", BASE_BLUE, False),
+        ("torch-scatter", "PyTorch scatter_add", BASE_BLUE, False),
+        ("cupy", "CuPy add.at", BASE_SLATE, False),
+      ],
+    )
+    if split_lg:
+      outputs.append(
+        (
+          "bench-gbdt-large-a100.svg",
+          _make_single_dot_svg(
+            title="Large-Scale GBDT Histogram Split on NVIDIA A100 (10,000,000 × 256)",
+            subtitle="All four Parakeet styles fuse into one atomic scatter pass (1.8× faster than PyTorch/CuPy).",
+            footer=footer,
+            arms=split_lg,
+            vmin=2.5,
+            vmax=9.0,
+          ),
+        )
+      )
+
+    cce_lg = _build_arms(
+      rm,
+      "cce",
+      "default",
+      [
+        ("pk-numpy", "Parakeet (_numpy)", PK_MAIN, True),
+        ("pk-helpers", "Parakeet (_helpers)", PK_ALT, True),
+        ("torch-compile", "torch.compile", BASE_BLUE, False),
+        ("torch-cross-entropy", "PyTorch cross_entropy", BASE_BLUE, False),
+        ("jax-jit", "JAX jit", BASE_PURPLE, False),
+        ("cupy", "CuPy", BASE_SLATE, False),
+      ],
+    )
+    if cce_lg:
+      outputs.append(
+        (
+          "bench-cce-large-a100.svg",
+          _make_single_dot_svg(
+            title="Large-Scale Linear Cross-Entropy on NVIDIA A100 (4,096 × 512 × 65,536)",
+            subtitle="Zero 4,096×65,536 logit buffer; scalar W-tile stride bottleneck vs. cuBLAS + fused CE.",
+            footer=footer,
+            arms=cce_lg,
+            vmin=2.0,
+            vmax=220.0,
+          ),
+        )
+      )
+
+  # 3. nanoGPT full suite (incl. par.nn.Module + host Adam) on A100
+  ng_path = assets_dir / "colab-a100-nanogpt.json"
+  if ng_path.exists():
+    d = json.loads(ng_path.read_text())
+    cfgs = d["configs"]
+    footer = "Source: docs/assets/colab-a100-nanogpt.json · NVIDIA A100-SXM4-40GB, n=20 steps (0 cuBLAS in Parakeet)"
+
+    def _ng_arms(cfg_d: dict):
+      spec = [
+        ("parakeet_batched_tf32", "Parakeet batched (TF32)", PK_MAIN, True),
+        ("parakeet_nn_module_tf32", "Parakeet nn.Module (TF32)", PK_ALT, True),
+        ("parakeet_batched_fp32", "Parakeet batched (FP32)", PK_ALT, True),
+        ("parakeet_host_adam_fp32", "Parakeet host Adam (FP32)", PK_LEGACY, True),
+        ("torch_eager_fp32", "PyTorch eager (FP32)", BASE_SLATE, False),
+        ("torch_compile_fp32", "torch.compile (FP32)", BASE_BLUE, False),
+        ("torch_compile_tf32", "torch.compile (TF32)", BASE_BLUE, False),
+        ("torch_sdpa_compile_tf32", "torch.compile SDPA (TF32)", BASE_BLUE, False),
+        ("jax_jit_fp32", "JAX jit (FP32)", BASE_PURPLE, False),
+        ("jax_jit_tf32", "JAX jit (TF32)", BASE_PURPLE, False),
+      ]
+      arms = []
+      for key, label, color, is_pk in spec:
+        entry = cfg_d.get(key)
+        if entry and entry.get("samples_ms"):
+          arms.append((label, entry["samples_ms"], color, is_pk))
+      arms.sort(key=lambda item: median(item[1]))
+      return arms
+
+    if "small_B16_T64_C128_L2" in cfgs:
+      outputs.append(
+        (
+          "bench-nanogpt-small-a100.svg",
+          _make_single_dot_svg(
+            title="nanoGPT Small Training Step on NVIDIA A100 (16 × 64 × 128 × 2L)",
+            subtitle="Forward + backward + Adam across Parakeet batched/par.nn.Module/host-Adam vs. PyTorch & JAX.",
+            footer=footer,
+            arms=_ng_arms(cfgs["small_B16_T64_C128_L2"]),
+            vmin=1.2,
+            vmax=12.0,
+          ),
+        )
+      )
+    if "med_B32_T128_C256_L4" in cfgs:
+      outputs.append(
+        (
+          "bench-nanogpt-med-a100.svg",
+          _make_single_dot_svg(
+            title="nanoGPT Medium Training Step on NVIDIA A100 (32 × 128 × 256 × 4L)",
+            subtitle="Parakeet TF32 & par.nn.Module beat PyTorch eager (13.9–15.4 ms vs. 17.8 ms) with zero cuBLAS.",
+            footer=footer,
+            arms=_ng_arms(cfgs["med_B32_T128_C256_L4"]),
+            vmin=4.0,
+            vmax=75.0,
+          ),
+        )
+      )
+
+  # 4. Pairwise fold scaling on A100 (untiled vs. tiled, R = 1,024..16,384)
+  pw_path = assets_dir / "colab-a100-pairwise.json"
+  if pw_path.exists():
+    pw = json.loads(pw_path.read_text())
+    off_np = {
+      r["references"]: r for r in pw["rows"] if r["source"] == "numpy" and not r["enabled"] and "samples_ms" in r
+    }
+    on_np = {r["references"]: r for r in pw["rows"] if r["source"] == "numpy" and r["enabled"] and "samples_ms" in r}
+    on_dsl = {r["references"]: r for r in pw["rows"] if r["source"] == "dsl" and r["enabled"] and "samples_ms" in r}
+    refs = [1024, 4096, 16384]
+    if all(r in off_np and r in on_np and r in on_dsl for r in refs):
+      w, h = CARD_W, 360
+      out = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w} {h}" width="{w}" height="{h}" role="img" '
+        'aria-label="Exact 1-NN pairwise fold scaling on NVIDIA A100 (untiled vs tiled)">',
+        f'<rect x="0.5" y="0.5" width="{w - 1}" height="{h - 1}" rx="10" fill="{BG}" stroke="{CARD_BORDER}"/>',
+        f'<text x="20" y="28" font-family="{FONT}" font-size="16" font-weight="700" fill="{TEXT}">'
+        "Exact 1-NN Pairwise Fold Scaling on NVIDIA A100 (Log Latency)</text>",
+        f'<text x="20" y="48" font-family="{FONT}" font-size="12.5" fill="{MUTED}">'
+        "1,024 queries × R references × 32 float32 features (n=21): 206× speedup at R = 16,384.</text>",
+      ]
+      lx0, ly0, lw, lh = 72.0, 68.0, w - 98.0, 218.0
+      out.append(
+        f'<rect x="{lx0:.1f}" y="{ly0:.1f}" width="{lw:.1f}" height="{lh:.1f}" rx="5" fill="#fafbfc" stroke="{GRID}"/>'
+      )
+
+      def sx_pw(r: int) -> float:
+        idx = math.log2(r / 1024.0) / 4.0
+        return lx0 + 58.0 + idx * (lw - 116.0)
+
+      ymin, ymax = 0.1, 200.0
+      lmin, lmax = math.log10(ymin), math.log10(ymax)
+
+      def sy_pw(v: float) -> float:
+        clamped = max(ymin, min(ymax, v))
+        return ly0 + lh - (math.log10(clamped) - lmin) / (lmax - lmin) * (lh - 16.0) - 8.0
+
+      for yt in (0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0):
+        yy = sy_pw(yt)
+        is_dec = abs(math.log10(yt) - round(math.log10(yt))) < 1e-6
+        out.append(
+          f'<line x1="{lx0:.1f}" y1="{yy:.1f}" x2="{lx0 + lw:.1f}" y2="{yy:.1f}" '
+          f'stroke="{GRID if is_dec else GRID_SUB}"/>'
+        )
+        if yt in (0.1, 0.5, 1.0, 5.0, 10.0, 50.0, 100.0):
+          out.append(
+            f'<text x="{lx0 - 10:.1f}" y="{yy + 4.5:.1f}" text-anchor="end" font-family="{MONO}" '
+            f'font-size="11.5" fill="{SUBTLE}">{yt:g}</text>'
+          )
+
+      for r in refs:
+        xx = sx_pw(r)
+        out.append(f'<line x1="{xx:.1f}" y1="{ly0:.1f}" x2="{xx:.1f}" y2="{ly0 + lh:.1f}" stroke="{GRID_SUB}"/>')
+        out.append(
+          f'<text x="{xx:.1f}" y="{ly0 + lh + 20:.1f}" text-anchor="middle" font-family="{MONO}" '
+          f'font-size="12.5" fill="{TEXT}">R = {r:,}</text>'
+        )
+
+      out.append(
+        f'<text x="{lx0 + lw / 2:.1f}" y="{ly0 + lh + 40:.1f}" text-anchor="middle" font-family="{FONT}" '
+        f'font-size="12.5" fill="{SUBTLE}">Number of reference rows R (log2 spacing)</text>'
+      )
+      out.append(
+        f'<text x="20" y="{ly0 + lh / 2:.1f}" text-anchor="middle" transform="rotate(-90 20 {ly0 + lh / 2:.1f})" '
+        f'font-family="{FONT}" font-size="12.5" fill="{SUBTLE}">Latency (ms, log scale)</text>'
+      )
+
+      series = [
+        ("Untiled (full Q×R distance matrix)", off_np, PK_LEGACY, "0", -5.0),
+        ("Tiled pairwise fold (broadcasting NumPy)", on_np, PK_MAIN, "0", 0.0),
+        ("Tiled pairwise fold (nested par.map)", on_dsl, PK_ALT, "5,3", 5.0),
+      ]
+      for label, rdict, color, dash, xoff in series:
+        pts = []
+        for r in refs:
+          s = rdict[r]["samples_ms"]
+          _, q1, med, q3, _ = _stats(s)
+          xx = sx_pw(r) + xoff
+          pts.append((xx, sy_pw(med), med, r))
+          out.append(
+            f'<line x1="{xx:.1f}" y1="{sy_pw(q1):.1f}" x2="{xx:.1f}" y2="{sy_pw(q3):.1f}" '
+            f'stroke="{color}" stroke-width="5.0" stroke-opacity="0.35" stroke-linecap="round"/>'
+          )
+          for j, sv in enumerate(s):
+            jx = xx + _jitter(f"a100pw:{label}:{r}", j, amplitude=3.8)
+            out.append(f'<circle cx="{jx:.1f}" cy="{sy_pw(sv):.1f}" r="2.2" fill="{color}" fill-opacity="0.34"/>')
+        d_attr = " ".join(f"{'M' if k == 0 else 'L'}{p[0]:.1f},{p[1]:.1f}" for k, p in enumerate(pts))
+        dash_str = f' stroke-dasharray="{dash}"' if dash != "0" else ""
+        out.append(f'<path d="{d_attr}" fill="none" stroke="{color}" stroke-width="2.8"{dash_str}/>')
+        for xx, yy, _med, _ in pts:
+          out.append(
+            f'<circle cx="{xx:.1f}" cy="{yy:.1f}" r="5.0" fill="{color}" stroke="#ffffff" stroke-width="1.5"/>'
+          )
+
+      x16 = sx_pw(16384)
+      out.append(
+        f'<text x="{x16 - 14:.1f}" y="{sy_pw(off_np[16384]["median_ms"]) - 10:.1f}" text-anchor="end" '
+        f'font-family="{MONO}" font-size="12.5" font-weight="700" fill="{PK_LEGACY}">100.3 ms (untiled)</text>'
+      )
+      out.append(
+        f'<text x="{x16 - 14:.1f}" y="{sy_pw(on_np[16384]["median_ms"]) - 14:.1f}" text-anchor="end" '
+        f'font-family="{MONO}" font-size="12.5" font-weight="700" fill="{PK_ALT}">0.49 ms (206× faster)</text>'
+      )
+
+      # Place legend in the open middle-left band between Untiled (y <= 161) and Tiled (y >= 236)
+      leg_y = ly0 + 102.0
+      out.append(
+        f'<rect x="{lx0 + 12:.1f}" y="{leg_y:.1f}" width="298" height="64" rx="6" fill="#ffffff" fill-opacity="0.95" stroke="{GRID}"/>'
+      )
+      for k, (label, _, color, dash, _) in enumerate(series):
+        yy = leg_y + 15.0 + k * 18.0
+        dash_str = f' stroke-dasharray="{dash}"' if dash != "0" else ""
+        out.append(
+          f'<line x1="{lx0 + 22:.1f}" y1="{yy:.1f}" x2="{lx0 + 46:.1f}" y2="{yy:.1f}" stroke="{color}" stroke-width="3"{dash_str}/>'
+        )
+        out.append(
+          f'<text x="{lx0 + 54:.1f}" y="{yy + 4.0:.1f}" font-family="{FONT}" font-size="12" fill="{TEXT}">{_esc(label)}</text>'
+        )
+
+      out.append(
+        f'<text x="20" y="{h - 10}" font-family="{FONT}" font-size="11" fill="{SUBTLE}">'
+        "Source: docs/assets/colab-a100-pairwise.json · NVIDIA A100-SXM4-40GB, GPU-resident float32</text>"
+      )
+      out.append("</svg>")
+      outputs.append(("bench-scaling-1nn-a100.svg", "\n".join(out) + "\n"))
+
   return outputs
 
 
@@ -883,8 +1510,15 @@ def generate_all(
 
   if bio_path.exists():
     bio_data = json.loads(bio_path.read_text())
-    for fname, content in make_bio_individual_svgs(bio_data):
+    for fname, content in make_bio_individual_svgs(bio_data, suffix="m1pro"):
       outputs.append((out_dir / fname, content))
+
+  for fname, content in _make_epyc24_svgs(out_dir):
+    outputs.append((out_dir / fname, content))
+  for fname, content in _make_a100_compiler_svgs(out_dir):
+    outputs.append((out_dir / fname, content))
+  for fname, content in _make_a100_suite_svgs(out_dir):
+    outputs.append((out_dir / fname, content))
 
   written: list[Path] = []
   for path, content in outputs:

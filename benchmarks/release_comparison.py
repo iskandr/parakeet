@@ -245,33 +245,66 @@ def _numba_cpu_adapter(task: str, args, num_threads: int):
   return None
 
 
-def _parakeet_implementations(task: str):
+def _parakeet_implementations(task: str, *, include_loops: bool = True):
   import parakeet as pk
   from examples.algebraic_gallery import (
-    causal_flash_attention,
-    cut_cross_entropy,
+    causal_attention_helpers,
+    causal_attention_numpy,
+    causal_attention_par,
+    cross_entropy_helpers,
+    cross_entropy_numpy,
+    cross_entropy_par,
     exact_1nn,
-    gbdt_best_split,
-    gbdt_best_split_comprehension,
-    gbdt_best_split_loop,
-    gbdt_best_split_numpy,
-    nearest_fold,
+    gbdt_split_comp,
+    gbdt_split_loop,
+    gbdt_split_numpy,
+    gbdt_split_par,
+    nearest_comp,
+    nearest_loop,
     nearest_numpy,
-    rbf_kernel_regression,
+    nearest_par,
+    rbf_regression_comp,
+    rbf_regression_helpers,
+    rbf_regression_loop,
+    rbf_regression_numpy,
+    rbf_regression_par,
   )
 
-  return {
-    "nn": [("pk-numpy", nearest_numpy), ("pk-map", exact_1nn), ("pk-fold", nearest_fold)],
-    "rbf": [("pk-numpy", rbf_kernel_regression)],
-    "causal": [("pk-numpy", causal_flash_attention)],
-    "cce": [("pk-numpy", pk.jit(cut_cross_entropy))],
+  impls = {
+    "nn": [
+      ("pk-numpy", nearest_numpy),
+      ("pk-comp", nearest_comp),
+      ("pk-par", nearest_par),
+      ("pk-map", exact_1nn),
+    ],
+    "rbf": [
+      ("pk-numpy", rbf_regression_numpy),
+      ("pk-helpers", rbf_regression_helpers),
+      ("pk-comp", rbf_regression_comp),
+      ("pk-par", rbf_regression_par),
+    ],
+    "causal": [
+      ("pk-numpy", causal_attention_numpy),
+      ("pk-helpers", causal_attention_helpers),
+      ("pk-par", causal_attention_par),
+    ],
+    "cce": [
+      ("pk-numpy", pk.jit(cross_entropy_numpy)),
+      ("pk-helpers", pk.jit(cross_entropy_helpers)),
+      ("pk-par", cross_entropy_par),
+    ],
     "split": [
-      ("pk-scatter", gbdt_best_split),
-      ("pk-comprehension", gbdt_best_split_comprehension),
-      ("pk-numpy-at", gbdt_best_split_numpy),
-      ("pk-loop", gbdt_best_split_loop),
+      ("pk-par", gbdt_split_par),
+      ("pk-comp", gbdt_split_comp),
+      ("pk-numpy", gbdt_split_numpy),
+      ("pk-loop", gbdt_split_loop),
     ],
   }[task]
+  if include_loops and task == "nn":
+    impls = [*impls, ("pk-loop", nearest_loop)]
+  elif include_loops and task == "rbf":
+    impls = [*impls, ("pk-loop", rbf_regression_loop)]
+  return impls
 
 
 def _extra_args_for_parakeet(task: str) -> tuple:
@@ -289,7 +322,7 @@ def cpu_adapters(task: str, args, num_threads: int):
   extra = _extra_args_for_parakeet(task)
 
   with pk.options(backend="threads", num_threads=num_threads, blas=False):
-    for name, fn in _parakeet_implementations(task):
+    for name, fn in _parakeet_implementations(task, include_loops=True):
       yield name, (lambda f=fn, a=args, ex=extra: f(*a, *ex))
 
   try:
@@ -373,7 +406,15 @@ def _torch_to_cpu(out):
   return out.detach().cpu().numpy()
 
 
-def adapters(provider: str, task: str, host, *, tensor_cores: bool = False, num_threads: int = 4):
+def adapters(
+  provider: str,
+  task: str,
+  host,
+  *,
+  tensor_cores: bool = False,
+  num_threads: int = 4,
+  cuda_compiler: str = "nvrtc",
+):
   if provider == "cpu":
     for name, fn in cpu_adapters(task, host, num_threads):
       yield name, fn, _noop_sync, np.asarray
@@ -388,9 +429,16 @@ def adapters(provider: str, task: str, host, *, tensor_cores: bool = False, num_
       cp.cuda.runtime.deviceSynchronize()
 
     extra = _extra_args_for_parakeet(task)
-    with pk.options(backend="cuda", blas=False, device_fallback="error", device_threshold=1, tensor_cores=tensor_cores):
+    with pk.options(
+      backend="cuda",
+      blas=False,
+      device_fallback="error",
+      device_threshold=1,
+      tensor_cores=tensor_cores,
+      cuda_compiler=cuda_compiler,
+    ):
       dargs = pk.to_device(host, backend="cuda")
-      for name, fn in _parakeet_implementations(task):
+      for name, fn in _parakeet_implementations(task, include_loops=False):
         yield name, (lambda f=fn, a=dargs, ex=extra: f(*a, *ex)), sync, pk.to_host
 
     cp_args = tuple(cp.asarray(a) for a in host)
@@ -530,6 +578,7 @@ def run(
   tensor_cores: bool = False,
   num_threads: int | None = None,
   cpu_all_tasks: bool = False,
+  cuda_compiler: str = "nvrtc",
 ) -> dict:
   threads = num_threads or (os.cpu_count() or 1)
   unsupported: tuple[type[BaseException], ...] = ()
@@ -542,6 +591,7 @@ def run(
     "packages": _installed_packages(),
     "scale": scale,
     "tensor_cores": tensor_cores,
+    "cuda_compiler": cuda_compiler,
     "rows": [],
   }
   if provider == "cpu":
@@ -563,7 +613,14 @@ def run(
 
     row = {"task": task, "shapes": [list(a.shape) for a in host], "provider": provider}
     try:
-      for name, call, sync, to_host in adapters(provider, task, host, tensor_cores=tensor_cores, num_threads=threads):
+      for name, call, sync, to_host in adapters(
+        provider,
+        task,
+        host,
+        tensor_cores=tensor_cores,
+        num_threads=threads,
+        cuda_compiler=cuda_compiler,
+      ):
         item = dict(row, method=name)
         try:
           if provider != "jax":
@@ -635,6 +692,7 @@ def main(argv=None):
   parser.add_argument("--tensor-cores", action="store_true")
   parser.add_argument("--threads", type=int, default=None, help="CPU thread count (default: all cores)")
   parser.add_argument("--all-tasks", action="store_true", help="Include causal, cce, and split on CPU")
+  parser.add_argument("--cuda-compiler", choices=("nvrtc", "ptx", "nvcc"), default="nvrtc")
   cli = parser.parse_args(argv)
   cli.output.parent.mkdir(parents=True, exist_ok=True)
   cli.output.write_text(
@@ -645,6 +703,7 @@ def main(argv=None):
         tensor_cores=cli.tensor_cores,
         num_threads=cli.threads,
         cpu_all_tasks=cli.all_tasks,
+        cuda_compiler=cli.cuda_compiler,
       ),
       indent=2,
     )
