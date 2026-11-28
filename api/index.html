@@ -1761,6 +1761,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#neural-network-helpers-optimizers-trees-and-sequences" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Neural-network helpers, optimizers, trees, and sequences
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#structured-folds-and-rewrite-inspection" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2778,6 +2789,17 @@
     <span class="md-ellipsis">
       
         Data-parallel operators
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#neural-network-helpers-optimizers-trees-and-sequences" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Neural-network helpers, optimizers, trees, and sequences
       
     </span>
   </a>
@@ -4058,6 +4080,20 @@ examples in <a href="../operators/#operator-reference">Data-parallel operators</
 <a href="../operators/#wavefront"><code>par.wavefront</code></a>,
 <a href="../operators/#batched_wavefront"><code>par.batched_wavefront</code></a>,
 <a href="../operators/#soft_align"><code>par.soft_align</code></a>.</p>
+<h2 id="neural-network-helpers-optimizers-trees-and-sequences">Neural-network helpers, optimizers, trees, and sequences<a class="headerlink" href="#neural-network-helpers-optimizers-trees-and-sequences" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Neural network primitives (<code>par.nn</code>):</strong> <code>par.nn.Module</code>, <code>Linear</code>,
+  <code>LayerNorm</code>, <code>Embedding</code>, <code>MLP</code>, <code>CausalSelfAttention</code>, <code>TransformerBlock</code>,
+  plus functional <code>relu</code>, <code>gelu</code>, <code>silu</code>, <code>softmax</code>, <code>log_softmax</code>,
+  <code>layer_norm</code>, <code>rms_norm</code>, <code>causal_mask</code>, <code>scaled_dot_product_attention</code>, and
+  <code>cross_entropy</code>.</li>
+<li><strong>Optimizers (<code>par.optim</code>):</strong> <code>par.optim.sgd_step</code>, <code>par.optim.adam_init</code>,
+  <code>par.optim.adam_step</code>, and stateful <code>par.optim.Adam</code>.</li>
+<li><strong>Parameter trees:</strong> <code>par.tree_map</code>, <code>par.tree_map_arrays</code>, <code>par.tree_leaves</code>,
+  <code>par.tree_array_leaves</code>.</li>
+<li><strong>Categorical sequence &amp; text encoders:</strong> <code>par.Alphabet</code> (including
+  <code>par.Alphabet.mask</code>) and <code>par.Vocab</code> (including <code>par.Vocab.from_text</code>).</li>
+</ul>
 <h2 id="structured-folds-and-rewrite-inspection">Structured folds and rewrite inspection<a class="headerlink" href="#structured-folds-and-rewrite-inspection" title="Permanent link">&para;</a></h2>
 
 

@@ -1116,6 +1116,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#categorical-encoding-for-sequences-and-tokens" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Categorical encoding for sequences and tokens
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#how-parakeet-compiles-bio-workloads" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1483,6 +1494,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#categorical-encoding-for-sequences-and-tokens" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Categorical encoding for sequences and tokens
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#how-parakeet-compiles-bio-workloads" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1613,6 +1635,23 @@ Run the examples or benchmarks from a checkout:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>python<span class="w"> </span>-m<span class="w"> </span>examples.bio_gallery
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>python<span class="w"> </span>benchmarks/bio_workloads.py
 </code></pre></div>
+<h2 id="categorical-encoding-for-sequences-and-tokens">Categorical encoding for sequences and tokens<a class="headerlink" href="#categorical-encoding-for-sequences-and-tokens" title="Permanent link">&para;</a></h2>
+<p>Working with character sequences in compiled code—whether DNA bases (<code>ACGT</code>),
+amino acids, GC indicator masks, or text tokens for a language model—comes down
+to the same operation: mapping ASCII bytes to compact integer codes through a
+256-entry lookup table.</p>
+<p>Rather than defining an <code>IntEnum</code> and a separate dict mapping characters to
+enum members, Parakeet provides two lightweight categorical encoders:</p>
+<ul>
+<li><strong><code>par.Alphabet("ACGT")</code></strong> maps ASCII characters to <code>uint8</code> codes <code>0..3</code>
+  (case-insensitive by default), and <strong><code>par.Alphabet.mask("GC")</code></strong> builds a
+  0/1 indicator table. Both work outside <code>@par.jit</code> (<code>DNA.encode(reads)</code>) and
+  inside <code>@par.jit</code> (<code>DNA[seq]</code>, <code>GC[seq]</code>), compiling to a single L1-resident
+  256-byte gather.</li>
+<li><strong><code>par.Vocab.from_text(text)</code></strong> builds the same 256-entry LUT from a text
+  corpus for language-model tokenization (<code>vocab.encode(text)</code> /
+  <code>vocab.decode(ids)</code>), as shown in <a href="../gallery/nanogpt/">Train nanoGPT</a>.</li>
+</ul>
 <h2 id="how-parakeet-compiles-bio-workloads">How Parakeet compiles bio workloads<a class="headerlink" href="#how-parakeet-compiles-bio-workloads" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -1625,7 +1664,7 @@ Run the examples or benchmarks from a checkout:</p>
 <tbody>
 <tr>
 <td>FASTQ k-mers &amp; read QC</td>
-<td>Multi-output <a href="../operators/#map"><code>par.map</code></a> + <code>IntEnum</code> + ASCII-dict LUT</td>
+<td>Multi-output <a href="../operators/#map"><code>par.map</code></a> + <code>par.Alphabet</code> LUT</td>
 <td>Manual <code>parfor</code>, scratch buffers, and ASCII bit-twiddling</td>
 </tr>
 <tr>
@@ -1653,45 +1692,40 @@ Run the examples or benchmarks from a checkout:</p>
 <hr />
 <h2 id="1-fastq-2-bit-canonical-k-mers-and-read-qc">1. FASTQ 2-bit canonical k-mers and read QC<a class="headerlink" href="#1-fastq-2-bit-canonical-k-mers-and-read-qc" title="Permanent link">&para;</a></h2>
 <p>Parakeet accepts <code>list[str]</code> directly (packing fixed-length strings into 2D
-<code>uint8</code> or variable-length strings into <code>RaggedArray[uint8]</code>), compiles constant
-single-char dicts (<code>BASE_CODE</code>) into 256-byte LUTs, supports <code>IntEnum</code>
-alphabets, and unboxes multi-output <code>par.map</code> tuples into one parallel pass:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">class</span><span class="w"> </span><span class="nc">Base</span><span class="p">(</span><span class="n">IntEnum</span><span class="p">):</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>  <span class="n">A</span> <span class="o">=</span> <span class="mi">0</span>
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>  <span class="n">C</span> <span class="o">=</span> <span class="mi">1</span>
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>  <span class="n">G</span> <span class="o">=</span> <span class="mi">2</span>
-<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>  <span class="n">T</span> <span class="o">=</span> <span class="mi">3</span>
-<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>
-<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>
-<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="n">BASE_CODE</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"A"</span><span class="p">:</span> <span class="n">Base</span><span class="o">.</span><span class="n">A</span><span class="p">,</span> <span class="s2">"C"</span><span class="p">:</span> <span class="n">Base</span><span class="o">.</span><span class="n">C</span><span class="p">,</span> <span class="s2">"G"</span><span class="p">:</span> <span class="n">Base</span><span class="o">.</span><span class="n">G</span><span class="p">,</span> <span class="s2">"T"</span><span class="p">:</span> <span class="n">Base</span><span class="o">.</span><span class="n">T</span><span class="p">}</span>
-<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>
-<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>
-<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="nd">@par</span><span class="o">.</span><span class="n">jit</span>
-<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="k">def</span><span class="w"> </span><span class="nf">encode_canonical_kmers_and_gc</span><span class="p">(</span><span class="n">reads</span><span class="p">,</span> <span class="n">quals</span><span class="p">,</span> <span class="n">k</span><span class="p">):</span>
-<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="w">  </span><span class="sd">"""Encode ASCII DNA reads (``list[str]`` or ``(N, L)`` uint8) into:</span>
-<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="sd">  - canonical 2-bit k-mers ``(N, L - k + 1)`` uint64  [min(fwd, revcomp)]</span>
-<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="sd">  - per-read GC fraction ``(N,)`` float32</span>
-<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="sd">  - per-read mean Phred quality ``(N,)`` float32</span>
-<a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="sd">  """</span>
-<a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>  <span class="n">mask</span> <span class="o">=</span> <span class="p">(</span><span class="o">~</span><span class="n">np</span><span class="o">.</span><span class="n">uint64</span><span class="p">(</span><span class="mi">0</span><span class="p">))</span> <span class="o">&gt;&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">uint64</span><span class="p">(</span><span class="mi">64</span> <span class="o">-</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">k</span><span class="p">)</span>
-<a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a>  <span class="n">rev_shift</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">uint64</span><span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="p">(</span><span class="n">k</span> <span class="o">-</span> <span class="mi">1</span><span class="p">))</span>
-<a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a>
-<a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a>  <span class="k">def</span><span class="w"> </span><span class="nf">encode_read</span><span class="p">(</span><span class="n">seq</span><span class="p">,</span> <span class="n">qual</span><span class="p">):</span>
-<a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a>    <span class="n">codes</span> <span class="o">=</span> <span class="n">BASE_CODE</span><span class="p">[</span><span class="n">seq</span><span class="p">]</span>
-<a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a>    <span class="n">gc</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">((</span><span class="n">codes</span> <span class="o">==</span> <span class="n">Base</span><span class="o">.</span><span class="n">C</span><span class="p">)</span> <span class="o">|</span> <span class="p">(</span><span class="n">codes</span> <span class="o">==</span> <span class="n">Base</span><span class="o">.</span><span class="n">G</span><span class="p">))</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
-<a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a>    <span class="n">mean_q</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">qual</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span> <span class="o">-</span> <span class="mf">33.0</span><span class="p">)</span>
-<a id="__codelineno-1-25" name="__codelineno-1-25" href="#__codelineno-1-25"></a>    <span class="n">out</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">seq</span><span class="p">)</span> <span class="o">-</span> <span class="n">k</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">uint64</span><span class="p">)</span>
-<a id="__codelineno-1-26" name="__codelineno-1-26" href="#__codelineno-1-26"></a>    <span class="n">fwd</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">uint64</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
-<a id="__codelineno-1-27" name="__codelineno-1-27" href="#__codelineno-1-27"></a>    <span class="n">rev</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">uint64</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
-<a id="__codelineno-1-28" name="__codelineno-1-28" href="#__codelineno-1-28"></a>    <span class="k">for</span> <span class="n">pos</span><span class="p">,</span> <span class="n">c</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">codes</span><span class="p">):</span>
-<a id="__codelineno-1-29" name="__codelineno-1-29" href="#__codelineno-1-29"></a>      <span class="n">code</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">uint64</span><span class="p">(</span><span class="n">c</span><span class="p">)</span>
-<a id="__codelineno-1-30" name="__codelineno-1-30" href="#__codelineno-1-30"></a>      <span class="n">fwd</span> <span class="o">=</span> <span class="p">((</span><span class="n">fwd</span> <span class="o">&lt;&lt;</span> <span class="n">np</span><span class="o">.</span><span class="n">uint64</span><span class="p">(</span><span class="mi">2</span><span class="p">))</span> <span class="o">|</span> <span class="n">code</span><span class="p">)</span> <span class="o">&amp;</span> <span class="n">mask</span>
-<a id="__codelineno-1-31" name="__codelineno-1-31" href="#__codelineno-1-31"></a>      <span class="n">rev</span> <span class="o">=</span> <span class="p">(</span><span class="n">rev</span> <span class="o">&gt;&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">uint64</span><span class="p">(</span><span class="mi">2</span><span class="p">))</span> <span class="o">|</span> <span class="p">((</span><span class="n">np</span><span class="o">.</span><span class="n">uint64</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span> <span class="o">^</span> <span class="n">code</span><span class="p">)</span> <span class="o">&lt;&lt;</span> <span class="n">rev_shift</span><span class="p">)</span>
-<a id="__codelineno-1-32" name="__codelineno-1-32" href="#__codelineno-1-32"></a>      <span class="k">if</span> <span class="n">pos</span> <span class="o">&gt;=</span> <span class="n">k</span> <span class="o">-</span> <span class="mi">1</span><span class="p">:</span>
-<a id="__codelineno-1-33" name="__codelineno-1-33" href="#__codelineno-1-33"></a>        <span class="n">out</span><span class="p">[</span><span class="n">pos</span> <span class="o">-</span> <span class="n">k</span> <span class="o">+</span> <span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">fwd</span><span class="p">,</span> <span class="n">rev</span><span class="p">)</span>
-<a id="__codelineno-1-34" name="__codelineno-1-34" href="#__codelineno-1-34"></a>    <span class="k">return</span> <span class="n">out</span><span class="p">,</span> <span class="n">gc</span><span class="p">,</span> <span class="n">mean_q</span>
-<a id="__codelineno-1-35" name="__codelineno-1-35" href="#__codelineno-1-35"></a>
-<a id="__codelineno-1-36" name="__codelineno-1-36" href="#__codelineno-1-36"></a>  <span class="k">return</span> <span class="n">par</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">encode_read</span><span class="p">,</span> <span class="n">reads</span><span class="p">,</span> <span class="n">quals</span><span class="p">)</span>
+<code>uint8</code> or variable-length strings into <code>RaggedArray[uint8]</code>), compiles
+<code>DNA[seq]</code> and <code>GC[seq]</code> to 256-byte LUT gathers, and unboxes multi-output
+<code>par.map</code> tuples into one parallel pass:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">DNA</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">Alphabet</span><span class="p">(</span><span class="s2">"ACGT"</span><span class="p">)</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">GC</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">Alphabet</span><span class="o">.</span><span class="n">mask</span><span class="p">(</span><span class="s2">"GC"</span><span class="p">)</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">A</span><span class="p">,</span> <span class="n">C</span><span class="p">,</span> <span class="n">G</span><span class="p">,</span> <span class="n">T</span> <span class="o">=</span> <span class="p">(</span><span class="n">DNA</span><span class="o">.</span><span class="n">code</span><span class="p">(</span><span class="n">b</span><span class="p">)</span> <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="s2">"ACGT"</span><span class="p">)</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="nd">@par</span><span class="o">.</span><span class="n">jit</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="k">def</span><span class="w"> </span><span class="nf">encode_canonical_kmers_and_gc</span><span class="p">(</span><span class="n">reads</span><span class="p">,</span> <span class="n">quals</span><span class="p">,</span> <span class="n">k</span><span class="p">):</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">  </span><span class="sd">"""Encode ASCII DNA reads (``list[str]`` or ``(N, L)`` uint8) into:</span>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="sd">  - canonical 2-bit k-mers ``(N, L - k + 1)`` uint64  [min(fwd, revcomp)]</span>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="sd">  - per-read GC fraction ``(N,)`` float32</span>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="sd">  - per-read mean Phred quality ``(N,)`` float32</span>
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="sd">  """</span>
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>  <span class="n">mask</span> <span class="o">=</span> <span class="p">(</span><span class="o">~</span><span class="n">np</span><span class="o">.</span><span class="n">uint64</span><span class="p">(</span><span class="mi">0</span><span class="p">))</span> <span class="o">&gt;&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">uint64</span><span class="p">(</span><span class="mi">64</span> <span class="o">-</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">k</span><span class="p">)</span>
+<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>  <span class="n">rev_shift</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">uint64</span><span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="p">(</span><span class="n">k</span> <span class="o">-</span> <span class="mi">1</span><span class="p">))</span>
+<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>
+<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>  <span class="k">def</span><span class="w"> </span><span class="nf">encode_read</span><span class="p">(</span><span class="n">seq</span><span class="p">,</span> <span class="n">qual</span><span class="p">):</span>
+<a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>    <span class="n">codes</span> <span class="o">=</span> <span class="n">DNA</span><span class="p">[</span><span class="n">seq</span><span class="p">]</span>
+<a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>    <span class="n">gc</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">GC</span><span class="p">[</span><span class="n">seq</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">))</span>
+<a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a>    <span class="n">mean_q</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">qual</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span> <span class="o">-</span> <span class="mf">33.0</span><span class="p">)</span>
+<a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a>    <span class="n">out</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">seq</span><span class="p">)</span> <span class="o">-</span> <span class="n">k</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">uint64</span><span class="p">)</span>
+<a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a>    <span class="n">fwd</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">uint64</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+<a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a>    <span class="n">rev</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">uint64</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+<a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a>    <span class="k">for</span> <span class="n">pos</span><span class="p">,</span> <span class="n">c</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">codes</span><span class="p">):</span>
+<a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a>      <span class="n">code</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">uint64</span><span class="p">(</span><span class="n">c</span><span class="p">)</span>
+<a id="__codelineno-1-25" name="__codelineno-1-25" href="#__codelineno-1-25"></a>      <span class="n">fwd</span> <span class="o">=</span> <span class="p">((</span><span class="n">fwd</span> <span class="o">&lt;&lt;</span> <span class="n">np</span><span class="o">.</span><span class="n">uint64</span><span class="p">(</span><span class="mi">2</span><span class="p">))</span> <span class="o">|</span> <span class="n">code</span><span class="p">)</span> <span class="o">&amp;</span> <span class="n">mask</span>
+<a id="__codelineno-1-26" name="__codelineno-1-26" href="#__codelineno-1-26"></a>      <span class="n">rev</span> <span class="o">=</span> <span class="p">(</span><span class="n">rev</span> <span class="o">&gt;&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">uint64</span><span class="p">(</span><span class="mi">2</span><span class="p">))</span> <span class="o">|</span> <span class="p">((</span><span class="n">np</span><span class="o">.</span><span class="n">uint64</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span> <span class="o">^</span> <span class="n">code</span><span class="p">)</span> <span class="o">&lt;&lt;</span> <span class="n">rev_shift</span><span class="p">)</span>
+<a id="__codelineno-1-27" name="__codelineno-1-27" href="#__codelineno-1-27"></a>      <span class="k">if</span> <span class="n">pos</span> <span class="o">&gt;=</span> <span class="n">k</span> <span class="o">-</span> <span class="mi">1</span><span class="p">:</span>
+<a id="__codelineno-1-28" name="__codelineno-1-28" href="#__codelineno-1-28"></a>        <span class="n">out</span><span class="p">[</span><span class="n">pos</span> <span class="o">-</span> <span class="n">k</span> <span class="o">+</span> <span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">fwd</span><span class="p">,</span> <span class="n">rev</span><span class="p">)</span>
+<a id="__codelineno-1-29" name="__codelineno-1-29" href="#__codelineno-1-29"></a>    <span class="k">return</span> <span class="n">out</span><span class="p">,</span> <span class="n">gc</span><span class="p">,</span> <span class="n">mean_q</span>
+<a id="__codelineno-1-30" name="__codelineno-1-30" href="#__codelineno-1-30"></a>
+<a id="__codelineno-1-31" name="__codelineno-1-31" href="#__codelineno-1-31"></a>  <span class="k">return</span> <span class="n">par</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">encode_read</span><span class="p">,</span> <span class="n">reads</span><span class="p">,</span> <span class="n">quals</span><span class="p">)</span>
 </code></pre></div>
 <h2 id="2-single-pass-multi-channel-alignment-pileup">2. Single-pass multi-channel alignment pileup<a class="headerlink" href="#2-single-pass-multi-channel-alignment-pileup" title="Permanent link">&para;</a></h2>
 <p>All six <code>par.scatter_add</code> channels (A/C/G/T counts, Phred quality sum, reverse
@@ -1702,10 +1736,10 @@ thread-privatized pass (<code>IndexScatter: 6 → 1</code>):</p>
 <a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span><span class="sd">"""Accumulate A/C/G/T counts, quality sums, and reverse-strand counts across</span>
 <a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="sd">  aligned base observations in one keyed IndexScatter traversal."""</span>
 <a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>  <span class="c1"># All six histograms share ref_pos, so Parakeet fuses them into one pass.</span>
-<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>  <span class="n">cnt_a</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">scatter_add</span><span class="p">(</span><span class="n">contig_len</span><span class="p">,</span> <span class="n">ref_pos</span><span class="p">,</span> <span class="p">(</span><span class="n">base_code</span> <span class="o">==</span> <span class="n">Base</span><span class="o">.</span><span class="n">A</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">))</span>
-<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>  <span class="n">cnt_c</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">scatter_add</span><span class="p">(</span><span class="n">contig_len</span><span class="p">,</span> <span class="n">ref_pos</span><span class="p">,</span> <span class="p">(</span><span class="n">base_code</span> <span class="o">==</span> <span class="n">Base</span><span class="o">.</span><span class="n">C</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">))</span>
-<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>  <span class="n">cnt_g</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">scatter_add</span><span class="p">(</span><span class="n">contig_len</span><span class="p">,</span> <span class="n">ref_pos</span><span class="p">,</span> <span class="p">(</span><span class="n">base_code</span> <span class="o">==</span> <span class="n">Base</span><span class="o">.</span><span class="n">G</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">))</span>
-<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>  <span class="n">cnt_t</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">scatter_add</span><span class="p">(</span><span class="n">contig_len</span><span class="p">,</span> <span class="n">ref_pos</span><span class="p">,</span> <span class="p">(</span><span class="n">base_code</span> <span class="o">==</span> <span class="n">Base</span><span class="o">.</span><span class="n">T</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">))</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>  <span class="n">cnt_a</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">scatter_add</span><span class="p">(</span><span class="n">contig_len</span><span class="p">,</span> <span class="n">ref_pos</span><span class="p">,</span> <span class="p">(</span><span class="n">base_code</span> <span class="o">==</span> <span class="n">A</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">))</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>  <span class="n">cnt_c</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">scatter_add</span><span class="p">(</span><span class="n">contig_len</span><span class="p">,</span> <span class="n">ref_pos</span><span class="p">,</span> <span class="p">(</span><span class="n">base_code</span> <span class="o">==</span> <span class="n">C</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">))</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>  <span class="n">cnt_g</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">scatter_add</span><span class="p">(</span><span class="n">contig_len</span><span class="p">,</span> <span class="n">ref_pos</span><span class="p">,</span> <span class="p">(</span><span class="n">base_code</span> <span class="o">==</span> <span class="n">G</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">))</span>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>  <span class="n">cnt_t</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">scatter_add</span><span class="p">(</span><span class="n">contig_len</span><span class="p">,</span> <span class="n">ref_pos</span><span class="p">,</span> <span class="p">(</span><span class="n">base_code</span> <span class="o">==</span> <span class="n">T</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">))</span>
 <a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>  <span class="n">qual_sum</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">scatter_add</span><span class="p">(</span><span class="n">contig_len</span><span class="p">,</span> <span class="n">ref_pos</span><span class="p">,</span> <span class="n">phred_q</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">))</span>
 <a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>  <span class="n">rev_cnt</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">scatter_add</span><span class="p">(</span><span class="n">contig_len</span><span class="p">,</span> <span class="n">ref_pos</span><span class="p">,</span> <span class="n">is_rev</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">))</span>
 <a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>  <span class="k">return</span> <span class="n">cnt_a</span><span class="p">,</span> <span class="n">cnt_c</span><span class="p">,</span> <span class="n">cnt_g</span><span class="p">,</span> <span class="n">cnt_t</span><span class="p">,</span> <span class="n">qual_sum</span><span class="p">,</span> <span class="n">rev_cnt</span>
@@ -1806,7 +1840,7 @@ exponential recurrences rewrite automatically into
 <h2 id="6-classic-sequence-structural-algorithms">6. Classic sequence &amp; structural algorithms<a class="headerlink" href="#6-classic-sequence-structural-algorithms" title="Permanent link">&para;</a></h2>
 <p><a href="https://github.com/iskandr/parakeet/blob/master/examples/bio_algorithms.py"><code>examples/bio_algorithms.py</code></a>
 implements seven textbook algorithms in compiled Python/NumPy
-(<a href="../release-benchmarks/#bioinformatics-and-structural-biology-apple-m1-pro-10-cores">see Apple M1 Pro head-to-head timings</a>):</p>
+(<a href="../release-benchmarks/#bioinformatics-and-structural-biology-apple-m1-pro-10-cores">see head-to-head timings</a>):</p>
 <table>
 <thead>
 <tr>
@@ -1829,7 +1863,7 @@ implements seven textbook algorithms in compiled Python/NumPy
 <tr>
 <td><code>O(N)</code> monotone-deque minimizer sketch</td>
 <td><code>minimizer_sketch</code></td>
-<td>Canonical 2-bit k-mers, SplitMix64 hash, circular monotone deque</td>
+<td><code>par.Alphabet("ACGT", unknown=4)</code>, SplitMix64 hash, circular monotone deque</td>
 </tr>
 <tr>
 <td>FM-index / BWT backward search</td>

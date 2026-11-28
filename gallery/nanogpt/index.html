@@ -82,7 +82,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#train-nanogpt-from-scratch" class="md-skip">
+        <a href="#train-nanogpt-in-parakeet" class="md-skip">
           Skip to content
         </a>
       
@@ -1088,10 +1088,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#normalize-one-position-at-a-time" class="md-nav__link">
+  <a href="#how-parnnmodule-compiles-python-objects" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Normalize one position at a time
+        How par.nn.Module compiles Python objects
       
     </span>
   </a>
@@ -1099,10 +1099,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#mix-information-across-visible-characters" class="md-nav__link">
+  <a href="#model-definition" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Mix information across visible characters
+        Model definition
       
     </span>
   </a>
@@ -1110,46 +1110,30 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#score-one-sequence-then-a-batch" class="md-nav__link">
+  <a href="#tokenization-and-training-loop" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Score one sequence, then a batch
+        Tokenization and training loop
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Tokenization and training loop">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#fusing-the-optimizer-step-on-gpu" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fusing the optimizer step on GPU
       
     </span>
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#build-the-model" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Build the model
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#update-every-parameter-with-adam" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Update every parameter with Adam
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#train-on-shifted-character-windows" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Train on shifted character windows
-      
-    </span>
-  </a>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -1450,10 +1434,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#normalize-one-position-at-a-time" class="md-nav__link">
+  <a href="#how-parnnmodule-compiles-python-objects" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Normalize one position at a time
+        How par.nn.Module compiles Python objects
       
     </span>
   </a>
@@ -1461,10 +1445,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#mix-information-across-visible-characters" class="md-nav__link">
+  <a href="#model-definition" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Mix information across visible characters
+        Model definition
       
     </span>
   </a>
@@ -1472,46 +1456,30 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#score-one-sequence-then-a-batch" class="md-nav__link">
+  <a href="#tokenization-and-training-loop" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Score one sequence, then a batch
+        Tokenization and training loop
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Tokenization and training loop">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#fusing-the-optimizer-step-on-gpu" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fusing the optimizer step on GPU
       
     </span>
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#build-the-model" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Build the model
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#update-every-parameter-with-adam" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Update every parameter with Adam
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#train-on-shifted-character-windows" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Train on shifted character windows
-      
-    </span>
-  </a>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -1535,248 +1503,270 @@
   
 
 
-<h1 id="train-nanogpt-from-scratch">Train nanoGPT from scratch<a class="headerlink" href="#train-nanogpt-from-scratch" title="Permanent link">&para;</a></h1>
+<h1 id="train-nanogpt-in-parakeet">Train nanoGPT in Parakeet<a class="headerlink" href="#train-nanogpt-in-parakeet" title="Permanent link">&para;</a></h1>
 <p>This character-level GPT learns to predict the next character in a short passage.
 For the fragment <code>para</code>, one training sequence has inputs <code>p a r</code> and targets
-<code>a r a</code>. At the second position, the model can see <code>p a</code> and must predict <code>r</code>.
-A causal mask enforces that rule even though the model computes predictions for
-every position at once.</p>
-<p>The six Python blocks below make one complete file. You can copy them in order
-into <code>train_gpt.py</code> and run <code>python train_gpt.py</code>, or run the <a href="https://github.com/iskandr/parakeet/blob/master/examples/nanogpt.py">same file from
-the repository</a>.
-To run the repository version, use Python 3.11 or newer and a C compiler.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/iskandr/parakeet.git
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nb">cd</span><span class="w"> </span>parakeet
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span>.
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>python<span class="w"> </span>-m<span class="w"> </span>examples.nanogpt
+<code>a r a</code>. A lower-triangular causal mask ensures position <code>t</code> only attends to
+positions <code>0..t</code> while computing every position's logits in parallel.</p>
+<p>Below we show <strong>two complete implementations</strong> of the exact same model:</p>
+<ol>
+<li><strong>Pythonic objects with <code>par.nn</code> and <code>par.optim</code></strong>
+   (<a href="https://github.com/iskandr/parakeet/blob/master/examples/nanogpt.py"><code>examples/nanogpt.py</code></a>):
+   a normal Python class inheriting from <code>par.nn.Module</code> with a standard
+   <code>__init__</code>, <code>par.nn.TransformerBlock</code>, <code>par.nn.cross_entropy</code>,
+   <code>par.optim.Adam</code>, and <code>par.Vocab.from_text</code>.</li>
+<li><strong>Minimalist functional from scratch</strong>
+   (<a href="https://github.com/iskandr/parakeet/blob/master/examples/nanogpt_functional.py"><code>examples/nanogpt_functional.py</code></a>):
+   plain dicts and tuples of NumPy arrays with every layer (layer norm, softmax,
+   multi-head attention, cross-entropy, and Adam) written inline in raw NumPy—no
+   <code>par.nn</code> or <code>par.optim</code> helpers at all.</li>
+</ol>
+<p>Run either version directly from a checkout:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>python<span class="w"> </span>-m<span class="w"> </span>examples.nanogpt
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>python<span class="w"> </span>-m<span class="w"> </span>examples.nanogpt_functional
 </code></pre></div>
-<p>The text is embedded in the script. The default run trains on batches of 16
-sequences, each 32 characters long, for 60 steps.</p>
-<h2 id="normalize-one-position-at-a-time">Normalize one position at a time<a class="headerlink" href="#normalize-one-position-at-a-time" title="Permanent link">&para;</a></h2>
-<p>One input sequence becomes a matrix of shape <code>(context, width)</code>. Each row holds
-one character's embedding. <code>LayerNorm</code> is a plain <code>@dataclass</code> with a <code>__call__</code>
-method that normalizes across the features of each row. Parakeet lowers
-<code>@dataclass</code> modules and their pure methods directly during compilation with no
-<code>PyObject</code> overhead. Later, each row passed to <code>softmax</code> holds attention scores
-from one position to every position in the sequence; subtracting the row
-maximum keeps the exponential stable.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="sd">"""A character-level GPT trained with parakeet.value_and_grad.</span>
+<hr />
+<h2 id="how-parnnmodule-compiles-python-objects">How <code>par.nn.Module</code> compiles Python objects<a class="headerlink" href="#how-parnnmodule-compiles-python-objects" title="Permanent link">&para;</a></h2>
+<p>Parakeet does not require external <code>init()</code> factories or manual dataclass
+unpacking to compile neural networks. Any class inheriting from <code>par.nn.Module</code>
+(or setting <code>__parakeet_record__ = True</code>) is lowered at <code>@par.jit</code> and
+<code>par.value_and_grad</code> boundaries into a flat compile-time record of its
+<code>self.__dict__</code> attributes:</p>
+<ul>
+<li><strong>Array attributes</strong> (<code>weight</code>, <code>bias</code>, <code>gain</code>, <code>wpe</code>) become native typed
+  array parameters that receive gradients under <code>par.value_and_grad</code>, transfer
+  cleanly with <code>par.to_device</code>, and update via <code>par.tree_map_arrays</code> /
+  <code>par.optim</code>.</li>
+<li><strong>Static attributes</strong> (<code>heads</code>, <code>eps</code>, <code>activation</code>) become compile-time
+  constants—zero runtime memory and untouched by optimizers.</li>
+<li><strong>Methods</strong> (<code>__call__</code>, helper methods) inline completely during elaboration
+  with zero <code>PyObject</code> overhead.</li>
+</ul>
+<p>Because every layer in <code>par.nn</code> (<code>Linear</code>, <code>LayerNorm</code>, <code>Embedding</code>, <code>MLP</code>,
+<code>CausalSelfAttention</code>, <code>TransformerBlock</code>) is just plain NumPy under the hood,
+Parakeet's monoidal FlashAttention tiling, warp-row LayerNorm reduction, and
+rematerialized AD trigger automatically on both versions.</p>
+<hr />
+<h2 id="model-definition">Model definition<a class="headerlink" href="#model-definition" title="Permanent link">&para;</a></h2>
+<div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">With <code>par.nn</code> and <code>par.optim</code></label><label for="__tabbed_1_2">Minimalist functional from scratch</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="sd">"""Character-level nanoGPT using ``par.nn.Module``, ``par.optim.Adam``, and ``par.Vocab``.</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="sd">The model is a small hierarchy of ``@dataclass`` modules (``LayerNorm``,</span>
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="sd">``Block``, ``NanoGPT``) holding plain NumPy arrays. ``par.value_and_grad``</span>
-<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="sd">differentiates the batch loss with respect to the entire model dataclass, and</span>
-<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="sd">Adam updates each parameter array in plain Python.</span>
-<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="sd">"""</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="sd">``NanoGPT`` is a normal Python class with a standard ``__init__``. Because it</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="sd">inherits from :class:`par.nn.Module`, Parakeet lowers the model and its methods</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="sd">into compiled native code with zero ``PyObject`` overhead, differentiates the</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="sd">loss with ``par.value_and_grad``, and updates every parameter array with</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="sd">``par.optim.Adam``.</span>
 <a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>
-<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
-<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span><span class="p">,</span> <span class="n">fields</span><span class="p">,</span> <span class="n">is_dataclass</span>
-<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>
-<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
-<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>
-<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="kn">import</span><span class="w"> </span><span class="nn">parakeet</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">par</span>
-<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>
-<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="n">N_HEAD</span> <span class="o">=</span> <span class="mi">2</span>
-<a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="sd">For a zero-helper functional version written with plain dicts and raw NumPy,</span>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="sd">see ``examples/nanogpt_functional.py``.</span>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="sd">"""</span>
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
+<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>
+<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
+<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>
+<a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
 <a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>
-<a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="k">def</span><span class="w"> </span><span class="nf">softmax</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
-<a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a>  <span class="n">e</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="n">x</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">keepdims</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
-<a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a>  <span class="k">return</span> <span class="n">e</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">e</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">keepdims</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a>
-<a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a>
-<a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a><span class="nd">@dataclass</span>
-<a id="__codelineno-1-25" name="__codelineno-1-25" href="#__codelineno-1-25"></a><span class="k">class</span><span class="w"> </span><span class="nc">LayerNorm</span><span class="p">:</span>
-<a id="__codelineno-1-26" name="__codelineno-1-26" href="#__codelineno-1-26"></a>  <span class="n">gain</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
-<a id="__codelineno-1-27" name="__codelineno-1-27" href="#__codelineno-1-27"></a>  <span class="n">bias</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
-<a id="__codelineno-1-28" name="__codelineno-1-28" href="#__codelineno-1-28"></a>
-<a id="__codelineno-1-29" name="__codelineno-1-29" href="#__codelineno-1-29"></a>  <span class="k">def</span><span class="w"> </span><span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
-<a id="__codelineno-1-30" name="__codelineno-1-30" href="#__codelineno-1-30"></a>    <span class="n">mu</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">keepdims</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<a id="__codelineno-1-31" name="__codelineno-1-31" href="#__codelineno-1-31"></a>    <span class="n">var</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">((</span><span class="n">x</span> <span class="o">-</span> <span class="n">mu</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">keepdims</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<a id="__codelineno-1-32" name="__codelineno-1-32" href="#__codelineno-1-32"></a>    <span class="k">return</span> <span class="p">(</span><span class="n">x</span> <span class="o">-</span> <span class="n">mu</span><span class="p">)</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">var</span> <span class="o">+</span> <span class="mf">1e-5</span><span class="p">)</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">gain</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">bias</span>
+<a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="kn">import</span><span class="w"> </span><span class="nn">parakeet</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">par</span>
+<a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a>
+<a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a>
+<a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a><span class="k">class</span><span class="w"> </span><span class="nc">NanoGPT</span><span class="p">(</span><span class="n">par</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+<a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a><span class="w">  </span><span class="sd">"""Character-level transformer with standard Python ``__init__``."""</span>
+<a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a>
+<a id="__codelineno-1-25" name="__codelineno-1-25" href="#__codelineno-1-25"></a>  <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">vocab</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">width</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">layers</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">heads</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span> <span class="n">rng</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">):</span>
+<a id="__codelineno-1-26" name="__codelineno-1-26" href="#__codelineno-1-26"></a>    <span class="n">g</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">default_rng</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span> <span class="k">if</span> <span class="n">rng</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">rng</span>
+<a id="__codelineno-1-27" name="__codelineno-1-27" href="#__codelineno-1-27"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">wte</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Embedding</span><span class="p">(</span><span class="n">vocab</span><span class="p">,</span> <span class="n">width</span><span class="p">,</span> <span class="n">rng</span><span class="o">=</span><span class="n">g</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">)</span>
+<a id="__codelineno-1-28" name="__codelineno-1-28" href="#__codelineno-1-28"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">wpe</span> <span class="o">=</span> <span class="n">g</span><span class="o">.</span><span class="n">normal</span><span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.02</span><span class="p">,</span> <span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">width</span><span class="p">))</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span>
+<a id="__codelineno-1-29" name="__codelineno-1-29" href="#__codelineno-1-29"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">blocks</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">par</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">TransformerBlock</span><span class="p">(</span><span class="n">width</span><span class="p">,</span> <span class="n">heads</span><span class="p">,</span> <span class="n">rng</span><span class="o">=</span><span class="n">g</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">)</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">layers</span><span class="p">))</span>
+<a id="__codelineno-1-30" name="__codelineno-1-30" href="#__codelineno-1-30"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">ln_f</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">LayerNorm</span><span class="p">(</span><span class="n">width</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">)</span>
+<a id="__codelineno-1-31" name="__codelineno-1-31" href="#__codelineno-1-31"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">head</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="n">width</span><span class="p">,</span> <span class="n">vocab</span><span class="p">,</span> <span class="n">bias</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">rng</span><span class="o">=</span><span class="n">g</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">,</span> <span class="n">std</span><span class="o">=</span><span class="mf">0.02</span><span class="p">)</span>
+<a id="__codelineno-1-32" name="__codelineno-1-32" href="#__codelineno-1-32"></a>
+<a id="__codelineno-1-33" name="__codelineno-1-33" href="#__codelineno-1-33"></a>  <span class="k">def</span><span class="w"> </span><span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tokens</span><span class="p">,</span> <span class="n">mask</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<a id="__codelineno-1-34" name="__codelineno-1-34" href="#__codelineno-1-34"></a>    <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">wte</span><span class="p">(</span><span class="n">tokens</span><span class="p">)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">wpe</span>
+<a id="__codelineno-1-35" name="__codelineno-1-35" href="#__codelineno-1-35"></a>    <span class="k">for</span> <span class="n">block</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">blocks</span><span class="p">:</span>
+<a id="__codelineno-1-36" name="__codelineno-1-36" href="#__codelineno-1-36"></a>      <span class="n">x</span> <span class="o">=</span> <span class="n">block</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">mask</span><span class="o">=</span><span class="n">mask</span><span class="p">)</span>
+<a id="__codelineno-1-37" name="__codelineno-1-37" href="#__codelineno-1-37"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">head</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ln_f</span><span class="p">(</span><span class="n">x</span><span class="p">))</span>
+<a id="__codelineno-1-38" name="__codelineno-1-38" href="#__codelineno-1-38"></a>
+<a id="__codelineno-1-39" name="__codelineno-1-39" href="#__codelineno-1-39"></a>
+<a id="__codelineno-1-40" name="__codelineno-1-40" href="#__codelineno-1-40"></a><span class="k">def</span><span class="w"> </span><span class="nf">loss</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">tokens</span><span class="p">,</span> <span class="n">targets</span><span class="p">,</span> <span class="n">mask</span><span class="p">):</span>
+<a id="__codelineno-1-41" name="__codelineno-1-41" href="#__codelineno-1-41"></a>  <span class="k">return</span> <span class="n">par</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">cross_entropy</span><span class="p">(</span><span class="n">model</span><span class="p">(</span><span class="n">tokens</span><span class="p">,</span> <span class="n">mask</span><span class="o">=</span><span class="n">mask</span><span class="p">),</span> <span class="n">targets</span><span class="p">)</span>
+<a id="__codelineno-1-42" name="__codelineno-1-42" href="#__codelineno-1-42"></a>
+<a id="__codelineno-1-43" name="__codelineno-1-43" href="#__codelineno-1-43"></a>
+<a id="__codelineno-1-44" name="__codelineno-1-44" href="#__codelineno-1-44"></a><span class="n">loss_and_grad</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">value_and_grad</span><span class="p">(</span><span class="n">loss</span><span class="p">)</span>
 </code></pre></div>
-<h2 id="mix-information-across-visible-characters">Mix information across visible characters<a class="headerlink" href="#mix-information-across-visible-characters" title="Permanent link">&para;</a></h2>
-<p><code>Block</code> groups one transformer layer's norms, attention projections (<code>wq</code>, <code>wk</code>,
-<code>wv</code>, <code>wo</code>), and feed-forward weights (<code>w1</code>, <code>b1</code>, <code>w2</code>, <code>b2</code>). Each attention
-head uses part of the model width, computes a <code>(context, context)</code> score matrix,
-masks future positions before softmax, and projects back through <code>wo</code>. The
-block adds the attention output to its input, runs a two-layer <code>tanh</code> MLP on
-each position, and adds that residual too.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nd">@dataclass</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="k">class</span><span class="w"> </span><span class="nc">Block</span><span class="p">:</span>
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>  <span class="n">ln1</span><span class="p">:</span> <span class="n">LayerNorm</span>
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>  <span class="n">wq</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
-<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>  <span class="n">wk</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
-<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>  <span class="n">wv</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
-<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>  <span class="n">wo</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
-<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>  <span class="n">ln2</span><span class="p">:</span> <span class="n">LayerNorm</span>
-<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>  <span class="n">w1</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
-<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>  <span class="n">b1</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
-<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>  <span class="n">w2</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
-<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>  <span class="n">b2</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="sd">"""Minimalist functional nanoGPT written from scratch without ``par.nn`` or ``par.optim``.</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="sd">Parameters live in plain dicts and tuples of NumPy arrays. Every neural-network</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="sd">building block (layer normalization, softmax, multi-head causal attention,</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="sd">cross-entropy, and Adam) is written inline in a few lines of NumPy so there are</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="sd">no hidden abstractions.</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="sd">Compare with the Pythonic ``par.nn.Module`` + ``par.optim.Adam`` version in</span>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="sd">``examples/nanogpt.py``.</span>
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="sd">"""</span>
+<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>
+<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 <a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>
-<a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>  <span class="k">def</span><span class="w"> </span><span class="nf">attention</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">causal</span><span class="p">):</span>
-<a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="w">    </span><span class="sd">"""Causal self-attention over one sequence: x is (T, C)."""</span>
-<a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a>    <span class="n">head_width</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">//</span> <span class="n">N_HEAD</span>
-<a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a>    <span class="n">q</span><span class="p">,</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="o">=</span> <span class="n">x</span> <span class="o">@</span> <span class="bp">self</span><span class="o">.</span><span class="n">wq</span><span class="p">,</span> <span class="n">x</span> <span class="o">@</span> <span class="bp">self</span><span class="o">.</span><span class="n">wk</span><span class="p">,</span> <span class="n">x</span> <span class="o">@</span> <span class="bp">self</span><span class="o">.</span><span class="n">wv</span>
-<a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a>    <span class="n">out</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
-<a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a>    <span class="k">for</span> <span class="n">h</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">N_HEAD</span><span class="p">):</span>
-<a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a>      <span class="n">lo</span><span class="p">,</span> <span class="n">hi</span> <span class="o">=</span> <span class="n">h</span> <span class="o">*</span> <span class="n">head_width</span><span class="p">,</span> <span class="p">(</span><span class="n">h</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">head_width</span>
-<a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a>      <span class="n">scores</span> <span class="o">=</span> <span class="n">q</span><span class="p">[:,</span> <span class="n">lo</span><span class="p">:</span><span class="n">hi</span><span class="p">]</span> <span class="o">@</span> <span class="n">k</span><span class="p">[:,</span> <span class="n">lo</span><span class="p">:</span><span class="n">hi</span><span class="p">]</span><span class="o">.</span><span class="n">T</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">head_width</span><span class="p">)</span>
-<a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a>      <span class="n">weights</span> <span class="o">=</span> <span class="n">softmax</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">causal</span><span class="p">,</span> <span class="n">scores</span><span class="p">,</span> <span class="o">-</span><span class="mf">1e9</span><span class="p">))</span>
-<a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a>      <span class="n">out</span> <span class="o">=</span> <span class="n">out</span> <span class="o">+</span> <span class="p">(</span><span class="n">weights</span> <span class="o">@</span> <span class="n">v</span><span class="p">[:,</span> <span class="n">lo</span><span class="p">:</span><span class="n">hi</span><span class="p">])</span> <span class="o">@</span> <span class="bp">self</span><span class="o">.</span><span class="n">wo</span><span class="p">[</span><span class="n">lo</span><span class="p">:</span><span class="n">hi</span><span class="p">]</span>
-<a id="__codelineno-2-24" name="__codelineno-2-24" href="#__codelineno-2-24"></a>    <span class="k">return</span> <span class="n">out</span>
-<a id="__codelineno-2-25" name="__codelineno-2-25" href="#__codelineno-2-25"></a>
-<a id="__codelineno-2-26" name="__codelineno-2-26" href="#__codelineno-2-26"></a>  <span class="k">def</span><span class="w"> </span><span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">causal</span><span class="p">):</span>
-<a id="__codelineno-2-27" name="__codelineno-2-27" href="#__codelineno-2-27"></a>    <span class="n">x</span> <span class="o">=</span> <span class="n">x</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">attention</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ln1</span><span class="p">(</span><span class="n">x</span><span class="p">),</span> <span class="n">causal</span><span class="p">)</span>
-<a id="__codelineno-2-28" name="__codelineno-2-28" href="#__codelineno-2-28"></a>    <span class="n">h</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ln2</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">@</span> <span class="bp">self</span><span class="o">.</span><span class="n">w1</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">b1</span><span class="p">)</span>
-<a id="__codelineno-2-29" name="__codelineno-2-29" href="#__codelineno-2-29"></a>    <span class="k">return</span> <span class="n">x</span> <span class="o">+</span> <span class="n">h</span> <span class="o">@</span> <span class="bp">self</span><span class="o">.</span><span class="n">w2</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">b2</span>
+<a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
+<a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a>
+<a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a>
+<a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="kn">import</span><span class="w"> </span><span class="nn">parakeet</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">par</span>
+<a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a>
+<a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="n">N_HEAD</span> <span class="o">=</span> <span class="mi">2</span>
+<a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a>
+<a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a>
+<a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a><span class="k">def</span><span class="w"> </span><span class="nf">layer_norm</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">gain</span><span class="p">,</span> <span class="n">bias</span><span class="p">,</span> <span class="n">eps</span><span class="o">=</span><span class="mf">1e-5</span><span class="p">):</span>
+<a id="__codelineno-2-24" name="__codelineno-2-24" href="#__codelineno-2-24"></a>  <span class="n">mu</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">,</span> <span class="n">keepdims</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-2-25" name="__codelineno-2-25" href="#__codelineno-2-25"></a>  <span class="n">var</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">((</span><span class="n">x</span> <span class="o">-</span> <span class="n">mu</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">,</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">,</span> <span class="n">keepdims</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-2-26" name="__codelineno-2-26" href="#__codelineno-2-26"></a>  <span class="k">return</span> <span class="p">(</span><span class="n">x</span> <span class="o">-</span> <span class="n">mu</span><span class="p">)</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">var</span> <span class="o">+</span> <span class="n">eps</span><span class="p">)</span> <span class="o">*</span> <span class="n">gain</span> <span class="o">+</span> <span class="n">bias</span>
+<a id="__codelineno-2-27" name="__codelineno-2-27" href="#__codelineno-2-27"></a>
+<a id="__codelineno-2-28" name="__codelineno-2-28" href="#__codelineno-2-28"></a>
+<a id="__codelineno-2-29" name="__codelineno-2-29" href="#__codelineno-2-29"></a><span class="k">def</span><span class="w"> </span><span class="nf">softmax</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+<a id="__codelineno-2-30" name="__codelineno-2-30" href="#__codelineno-2-30"></a>  <span class="n">shifted</span> <span class="o">=</span> <span class="n">x</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">,</span> <span class="n">keepdims</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-2-31" name="__codelineno-2-31" href="#__codelineno-2-31"></a>  <span class="n">exps</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="n">shifted</span><span class="p">)</span>
+<a id="__codelineno-2-32" name="__codelineno-2-32" href="#__codelineno-2-32"></a>  <span class="k">return</span> <span class="n">exps</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">exps</span><span class="p">,</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">,</span> <span class="n">keepdims</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-2-33" name="__codelineno-2-33" href="#__codelineno-2-33"></a>
+<a id="__codelineno-2-34" name="__codelineno-2-34" href="#__codelineno-2-34"></a>
+<a id="__codelineno-2-35" name="__codelineno-2-35" href="#__codelineno-2-35"></a><span class="k">def</span><span class="w"> </span><span class="nf">causal_attention</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">block</span><span class="p">,</span> <span class="n">mask</span><span class="p">):</span>
+<a id="__codelineno-2-36" name="__codelineno-2-36" href="#__codelineno-2-36"></a><span class="w">  </span><span class="sd">"""Multi-head causal self-attention over ``(B, T, C)``."""</span>
+<a id="__codelineno-2-37" name="__codelineno-2-37" href="#__codelineno-2-37"></a>  <span class="n">b</span><span class="p">,</span> <span class="n">t</span><span class="p">,</span> <span class="n">c</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">shape</span>
+<a id="__codelineno-2-38" name="__codelineno-2-38" href="#__codelineno-2-38"></a>  <span class="n">d</span> <span class="o">=</span> <span class="n">c</span> <span class="o">//</span> <span class="n">N_HEAD</span>
+<a id="__codelineno-2-39" name="__codelineno-2-39" href="#__codelineno-2-39"></a>  <span class="n">q</span> <span class="o">=</span> <span class="p">(</span><span class="n">x</span> <span class="o">@</span> <span class="n">block</span><span class="p">[</span><span class="s2">"wq"</span><span class="p">])</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="n">b</span><span class="p">,</span> <span class="n">t</span><span class="p">,</span> <span class="n">N_HEAD</span><span class="p">,</span> <span class="n">d</span><span class="p">))</span><span class="o">.</span><span class="n">transpose</span><span class="p">((</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
+<a id="__codelineno-2-40" name="__codelineno-2-40" href="#__codelineno-2-40"></a>  <span class="n">k</span> <span class="o">=</span> <span class="p">(</span><span class="n">x</span> <span class="o">@</span> <span class="n">block</span><span class="p">[</span><span class="s2">"wk"</span><span class="p">])</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="n">b</span><span class="p">,</span> <span class="n">t</span><span class="p">,</span> <span class="n">N_HEAD</span><span class="p">,</span> <span class="n">d</span><span class="p">))</span><span class="o">.</span><span class="n">transpose</span><span class="p">((</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
+<a id="__codelineno-2-41" name="__codelineno-2-41" href="#__codelineno-2-41"></a>  <span class="n">v</span> <span class="o">=</span> <span class="p">(</span><span class="n">x</span> <span class="o">@</span> <span class="n">block</span><span class="p">[</span><span class="s2">"wv"</span><span class="p">])</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="n">b</span><span class="p">,</span> <span class="n">t</span><span class="p">,</span> <span class="n">N_HEAD</span><span class="p">,</span> <span class="n">d</span><span class="p">))</span><span class="o">.</span><span class="n">transpose</span><span class="p">((</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
+<a id="__codelineno-2-42" name="__codelineno-2-42" href="#__codelineno-2-42"></a>  <span class="n">scores</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">matmul</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">swapaxes</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">2</span><span class="p">))</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">d</span><span class="p">)</span>
+<a id="__codelineno-2-43" name="__codelineno-2-43" href="#__codelineno-2-43"></a>  <span class="n">weights</span> <span class="o">=</span> <span class="n">softmax</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">mask</span><span class="p">,</span> <span class="n">scores</span><span class="p">,</span> <span class="o">-</span><span class="mf">1e9</span><span class="p">))</span>
+<a id="__codelineno-2-44" name="__codelineno-2-44" href="#__codelineno-2-44"></a>  <span class="n">out</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">matmul</span><span class="p">(</span><span class="n">weights</span><span class="p">,</span> <span class="n">v</span><span class="p">)</span><span class="o">.</span><span class="n">transpose</span><span class="p">((</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="n">b</span><span class="p">,</span> <span class="n">t</span><span class="p">,</span> <span class="n">c</span><span class="p">))</span>
+<a id="__codelineno-2-45" name="__codelineno-2-45" href="#__codelineno-2-45"></a>  <span class="k">return</span> <span class="n">out</span> <span class="o">@</span> <span class="n">block</span><span class="p">[</span><span class="s2">"wo"</span><span class="p">]</span>
+<a id="__codelineno-2-46" name="__codelineno-2-46" href="#__codelineno-2-46"></a>
+<a id="__codelineno-2-47" name="__codelineno-2-47" href="#__codelineno-2-47"></a>
+<a id="__codelineno-2-48" name="__codelineno-2-48" href="#__codelineno-2-48"></a><span class="k">def</span><span class="w"> </span><span class="nf">transformer_block</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">block</span><span class="p">,</span> <span class="n">mask</span><span class="p">):</span>
+<a id="__codelineno-2-49" name="__codelineno-2-49" href="#__codelineno-2-49"></a>  <span class="n">x</span> <span class="o">=</span> <span class="n">x</span> <span class="o">+</span> <span class="n">causal_attention</span><span class="p">(</span><span class="n">layer_norm</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">block</span><span class="p">[</span><span class="s2">"g1"</span><span class="p">],</span> <span class="n">block</span><span class="p">[</span><span class="s2">"b1"</span><span class="p">]),</span> <span class="n">block</span><span class="p">,</span> <span class="n">mask</span><span class="p">)</span>
+<a id="__codelineno-2-50" name="__codelineno-2-50" href="#__codelineno-2-50"></a>  <span class="n">h</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">layer_norm</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">block</span><span class="p">[</span><span class="s2">"g2"</span><span class="p">],</span> <span class="n">block</span><span class="p">[</span><span class="s2">"b2"</span><span class="p">])</span> <span class="o">@</span> <span class="n">block</span><span class="p">[</span><span class="s2">"w1"</span><span class="p">]</span> <span class="o">+</span> <span class="n">block</span><span class="p">[</span><span class="s2">"bf1"</span><span class="p">])</span>
+<a id="__codelineno-2-51" name="__codelineno-2-51" href="#__codelineno-2-51"></a>  <span class="k">return</span> <span class="n">x</span> <span class="o">+</span> <span class="n">h</span> <span class="o">@</span> <span class="n">block</span><span class="p">[</span><span class="s2">"w2"</span><span class="p">]</span> <span class="o">+</span> <span class="n">block</span><span class="p">[</span><span class="s2">"bf2"</span><span class="p">]</span>
 </code></pre></div>
-<h2 id="score-one-sequence-then-a-batch">Score one sequence, then a batch<a class="headerlink" href="#score-one-sequence-then-a-batch" title="Permanent link">&para;</a></h2>
-<p><code>NanoGPT.sequence_loss</code> embeds the token IDs (<code>self.wte[tokens] + self.wpe</code>),
-runs each block in <code>self.blocks</code>, projects to vocabulary logits with
-<code>self.ln_f(x) @ self.head</code>, and computes the mean negative log-probability of
-the next character at each position.</p>
-<p>In <code>loss</code>, both <code>tokens</code> and <code>targets</code> have shape <code>(batch, context)</code>.
-<code>par.map</code> applies <code>model.sequence_loss</code> across every <code>(inp, tgt)</code> pair in the
-batch, and <code>np.mean</code> averages the per-sequence losses.
-<code>par.value_and_grad(loss)</code> compiles one native function returning both the
-scalar loss and a <code>NanoGPT</code> dataclass holding the gradient of every parameter
-array.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nd">@dataclass</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="k">class</span><span class="w"> </span><span class="nc">NanoGPT</span><span class="p">:</span>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>  <span class="n">wte</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>  <span class="n">wpe</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>  <span class="n">blocks</span><span class="p">:</span> <span class="nb">tuple</span>
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>  <span class="n">ln_f</span><span class="p">:</span> <span class="n">LayerNorm</span>
-<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>  <span class="n">head</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
-<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>
-<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>  <span class="k">def</span><span class="w"> </span><span class="nf">sequence_loss</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tokens</span><span class="p">,</span> <span class="n">targets</span><span class="p">,</span> <span class="n">causal</span><span class="p">):</span>
-<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>    <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">wte</span><span class="p">[</span><span class="n">tokens</span><span class="p">]</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">wpe</span>
-<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>    <span class="k">for</span> <span class="n">blk</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">blocks</span><span class="p">:</span>
-<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>      <span class="n">x</span> <span class="o">=</span> <span class="n">blk</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">causal</span><span class="p">)</span>
-<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>    <span class="n">logits</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ln_f</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">@</span> <span class="bp">self</span><span class="o">.</span><span class="n">head</span>
-<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>    <span class="n">z</span> <span class="o">=</span> <span class="n">logits</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">logits</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">keepdims</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a>    <span class="n">logp</span> <span class="o">=</span> <span class="n">z</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="n">z</span><span class="p">),</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">keepdims</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
-<a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a>    <span class="k">return</span> <span class="o">-</span><span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">logp</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">targets</span><span class="p">)),</span> <span class="n">targets</span><span class="p">])</span>
-<a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a>
-<a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a>
-<a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a><span class="k">def</span><span class="w"> </span><span class="nf">loss</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">tokens</span><span class="p">,</span> <span class="n">targets</span><span class="p">,</span> <span class="n">causal</span><span class="p">):</span>
-<a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a>  <span class="n">per_sequence</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">inp</span><span class="p">,</span> <span class="n">tgt</span><span class="p">:</span> <span class="n">model</span><span class="o">.</span><span class="n">sequence_loss</span><span class="p">(</span><span class="n">inp</span><span class="p">,</span> <span class="n">tgt</span><span class="p">,</span> <span class="n">causal</span><span class="p">),</span> <span class="n">tokens</span><span class="p">,</span> <span class="n">targets</span><span class="p">)</span>
-<a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a>  <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">per_sequence</span><span class="p">)</span>
-<a id="__codelineno-3-22" name="__codelineno-3-22" href="#__codelineno-3-22"></a>
-<a id="__codelineno-3-23" name="__codelineno-3-23" href="#__codelineno-3-23"></a>
-<a id="__codelineno-3-24" name="__codelineno-3-24" href="#__codelineno-3-24"></a><span class="n">loss_and_grad</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">value_and_grad</span><span class="p">(</span><span class="n">loss</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">loss</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">tokens</span><span class="p">,</span> <span class="n">targets</span><span class="p">,</span> <span class="n">mask</span><span class="p">):</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>  <span class="n">b</span><span class="p">,</span> <span class="n">t</span> <span class="o">=</span> <span class="n">tokens</span><span class="o">.</span><span class="n">shape</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>  <span class="n">c</span> <span class="o">=</span> <span class="n">params</span><span class="p">[</span><span class="s2">"wte"</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>  <span class="n">x</span> <span class="o">=</span> <span class="n">params</span><span class="p">[</span><span class="s2">"wte"</span><span class="p">][</span><span class="n">tokens</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="n">b</span> <span class="o">*</span> <span class="n">t</span><span class="p">,))]</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="n">b</span><span class="p">,</span> <span class="n">t</span><span class="p">,</span> <span class="n">c</span><span class="p">))</span> <span class="o">+</span> <span class="n">params</span><span class="p">[</span><span class="s2">"wpe"</span><span class="p">]</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>  <span class="k">for</span> <span class="n">block</span> <span class="ow">in</span> <span class="n">params</span><span class="p">[</span><span class="s2">"blocks"</span><span class="p">]:</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    <span class="n">x</span> <span class="o">=</span> <span class="n">transformer_block</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">block</span><span class="p">,</span> <span class="n">mask</span><span class="p">)</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>  <span class="n">logits</span> <span class="o">=</span> <span class="p">(</span><span class="n">layer_norm</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">params</span><span class="p">[</span><span class="s2">"gf"</span><span class="p">],</span> <span class="n">params</span><span class="p">[</span><span class="s2">"bf"</span><span class="p">])</span> <span class="o">@</span> <span class="n">params</span><span class="p">[</span><span class="s2">"head"</span><span class="p">])</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="n">b</span> <span class="o">*</span> <span class="n">t</span><span class="p">,</span> <span class="n">params</span><span class="p">[</span><span class="s2">"head"</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]))</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>  <span class="n">shifted</span> <span class="o">=</span> <span class="n">logits</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">logits</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">keepdims</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>  <span class="n">log_denom</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="n">shifted</span><span class="p">),</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">))</span>
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>  <span class="n">picked</span> <span class="o">=</span> <span class="n">shifted</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">b</span> <span class="o">*</span> <span class="n">t</span><span class="p">),</span> <span class="n">targets</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="n">b</span> <span class="o">*</span> <span class="n">t</span><span class="p">,))]</span>
+<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>  <span class="k">return</span> <span class="o">-</span><span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">picked</span> <span class="o">-</span> <span class="n">log_denom</span><span class="p">)</span>
+<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>
+<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>
+<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="n">loss_and_grad</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">value_and_grad</span><span class="p">(</span><span class="n">loss</span><span class="p">)</span>
+<a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a>
+<a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a>
+<a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="k">def</span><span class="w"> </span><span class="nf">init_params</span><span class="p">(</span><span class="n">vocab</span><span class="p">,</span> <span class="n">context</span><span class="p">,</span> <span class="n">width</span><span class="p">,</span> <span class="n">layers</span><span class="p">,</span> <span class="n">rng</span><span class="p">):</span>
+<a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a>  <span class="n">w</span> <span class="o">=</span> <span class="k">lambda</span> <span class="o">*</span><span class="n">shape</span><span class="p">:</span> <span class="n">rng</span><span class="o">.</span><span class="n">normal</span><span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.02</span><span class="p">,</span> <span class="n">shape</span><span class="p">)</span>  <span class="c1"># noqa: E731</span>
+<a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a>  <span class="n">blocks</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span>
+<a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a>    <span class="p">{</span>
+<a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a>      <span class="s2">"g1"</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="n">width</span><span class="p">),</span>
+<a id="__codelineno-3-22" name="__codelineno-3-22" href="#__codelineno-3-22"></a>      <span class="s2">"b1"</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">width</span><span class="p">),</span>
+<a id="__codelineno-3-23" name="__codelineno-3-23" href="#__codelineno-3-23"></a>      <span class="s2">"wq"</span><span class="p">:</span> <span class="n">w</span><span class="p">(</span><span class="n">width</span><span class="p">,</span> <span class="n">width</span><span class="p">),</span>
+<a id="__codelineno-3-24" name="__codelineno-3-24" href="#__codelineno-3-24"></a>      <span class="s2">"wk"</span><span class="p">:</span> <span class="n">w</span><span class="p">(</span><span class="n">width</span><span class="p">,</span> <span class="n">width</span><span class="p">),</span>
+<a id="__codelineno-3-25" name="__codelineno-3-25" href="#__codelineno-3-25"></a>      <span class="s2">"wv"</span><span class="p">:</span> <span class="n">w</span><span class="p">(</span><span class="n">width</span><span class="p">,</span> <span class="n">width</span><span class="p">),</span>
+<a id="__codelineno-3-26" name="__codelineno-3-26" href="#__codelineno-3-26"></a>      <span class="s2">"wo"</span><span class="p">:</span> <span class="n">w</span><span class="p">(</span><span class="n">width</span><span class="p">,</span> <span class="n">width</span><span class="p">),</span>
+<a id="__codelineno-3-27" name="__codelineno-3-27" href="#__codelineno-3-27"></a>      <span class="s2">"g2"</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="n">width</span><span class="p">),</span>
+<a id="__codelineno-3-28" name="__codelineno-3-28" href="#__codelineno-3-28"></a>      <span class="s2">"b2"</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">width</span><span class="p">),</span>
+<a id="__codelineno-3-29" name="__codelineno-3-29" href="#__codelineno-3-29"></a>      <span class="s2">"w1"</span><span class="p">:</span> <span class="n">w</span><span class="p">(</span><span class="n">width</span><span class="p">,</span> <span class="mi">4</span> <span class="o">*</span> <span class="n">width</span><span class="p">),</span>
+<a id="__codelineno-3-30" name="__codelineno-3-30" href="#__codelineno-3-30"></a>      <span class="s2">"bf1"</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="mi">4</span> <span class="o">*</span> <span class="n">width</span><span class="p">),</span>
+<a id="__codelineno-3-31" name="__codelineno-3-31" href="#__codelineno-3-31"></a>      <span class="s2">"w2"</span><span class="p">:</span> <span class="n">w</span><span class="p">(</span><span class="mi">4</span> <span class="o">*</span> <span class="n">width</span><span class="p">,</span> <span class="n">width</span><span class="p">),</span>
+<a id="__codelineno-3-32" name="__codelineno-3-32" href="#__codelineno-3-32"></a>      <span class="s2">"bf2"</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">width</span><span class="p">),</span>
+<a id="__codelineno-3-33" name="__codelineno-3-33" href="#__codelineno-3-33"></a>    <span class="p">}</span>
+<a id="__codelineno-3-34" name="__codelineno-3-34" href="#__codelineno-3-34"></a>    <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">layers</span><span class="p">)</span>
+<a id="__codelineno-3-35" name="__codelineno-3-35" href="#__codelineno-3-35"></a>  <span class="p">)</span>
+<a id="__codelineno-3-36" name="__codelineno-3-36" href="#__codelineno-3-36"></a>  <span class="k">return</span> <span class="p">{</span>
+<a id="__codelineno-3-37" name="__codelineno-3-37" href="#__codelineno-3-37"></a>    <span class="s2">"wte"</span><span class="p">:</span> <span class="n">w</span><span class="p">(</span><span class="n">vocab</span><span class="p">,</span> <span class="n">width</span><span class="p">),</span>
+<a id="__codelineno-3-38" name="__codelineno-3-38" href="#__codelineno-3-38"></a>    <span class="s2">"wpe"</span><span class="p">:</span> <span class="n">w</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">width</span><span class="p">),</span>
+<a id="__codelineno-3-39" name="__codelineno-3-39" href="#__codelineno-3-39"></a>    <span class="s2">"blocks"</span><span class="p">:</span> <span class="n">blocks</span><span class="p">,</span>
+<a id="__codelineno-3-40" name="__codelineno-3-40" href="#__codelineno-3-40"></a>    <span class="s2">"gf"</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="n">width</span><span class="p">),</span>
+<a id="__codelineno-3-41" name="__codelineno-3-41" href="#__codelineno-3-41"></a>    <span class="s2">"bf"</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">width</span><span class="p">),</span>
+<a id="__codelineno-3-42" name="__codelineno-3-42" href="#__codelineno-3-42"></a>    <span class="s2">"head"</span><span class="p">:</span> <span class="n">w</span><span class="p">(</span><span class="n">width</span><span class="p">,</span> <span class="n">vocab</span><span class="p">),</span>
+<a id="__codelineno-3-43" name="__codelineno-3-43" href="#__codelineno-3-43"></a>  <span class="p">}</span>
+<a id="__codelineno-3-44" name="__codelineno-3-44" href="#__codelineno-3-44"></a>
+<a id="__codelineno-3-45" name="__codelineno-3-45" href="#__codelineno-3-45"></a>
+<a id="__codelineno-3-46" name="__codelineno-3-46" href="#__codelineno-3-46"></a><span class="k">def</span><span class="w"> </span><span class="nf">adam_step</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">grads</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">v</span><span class="p">,</span> <span class="n">step</span><span class="p">,</span> <span class="n">lr</span><span class="o">=</span><span class="mf">3e-3</span><span class="p">,</span> <span class="n">b1</span><span class="o">=</span><span class="mf">0.9</span><span class="p">,</span> <span class="n">b2</span><span class="o">=</span><span class="mf">0.99</span><span class="p">):</span>
+<a id="__codelineno-3-47" name="__codelineno-3-47" href="#__codelineno-3-47"></a>  <span class="n">m</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">tree_map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">mi</span><span class="p">,</span> <span class="n">g</span><span class="p">:</span> <span class="n">b1</span> <span class="o">*</span> <span class="n">mi</span> <span class="o">+</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">-</span> <span class="n">b1</span><span class="p">)</span> <span class="o">*</span> <span class="n">g</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">grads</span><span class="p">)</span>
+<a id="__codelineno-3-48" name="__codelineno-3-48" href="#__codelineno-3-48"></a>  <span class="n">v</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">tree_map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">vi</span><span class="p">,</span> <span class="n">g</span><span class="p">:</span> <span class="n">b2</span> <span class="o">*</span> <span class="n">vi</span> <span class="o">+</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">-</span> <span class="n">b2</span><span class="p">)</span> <span class="o">*</span> <span class="n">g</span> <span class="o">*</span> <span class="n">g</span><span class="p">,</span> <span class="n">v</span><span class="p">,</span> <span class="n">grads</span><span class="p">)</span>
+<a id="__codelineno-3-49" name="__codelineno-3-49" href="#__codelineno-3-49"></a>  <span class="n">scale</span> <span class="o">=</span> <span class="n">lr</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="mf">1.0</span> <span class="o">-</span> <span class="n">b2</span><span class="o">**</span><span class="n">step</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">-</span> <span class="n">b1</span><span class="o">**</span><span class="n">step</span><span class="p">)</span>
+<a id="__codelineno-3-50" name="__codelineno-3-50" href="#__codelineno-3-50"></a>  <span class="n">params</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">tree_map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">p</span><span class="p">,</span> <span class="n">mi</span><span class="p">,</span> <span class="n">vi</span><span class="p">:</span> <span class="n">p</span> <span class="o">-</span> <span class="n">scale</span> <span class="o">*</span> <span class="n">mi</span> <span class="o">/</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">vi</span><span class="p">)</span> <span class="o">+</span> <span class="mf">1e-8</span><span class="p">),</span> <span class="n">params</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">v</span><span class="p">)</span>
+<a id="__codelineno-3-51" name="__codelineno-3-51" href="#__codelineno-3-51"></a>  <span class="k">return</span> <span class="n">params</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">v</span>
 </code></pre></div>
-<h2 id="build-the-model">Build the model<a class="headerlink" href="#build-the-model" title="Permanent link">&para;</a></h2>
-<p><code>init</code> constructs a <code>NanoGPT</code> instance containing the token and position
-embedding tables, a tuple of <code>Block</code> modules, the final <code>LayerNorm</code>, and the
-output projection <code>head</code>. With the defaults, <code>wte</code> has shape <code>(vocab, 32)</code> and
-<code>head</code> has shape <code>(32, vocab)</code>.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">init</span><span class="p">(</span><span class="n">vocab</span><span class="p">,</span> <span class="n">context</span><span class="p">,</span> <span class="n">width</span><span class="p">,</span> <span class="n">layers</span><span class="p">,</span> <span class="n">rng</span><span class="p">):</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>  <span class="k">def</span><span class="w"> </span><span class="nf">w</span><span class="p">(</span><span class="o">*</span><span class="n">shape</span><span class="p">):</span>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>    <span class="k">return</span> <span class="n">rng</span><span class="o">.</span><span class="n">normal</span><span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.02</span><span class="p">,</span> <span class="n">shape</span><span class="p">)</span>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>
-<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>  <span class="k">def</span><span class="w"> </span><span class="nf">norm</span><span class="p">():</span>
-<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>    <span class="k">return</span> <span class="n">LayerNorm</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="n">width</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">width</span><span class="p">))</span>
-<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>
-<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>  <span class="k">def</span><span class="w"> </span><span class="nf">one_block</span><span class="p">():</span>
-<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>    <span class="k">return</span> <span class="n">Block</span><span class="p">(</span>
-<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>      <span class="n">ln1</span><span class="o">=</span><span class="n">norm</span><span class="p">(),</span>
-<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>      <span class="n">wq</span><span class="o">=</span><span class="n">w</span><span class="p">(</span><span class="n">width</span><span class="p">,</span> <span class="n">width</span><span class="p">),</span>
-<a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a>      <span class="n">wk</span><span class="o">=</span><span class="n">w</span><span class="p">(</span><span class="n">width</span><span class="p">,</span> <span class="n">width</span><span class="p">),</span>
-<a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a>      <span class="n">wv</span><span class="o">=</span><span class="n">w</span><span class="p">(</span><span class="n">width</span><span class="p">,</span> <span class="n">width</span><span class="p">),</span>
-<a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a>      <span class="n">wo</span><span class="o">=</span><span class="n">w</span><span class="p">(</span><span class="n">width</span><span class="p">,</span> <span class="n">width</span><span class="p">),</span>
-<a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a>      <span class="n">ln2</span><span class="o">=</span><span class="n">norm</span><span class="p">(),</span>
-<a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a>      <span class="n">w1</span><span class="o">=</span><span class="n">w</span><span class="p">(</span><span class="n">width</span><span class="p">,</span> <span class="mi">4</span> <span class="o">*</span> <span class="n">width</span><span class="p">),</span>
-<a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a>      <span class="n">b1</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="mi">4</span> <span class="o">*</span> <span class="n">width</span><span class="p">),</span>
-<a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a>      <span class="n">w2</span><span class="o">=</span><span class="n">w</span><span class="p">(</span><span class="mi">4</span> <span class="o">*</span> <span class="n">width</span><span class="p">,</span> <span class="n">width</span><span class="p">),</span>
-<a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a>      <span class="n">b2</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">width</span><span class="p">),</span>
-<a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a>    <span class="p">)</span>
-<a id="__codelineno-4-21" name="__codelineno-4-21" href="#__codelineno-4-21"></a>
-<a id="__codelineno-4-22" name="__codelineno-4-22" href="#__codelineno-4-22"></a>  <span class="k">return</span> <span class="n">NanoGPT</span><span class="p">(</span>
-<a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a>    <span class="n">wte</span><span class="o">=</span><span class="n">w</span><span class="p">(</span><span class="n">vocab</span><span class="p">,</span> <span class="n">width</span><span class="p">),</span>
-<a id="__codelineno-4-24" name="__codelineno-4-24" href="#__codelineno-4-24"></a>    <span class="n">wpe</span><span class="o">=</span><span class="n">w</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">width</span><span class="p">),</span>
-<a id="__codelineno-4-25" name="__codelineno-4-25" href="#__codelineno-4-25"></a>    <span class="n">blocks</span><span class="o">=</span><span class="nb">tuple</span><span class="p">(</span><span class="n">one_block</span><span class="p">()</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">layers</span><span class="p">)),</span>
-<a id="__codelineno-4-26" name="__codelineno-4-26" href="#__codelineno-4-26"></a>    <span class="n">ln_f</span><span class="o">=</span><span class="n">norm</span><span class="p">(),</span>
-<a id="__codelineno-4-27" name="__codelineno-4-27" href="#__codelineno-4-27"></a>    <span class="n">head</span><span class="o">=</span><span class="n">w</span><span class="p">(</span><span class="n">width</span><span class="p">,</span> <span class="n">vocab</span><span class="p">),</span>
-<a id="__codelineno-4-28" name="__codelineno-4-28" href="#__codelineno-4-28"></a>  <span class="p">)</span>
+</div>
+</div>
+</div>
+<hr />
+<h2 id="tokenization-and-training-loop">Tokenization and training loop<a class="headerlink" href="#tokenization-and-training-loop" title="Permanent link">&para;</a></h2>
+<p><code>par.Vocab.from_text(TEXT)</code> builds a compact character vocabulary backed by a
+256-entry lookup table—the exact same categorical encoding pattern as
+<code>par.Alphabet("ACGT")</code> in the <a href="../../bioinformatics/">bioinformatics gallery</a>.
+Calling <code>vocab.encode(TEXT)</code> returns a 1D <code>int64</code> token array ready for
+windowed batching.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">TEXT</span> <span class="o">=</span> <span class="p">(</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>  <span class="s2">"parakeet compiles numerical python. it fuses array expressions into loops, "</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>  <span class="s2">"runs them on every core, and now differentiates them too. "</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="p">)</span> <span class="o">*</span> <span class="mi">8</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="k">def</span><span class="w"> </span><span class="nf">sample_batch</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">batch</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">rng</span><span class="p">):</span>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>  <span class="n">starts</span> <span class="o">=</span> <span class="n">rng</span><span class="o">.</span><span class="n">integers</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">)</span> <span class="o">-</span> <span class="n">context</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span> <span class="n">batch</span><span class="p">)</span>
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>  <span class="n">tokens</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">stack</span><span class="p">([</span><span class="n">data</span><span class="p">[</span><span class="n">i</span> <span class="p">:</span> <span class="n">i</span> <span class="o">+</span> <span class="n">context</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">starts</span><span class="p">])</span>
+<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>  <span class="n">targets</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">stack</span><span class="p">([</span><span class="n">data</span><span class="p">[</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span> <span class="p">:</span> <span class="n">i</span> <span class="o">+</span> <span class="n">context</span> <span class="o">+</span> <span class="mi">1</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">starts</span><span class="p">])</span>
+<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>  <span class="k">return</span> <span class="n">tokens</span><span class="p">,</span> <span class="n">targets</span>
+<a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a>
+<a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a>
+<a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">(</span><span class="n">steps</span><span class="o">=</span><span class="mi">60</span><span class="p">,</span> <span class="n">batch</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span> <span class="n">context</span><span class="o">=</span><span class="mi">32</span><span class="p">,</span> <span class="n">width</span><span class="o">=</span><span class="mi">32</span><span class="p">,</span> <span class="n">layers</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">heads</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a>  <span class="n">rng</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">default_rng</span><span class="p">(</span><span class="n">seed</span><span class="p">)</span>
+<a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a>  <span class="n">vocab</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">Vocab</span><span class="o">.</span><span class="n">from_text</span><span class="p">(</span><span class="n">TEXT</span><span class="p">)</span>
+<a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a>  <span class="n">data</span> <span class="o">=</span> <span class="n">vocab</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="n">TEXT</span><span class="p">)</span>
+<a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a>
+<a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a>  <span class="n">model</span> <span class="o">=</span> <span class="n">NanoGPT</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">vocab</span><span class="p">),</span> <span class="n">context</span><span class="p">,</span> <span class="n">width</span><span class="p">,</span> <span class="n">layers</span><span class="p">,</span> <span class="n">heads</span><span class="o">=</span><span class="n">heads</span><span class="p">,</span> <span class="n">rng</span><span class="o">=</span><span class="n">rng</span><span class="p">)</span>
+<a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a>  <span class="n">optimizer</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">optim</span><span class="o">.</span><span class="n">Adam</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">lr</span><span class="o">=</span><span class="mf">3e-3</span><span class="p">,</span> <span class="n">betas</span><span class="o">=</span><span class="p">(</span><span class="mf">0.9</span><span class="p">,</span> <span class="mf">0.99</span><span class="p">))</span>
+<a id="__codelineno-4-21" name="__codelineno-4-21" href="#__codelineno-4-21"></a>  <span class="n">mask</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">causal_mask</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+<a id="__codelineno-4-22" name="__codelineno-4-22" href="#__codelineno-4-22"></a>
+<a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a>  <span class="n">first</span> <span class="o">=</span> <span class="n">last</span> <span class="o">=</span> <span class="kc">None</span>
+<a id="__codelineno-4-24" name="__codelineno-4-24" href="#__codelineno-4-24"></a>  <span class="n">start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span>
+<a id="__codelineno-4-25" name="__codelineno-4-25" href="#__codelineno-4-25"></a>  <span class="k">for</span> <span class="n">step</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">steps</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
+<a id="__codelineno-4-26" name="__codelineno-4-26" href="#__codelineno-4-26"></a>    <span class="n">tokens</span><span class="p">,</span> <span class="n">targets</span> <span class="o">=</span> <span class="n">sample_batch</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">batch</span><span class="p">,</span> <span class="n">context</span><span class="p">,</span> <span class="n">rng</span><span class="p">)</span>
+<a id="__codelineno-4-27" name="__codelineno-4-27" href="#__codelineno-4-27"></a>    <span class="n">value</span><span class="p">,</span> <span class="n">grads</span> <span class="o">=</span> <span class="n">loss_and_grad</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">tokens</span><span class="p">,</span> <span class="n">targets</span><span class="p">,</span> <span class="n">mask</span><span class="p">)</span>
+<a id="__codelineno-4-28" name="__codelineno-4-28" href="#__codelineno-4-28"></a>    <span class="n">model</span> <span class="o">=</span> <span class="n">optimizer</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">grads</span><span class="p">)</span>
+<a id="__codelineno-4-29" name="__codelineno-4-29" href="#__codelineno-4-29"></a>    <span class="n">first</span> <span class="o">=</span> <span class="n">value</span> <span class="k">if</span> <span class="n">first</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">first</span>
+<a id="__codelineno-4-30" name="__codelineno-4-30" href="#__codelineno-4-30"></a>    <span class="n">last</span> <span class="o">=</span> <span class="n">value</span>
+<a id="__codelineno-4-31" name="__codelineno-4-31" href="#__codelineno-4-31"></a>    <span class="k">if</span> <span class="n">verbose</span> <span class="ow">and</span> <span class="p">(</span><span class="n">step</span> <span class="o">==</span> <span class="mi">1</span> <span class="ow">or</span> <span class="n">step</span> <span class="o">%</span> <span class="mi">20</span> <span class="o">==</span> <span class="mi">0</span><span class="p">):</span>
+<a id="__codelineno-4-32" name="__codelineno-4-32" href="#__codelineno-4-32"></a>      <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"step </span><span class="si">{</span><span class="n">step</span><span class="si">:</span><span class="s2">3d</span><span class="si">}</span><span class="s2">  loss </span><span class="si">{</span><span class="n">value</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2">  (</span><span class="si">{</span><span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">start</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2">s)"</span><span class="p">)</span>
+<a id="__codelineno-4-33" name="__codelineno-4-33" href="#__codelineno-4-33"></a>
+<a id="__codelineno-4-34" name="__codelineno-4-34" href="#__codelineno-4-34"></a>  <span class="k">assert</span> <span class="n">last</span> <span class="o">&lt;</span> <span class="mf">0.8</span> <span class="o">*</span> <span class="n">first</span><span class="p">,</span> <span class="p">(</span><span class="n">first</span><span class="p">,</span> <span class="n">last</span><span class="p">)</span>
+<a id="__codelineno-4-35" name="__codelineno-4-35" href="#__codelineno-4-35"></a>  <span class="k">return</span> <span class="n">first</span><span class="p">,</span> <span class="n">last</span>
+<a id="__codelineno-4-36" name="__codelineno-4-36" href="#__codelineno-4-36"></a>
+<a id="__codelineno-4-37" name="__codelineno-4-37" href="#__codelineno-4-37"></a>
+<a id="__codelineno-4-38" name="__codelineno-4-38" href="#__codelineno-4-38"></a><span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">"__main__"</span><span class="p">:</span>
+<a id="__codelineno-4-39" name="__codelineno-4-39" href="#__codelineno-4-39"></a>  <span class="n">main</span><span class="p">(</span><span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </code></pre></div>
-<h2 id="update-every-parameter-with-adam">Update every parameter with Adam<a class="headerlink" href="#update-every-parameter-with-adam" title="Permanent link">&para;</a></h2>
-<p><code>loss_and_grad</code> returns the batch loss and a <code>NanoGPT</code> gradient tree matching
-the structure of <code>model</code>. <code>tree_map</code> walks matching tuples and dataclass fields
-together so Adam can update embeddings, norms, biases, and projections with the
-same few lines. <code>m</code> tracks the moving average of gradients and <code>v</code> tracks the
-moving average of squared gradients.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">tree_map</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="o">*</span><span class="n">trees</span><span class="p">):</span>
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>  <span class="n">first</span> <span class="o">=</span> <span class="n">trees</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
-<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>  <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">first</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">):</span>
-<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>    <span class="k">return</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">tree_map</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="o">*</span><span class="n">parts</span><span class="p">)</span> <span class="k">for</span> <span class="n">parts</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="o">*</span><span class="n">trees</span><span class="p">))</span>
-<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>  <span class="k">if</span> <span class="n">is_dataclass</span><span class="p">(</span><span class="n">first</span><span class="p">):</span>
-<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>    <span class="k">return</span> <span class="nb">type</span><span class="p">(</span><span class="n">first</span><span class="p">)(</span><span class="o">*</span><span class="p">(</span><span class="n">tree_map</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="o">*</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">fl</span><span class="o">.</span><span class="n">name</span><span class="p">)</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">trees</span><span class="p">))</span> <span class="k">for</span> <span class="n">fl</span> <span class="ow">in</span> <span class="n">fields</span><span class="p">(</span><span class="n">first</span><span class="p">)))</span>
-<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>  <span class="k">return</span> <span class="n">f</span><span class="p">(</span><span class="o">*</span><span class="n">trees</span><span class="p">)</span>
-<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>
-<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>
-<a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="k">def</span><span class="w"> </span><span class="nf">adam</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">grads</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">v</span><span class="p">,</span> <span class="n">step</span><span class="p">,</span> <span class="n">lr</span><span class="o">=</span><span class="mf">3e-3</span><span class="p">,</span> <span class="n">b1</span><span class="o">=</span><span class="mf">0.9</span><span class="p">,</span> <span class="n">b2</span><span class="o">=</span><span class="mf">0.99</span><span class="p">):</span>
-<a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>  <span class="n">m</span> <span class="o">=</span> <span class="n">tree_map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">m</span><span class="p">,</span> <span class="n">g</span><span class="p">:</span> <span class="n">b1</span> <span class="o">*</span> <span class="n">m</span> <span class="o">+</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">b1</span><span class="p">)</span> <span class="o">*</span> <span class="n">g</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">grads</span><span class="p">)</span>
-<a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a>  <span class="n">v</span> <span class="o">=</span> <span class="n">tree_map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">v</span><span class="p">,</span> <span class="n">g</span><span class="p">:</span> <span class="n">b2</span> <span class="o">*</span> <span class="n">v</span> <span class="o">+</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">b2</span><span class="p">)</span> <span class="o">*</span> <span class="n">g</span> <span class="o">*</span> <span class="n">g</span><span class="p">,</span> <span class="n">v</span><span class="p">,</span> <span class="n">grads</span><span class="p">)</span>
-<a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a>  <span class="n">scale</span> <span class="o">=</span> <span class="n">lr</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">b2</span><span class="o">**</span><span class="n">step</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">b1</span><span class="o">**</span><span class="n">step</span><span class="p">)</span>
-<a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a>  <span class="n">model</span> <span class="o">=</span> <span class="n">tree_map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">p</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">v</span><span class="p">:</span> <span class="n">p</span> <span class="o">-</span> <span class="n">scale</span> <span class="o">*</span> <span class="n">m</span> <span class="o">/</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="o">+</span> <span class="mf">1e-8</span><span class="p">),</span> <span class="n">model</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">v</span><span class="p">)</span>
-<a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a>  <span class="k">return</span> <span class="n">model</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">v</span>
-<a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a>
-<a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a>
-<a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a><span class="k">def</span><span class="w"> </span><span class="nf">train_step</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">v</span><span class="p">,</span> <span class="n">step</span><span class="p">,</span> <span class="n">tokens</span><span class="p">,</span> <span class="n">targets</span><span class="p">,</span> <span class="n">causal</span><span class="p">):</span>
-<a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a>  <span class="n">value</span><span class="p">,</span> <span class="n">grads</span> <span class="o">=</span> <span class="n">loss_and_grad</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">tokens</span><span class="p">,</span> <span class="n">targets</span><span class="p">,</span> <span class="n">causal</span><span class="p">)</span>
-<a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a>  <span class="n">model</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">v</span> <span class="o">=</span> <span class="n">adam</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">grads</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">v</span><span class="p">,</span> <span class="n">step</span><span class="p">)</span>
-<a id="__codelineno-5-21" name="__codelineno-5-21" href="#__codelineno-5-21"></a>  <span class="k">return</span> <span class="n">value</span><span class="p">,</span> <span class="n">model</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">v</span>
+<h3 id="fusing-the-optimizer-step-on-gpu">Fusing the optimizer step on GPU<a class="headerlink" href="#fusing-the-optimizer-step-on-gpu" title="Permanent link">&para;</a></h3>
+<p>In the walkthrough above, <code>optimizer.update(model, grads)</code> runs in Python so
+each step is easy to inspect. When training on a GPU, wrap both
+<code>par.value_and_grad(loss)</code> and <code>par.optim.adam_step</code> inside one <code>@par.jit</code>
+function and keep <code>(model, m, v)</code> resident on the device with <code>par.to_device</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nd">@par</span><span class="o">.</span><span class="n">jit</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">"cuda"</span><span class="p">,</span> <span class="n">tensor_cores</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">train_step</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">v</span><span class="p">,</span> <span class="n">step</span><span class="p">,</span> <span class="n">tokens</span><span class="p">,</span> <span class="n">targets</span><span class="p">,</span> <span class="n">mask</span><span class="p">):</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>  <span class="n">value</span><span class="p">,</span> <span class="n">grads</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">value_and_grad</span><span class="p">(</span><span class="n">loss</span><span class="p">)(</span><span class="n">model</span><span class="p">,</span> <span class="n">tokens</span><span class="p">,</span> <span class="n">targets</span><span class="p">,</span> <span class="n">mask</span><span class="p">)</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>  <span class="n">model</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">v</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">optim</span><span class="o">.</span><span class="n">adam_step</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">grads</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">v</span><span class="p">,</span> <span class="n">step</span><span class="p">,</span> <span class="n">lr</span><span class="o">=</span><span class="mf">3e-3</span><span class="p">)</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>  <span class="k">return</span> <span class="n">value</span><span class="p">,</span> <span class="n">model</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">v</span>
 </code></pre></div>
-<h2 id="train-on-shifted-character-windows">Train on shifted character windows<a class="headerlink" href="#train-on-shifted-character-windows" title="Permanent link">&para;</a></h2>
-<p><code>main</code> assigns one integer ID to each distinct character in <code>TEXT</code>. For a
-sample starting at offset <code>i</code>, <code>tokens</code> starts at <code>i</code> and <code>targets</code> starts at
-<code>i + 1</code>. Stacking those windows gives the two arrays consumed by <code>par.map</code>.
-The lower triangle of <code>causal</code> includes the diagonal, so each position can read
-its own input when predicting the following character.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">TEXT</span> <span class="o">=</span> <span class="p">(</span>
-<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>  <span class="s2">"parakeet compiles numerical python. it fuses array expressions into loops, "</span>
-<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>  <span class="s2">"runs them on every core, and now differentiates them too. "</span>
-<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="p">)</span> <span class="o">*</span> <span class="mi">8</span>
-<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>
-<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>
-<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">(</span><span class="n">steps</span><span class="o">=</span><span class="mi">60</span><span class="p">,</span> <span class="n">batch</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span> <span class="n">context</span><span class="o">=</span><span class="mi">32</span><span class="p">,</span> <span class="n">width</span><span class="o">=</span><span class="mi">32</span><span class="p">,</span> <span class="n">layers</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
-<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>  <span class="n">rng</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">default_rng</span><span class="p">(</span><span class="n">seed</span><span class="p">)</span>
-<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>  <span class="n">chars</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">TEXT</span><span class="p">))</span>
-<a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>  <span class="n">data</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">chars</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">c</span><span class="p">)</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">TEXT</span><span class="p">])</span>
-<a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a>  <span class="n">model</span> <span class="o">=</span> <span class="n">init</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">chars</span><span class="p">),</span> <span class="n">context</span><span class="p">,</span> <span class="n">width</span><span class="p">,</span> <span class="n">layers</span><span class="p">,</span> <span class="n">rng</span><span class="p">)</span>
-<a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a>  <span class="n">m</span> <span class="o">=</span> <span class="n">tree_map</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">,</span> <span class="n">model</span><span class="p">)</span>
-<a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a>  <span class="n">v</span> <span class="o">=</span> <span class="n">tree_map</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">,</span> <span class="n">model</span><span class="p">)</span>
-<a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a>  <span class="n">causal</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">tril</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="n">context</span><span class="p">,</span> <span class="n">context</span><span class="p">)))</span> <span class="o">&gt;</span> <span class="mi">0</span>
-<a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a>  <span class="n">first</span> <span class="o">=</span> <span class="n">last</span> <span class="o">=</span> <span class="kc">None</span>
-<a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a>  <span class="n">start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span>
-<a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a>  <span class="k">for</span> <span class="n">step</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">steps</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
-<a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a>    <span class="n">at</span> <span class="o">=</span> <span class="n">rng</span><span class="o">.</span><span class="n">integers</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">)</span> <span class="o">-</span> <span class="n">context</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span> <span class="n">batch</span><span class="p">)</span>
-<a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a>    <span class="n">tokens</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">stack</span><span class="p">([</span><span class="n">data</span><span class="p">[</span><span class="n">i</span> <span class="p">:</span> <span class="n">i</span> <span class="o">+</span> <span class="n">context</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">at</span><span class="p">])</span>
-<a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a>    <span class="n">targets</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">stack</span><span class="p">([</span><span class="n">data</span><span class="p">[</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span> <span class="p">:</span> <span class="n">i</span> <span class="o">+</span> <span class="n">context</span> <span class="o">+</span> <span class="mi">1</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">at</span><span class="p">])</span>
-<a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a>    <span class="n">value</span><span class="p">,</span> <span class="n">model</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">v</span> <span class="o">=</span> <span class="n">train_step</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">v</span><span class="p">,</span> <span class="n">step</span><span class="p">,</span> <span class="n">tokens</span><span class="p">,</span> <span class="n">targets</span><span class="p">,</span> <span class="n">causal</span><span class="p">)</span>
-<a id="__codelineno-6-22" name="__codelineno-6-22" href="#__codelineno-6-22"></a>    <span class="n">first</span> <span class="o">=</span> <span class="n">value</span> <span class="k">if</span> <span class="n">first</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">first</span>
-<a id="__codelineno-6-23" name="__codelineno-6-23" href="#__codelineno-6-23"></a>    <span class="n">last</span> <span class="o">=</span> <span class="n">value</span>
-<a id="__codelineno-6-24" name="__codelineno-6-24" href="#__codelineno-6-24"></a>    <span class="k">if</span> <span class="n">verbose</span> <span class="ow">and</span> <span class="p">(</span><span class="n">step</span> <span class="o">==</span> <span class="mi">1</span> <span class="ow">or</span> <span class="n">step</span> <span class="o">%</span> <span class="mi">20</span> <span class="o">==</span> <span class="mi">0</span><span class="p">):</span>
-<a id="__codelineno-6-25" name="__codelineno-6-25" href="#__codelineno-6-25"></a>      <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"step </span><span class="si">{</span><span class="n">step</span><span class="si">:</span><span class="s2">3d</span><span class="si">}</span><span class="s2">  loss </span><span class="si">{</span><span class="n">value</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2">  (</span><span class="si">{</span><span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">start</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2">s)"</span><span class="p">)</span>
-<a id="__codelineno-6-26" name="__codelineno-6-26" href="#__codelineno-6-26"></a>  <span class="k">assert</span> <span class="n">last</span> <span class="o">&lt;</span> <span class="mf">0.8</span> <span class="o">*</span> <span class="n">first</span><span class="p">,</span> <span class="p">(</span><span class="n">first</span><span class="p">,</span> <span class="n">last</span><span class="p">)</span>
-<a id="__codelineno-6-27" name="__codelineno-6-27" href="#__codelineno-6-27"></a>  <span class="k">return</span> <span class="n">first</span><span class="p">,</span> <span class="n">last</span>
-<a id="__codelineno-6-28" name="__codelineno-6-28" href="#__codelineno-6-28"></a>
-<a id="__codelineno-6-29" name="__codelineno-6-29" href="#__codelineno-6-29"></a>
-<a id="__codelineno-6-30" name="__codelineno-6-30" href="#__codelineno-6-30"></a><span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">"__main__"</span><span class="p">:</span>
-<a id="__codelineno-6-31" name="__codelineno-6-31" href="#__codelineno-6-31"></a>  <span class="n">main</span><span class="p">(</span><span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-</code></pre></div>
-<p>The first training step compiles the forward and gradient kernels; subsequent
-steps reuse the compiled native code. With <code>--verbose</code> (the default when run as
-a script), <code>main</code> prints the cross-entropy loss at steps 1, 20, 40, and 60 and
-asserts that training makes progress (final loss below 80% of step 1). Using
-the fixed <code>seed=0</code> above, the printed loss drops from <strong>3.173</strong> at step 1 to
-<strong>2.307</strong> (step 20), <strong>1.796</strong> (step 40), and <strong>1.250</strong> (step 60) on GPU (with
-nearly identical values on CPU).</p>
-<p>For larger four-head training runs where the Adam update is also compiled into
-the training step, see the <a href="../../release-benchmarks/#end-to-end-nanogpt-training-nvidia-l4">nanoGPT training benchmark</a>.
-The compact two-head walkthrough above keeps Adam in plain Python so every line
-is easy to follow.</p>
+<p>That compiles forward, backward, and Adam into a single zero-round-trip device
+step. See the <a href="../../release-benchmarks/#end-to-end-nanogpt-training-nvidia-l4">nanoGPT GPU benchmarks</a>
+for full timings comparing Parakeet FP32/TF32, PyTorch (<code>eager</code>, <code>SDPA</code>,
+<code>torch.compile</code>), and JAX.</p>
 
 
 

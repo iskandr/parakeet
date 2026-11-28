@@ -1845,7 +1845,11 @@ separate fusion and tiling rules for every combination (<code>Map ∘ Transpose<
 <li><strong>Broadcasting, transposes, slices, views, comprehensions, and <code>allpairs</code>
   vanish into simple index expressions</strong> before any middle-end pass runs.</li>
 </ul>
-<p><img alt="Indexification collapses diverse array-driven Python and NumPy operations into coordinate-driven IndexMap and IndexReduce primitives" src="../assets/diag-indexification.svg" /></p>
+<figure>
+  <img alt="Indexification collapses diverse array-driven Python and NumPy operations into coordinate-driven IndexMap and IndexReduce primitives" src="../assets/diag-indexification.svg" />
+<br />
+<figcaption><strong>Figure 1.</strong> Indexification normalizes broadcasting, transposes, slices, comprehensions, and explicit <code>par.*</code> calls into coordinate-driven <code>IndexMap</code> and <code>IndexReduce</code> primitives.</figcaption>
+</figure>
 <p>That single normalization is why one fusion pass (<code>IndexMap</code> into <code>IndexReduce</code>)
 automatically handles <code>np.sum(x * x)</code>, <code>np.sum(x.T[::2])</code>, <code>a @ b.T</code>,
 <code>np.einsum('ij,jk-&gt;ik', a, b)</code>, and <code>np.argmin(np.sum((x[:, None] - y[None, :])**2, axis=2), axis=1)</code>
@@ -1950,7 +1954,11 @@ nested <code>IndexTile</code> operators with explicit <code>TileStage</code> buf
 L1/L2 cache blocking, <code>2×4</code> register jamming, GPU <code>__shared__</code> /
 <code>threadgroup</code> memory, Metal <code>simdgroup_matrix</code>, and CUDA TF32 WMMA from one
 representation.</p>
-<p><img alt="Vertical, filter-reduce, and sibling fusion collapse memory passes" src="../assets/diag-fusion.svg" /></p>
+<figure>
+  <img alt="Vertical, filter-reduce, and sibling fusion collapse memory passes" src="../assets/diag-fusion.svg" />
+<br />
+<figcaption><strong>Figure 2.</strong> Algebraic fusion collapses vertical chains, boolean filter-reductions, and sibling passes into single-pass loops with zero intermediate allocations.</figcaption>
+</figure>
 <hr />
 <h2 id="worked-end-to-end-compilation-walkthroughs">Worked compilation walkthroughs<a class="headerlink" href="#worked-end-to-end-compilation-walkthroughs" title="Permanent link">&para;</a></h2>
 <p>Each walkthrough below starts from ordinary Python/NumPy and shows the exact
@@ -1965,7 +1973,11 @@ compiled schedule Parakeet produces. (To inspect raw SSA loop IR, see
 <a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>  <span class="n">e</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="n">s</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">,</span> <span class="n">keepdims</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
 <a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>  <span class="k">return</span> <span class="p">(</span><span class="n">e</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">e</span><span class="p">,</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">,</span> <span class="n">keepdims</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span> <span class="o">@</span> <span class="n">v</span>
 </code></pre></div>
-<p><img alt="Causal attention compiled from 3 O(T^2) buffers to 1 tiled kernel with Law 5 block skipping" src="../assets/diag-attention-tiling.svg" /></p>
+<figure>
+  <img alt="Causal attention compiled from 3 O(T^2) buffers to 1 tiled kernel with Law 5 block skipping" src="../assets/diag-attention-tiling.svg" />
+<br />
+<figcaption><strong>Figure 3.</strong> Causal attention compiled from naive NumPy into a single monoidally tiled kernel with Law 5 upper-triangular block skipping.</figcaption>
+</figure>
 <p>Three general passes transform this function:</p>
 <ol>
 <li><strong>Indexification &amp; delayed fusion</strong> fold <code>causal</code>, <code>* 0.125</code>, and <code>np.where</code>
@@ -2030,7 +2042,11 @@ compiled schedule Parakeet produces. (To inspect raw SSA loop IR, see
 <a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>  <span class="n">d2</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">delta</span> <span class="o">**</span> <span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">(</span><span class="mi">2</span><span class="p">),</span> <span class="n">axis</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
 <a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>  <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">argmin</span><span class="p">(</span><span class="n">d2</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
 </code></pre></div>
-<p><img alt="Exact 1-NN streams 16x128 score tiles in L1/SRAM with left-to-right ordered carry merge" src="../assets/diag-pairwise-1nn.svg" /></p>
+<figure>
+  <img alt="Exact 1-NN streams 16x128 score tiles in L1/SRAM with left-to-right ordered carry merge" src="../assets/diag-pairwise-1nn.svg" />
+<br />
+<figcaption><strong>Figure 4.</strong> Exact 1-NN pairwise fold tiling streams 16×128 score tiles in L1/SRAM with ordered carry merges, eliminating the Q×R distance matrix.</figcaption>
+</figure>
 <p>Indexification turns the 3D broadcast <code>delta</code> and squared sum <code>d2</code> directly
 into index expressions inside <code>argmin</code>—eliminating both the <code>(Q, R, D)</code>
 difference tensor and <code>(Q, R)</code> distance matrix. <strong>Law 6 (<code>pairwise fold tiling</code>)</strong>

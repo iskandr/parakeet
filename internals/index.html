@@ -1527,7 +1527,11 @@
 <p>Parakeet compiles a decorated Python function through four clean stages:
 <strong>elaboration</strong>, <strong>algebraic optimization</strong>, <strong>loop lowering</strong>, and
 <strong>multi-target codegen</strong>.</p>
-<p><img alt="Parakeet compiler pipeline from Python source through operator algebra and loop IR to C, CUDA, and Metal" src="../assets/diag-pipeline.svg" /></p>
+<figure>
+  <img alt="Parakeet compiler pipeline from Python source through operator algebra and loop IR to C, CUDA, and Metal" src="../assets/diag-pipeline.svg" />
+<br />
+<figcaption><strong>Figure 1.</strong> Parakeet's four-stage compilation pipeline: type/shape specialization and staged elaboration, algebraic operator optimization, loop lowering, and multi-target C / Metal / CUDA code generation.</figcaption>
+</figure>
 <h2 id="1-specialization">1. Specialization<a class="headerlink" href="#1-specialization" title="Permanent link">&para;</a></h2>
 <p>Calling a <code>@par.jit</code> function classifies its arguments—array dtype, rank,
 contiguity/layout, scalar types, container structure, and callable identity—into

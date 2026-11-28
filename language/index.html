@@ -687,10 +687,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#dataclasses-and-fixed-records" class="md-nav__link">
+  <a href="#objects-parnnmodule-and-records" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Dataclasses and fixed records
+        Objects, par.nn.Module, and records
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#strings-alphabets-and-tokenization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Strings, alphabets, and tokenization
       
     </span>
   </a>
@@ -1526,10 +1537,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#dataclasses-and-fixed-records" class="md-nav__link">
+  <a href="#objects-parnnmodule-and-records" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Dataclasses and fixed records
+        Objects, par.nn.Module, and records
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#strings-alphabets-and-tokenization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Strings, alphabets, and tokenization
       
     </span>
   </a>
@@ -1597,8 +1619,12 @@ supported and where compiled code intentionally differs from CPython.</p>
 <td>Compile-time structures (zero runtime overhead)</td>
 </tr>
 <tr>
-<td><code>NamedTuple</code> and <code>@dataclass</code> (frozen or mutable)</td>
-<td>Compile-time records with pure methods, <code>@property</code>, <code>__call__</code>, and functional field rebinding (<code>obj.x = v</code>)</td>
+<td><code>NamedTuple</code>, <code>@dataclass</code>, and <code>par.nn.Module</code></td>
+<td>Compile-time records with normal <code>__init__</code>, pure methods, <code>@property</code>, <code>__call__</code>, and functional field rebinding (<code>obj.x = v</code>)</td>
+</tr>
+<tr>
+<td><code>par.Alphabet</code> and <code>par.Vocab</code></td>
+<td>256-entry categorical lookup tables for ASCII sequences and character tokenization (<code>DNA[seq]</code>, <code>vocab.encode(text)</code>)</td>
 </tr>
 <tr>
 <td>Fixed string-key <code>dict</code></td>
@@ -1719,19 +1745,35 @@ supported and where compiled code intentionally differs from CPython.</p>
 <li><strong>Shape rebinding:</strong> variables holding arrays or <code>RaggedArray</code>s can be rebound
   to new shapes across <code>for</code> / <code>while</code> iterations (for example <code>active = active[mask]</code>).</li>
 </ul>
-<h2 id="dataclasses-and-fixed-records">Dataclasses and fixed records<a class="headerlink" href="#dataclasses-and-fixed-records" title="Permanent link">&para;</a></h2>
-<p><code>NamedTuple</code>s, <code>@dataclass</code>es (frozen or non-frozen), and fixed string-key
-<code>dict</code>s can cross the <code>@par.jit</code> boundary and hold arrays, scalars, static
-metadata, or nested records.</p>
+<h2 id="objects-parnnmodule-and-records">Objects, <code>par.nn.Module</code>, and records<a class="headerlink" href="#objects-parnnmodule-and-records" title="Permanent link">&para;</a></h2>
+<p><code>NamedTuple</code>s, <code>@dataclass</code>es (frozen or non-frozen), fixed string-key <code>dict</code>s,
+and ordinary Python classes inheriting from <code>par.nn.Module</code> (or setting
+<code>__parakeet_record__ = True</code>) can cross the <code>@par.jit</code> boundary and hold
+arrays, scalars, static metadata, or nested records.</p>
 <ul>
-<li>Pure methods, <code>@property</code>, <code>@staticmethod</code>, <code>@classmethod</code>, and <code>__call__</code>
-  inline at compile time with zero <code>PyObject</code> overhead.</li>
-<li>Local field updates (<code>obj.x = v</code>, <code>obj.x += v</code>) on non-frozen dataclasses
-  functionally rebind the compile-time record (value semantics, no heap
-  mutation).</li>
+<li>Standard <code>__init__</code> runs in Python when constructing the object; inside
+  <code>@par.jit</code> and <code>par.value_and_grad</code>, Parakeet unpacks <code>self.__dict__</code> into a
+  typed compile-time record with zero <code>PyObject</code> overhead.</li>
+<li>Pure methods, <code>@property</code>, <code>@staticmethod</code>, <code>@classmethod</code>, <code>__call__</code>, and
+  <code>__getitem__</code> inline at compile time.</li>
+<li>Local field updates (<code>obj.x = v</code>, <code>obj.x += v</code>) functionally rebind the
+  compile-time record (value semantics, no heap mutation).</li>
 <li>Returning a record reconstructs its Python type while preserving NumPy view
   semantics for array fields.</li>
+<li><code>par.tree_map</code> and <code>par.tree_map_arrays</code> walk nested tuples, dicts,
+  dataclasses, and <code>par.nn.Module</code> trees both in Python and inside <code>@par.jit</code>.</li>
 </ul>
+<h2 id="strings-alphabets-and-tokenization">Strings, alphabets, and tokenization<a class="headerlink" href="#strings-alphabets-and-tokenization" title="Permanent link">&para;</a></h2>
+<p>Strings and <code>list[str]</code> passed into <code>@par.jit</code> are packed into dense <code>uint8</code>
+arrays (fixed length) or <code>RaggedArray[uint8]</code> (variable length). To map ASCII
+characters to compact integer categories—whether DNA bases, GC masks, or
+language-model tokens—use <code>par.Alphabet</code> or <code>par.Vocab</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">DNA</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">Alphabet</span><span class="p">(</span><span class="s2">"ACGT"</span><span class="p">)</span>  <span class="c1"># 'A'-&gt;0, 'C'-&gt;1, 'G'-&gt;2, 'T'-&gt;3 (case-insensitive)</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">GC</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">Alphabet</span><span class="o">.</span><span class="n">mask</span><span class="p">(</span><span class="s2">"GC"</span><span class="p">)</span>  <span class="c1"># 1 for G/C, 0 elsewhere</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">vocab</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">Vocab</span><span class="o">.</span><span class="n">from_text</span><span class="p">(</span><span class="n">corpus</span><span class="p">)</span>  <span class="c1"># sorted character vocabulary -&gt; int64 IDs</span>
+</code></pre></div>
+<p>Indexing <code>DNA[seq]</code> or <code>GC[seq]</code> inside <code>@par.jit</code> compiles directly to a
+256-byte LUT gather with no <code>IntEnum</code> or dictionary boilerplate.</p>
 <h2 id="differences-from-cpython-numpy">Differences from CPython / NumPy<a class="headerlink" href="#differences-from-cpython-numpy" title="Permanent link">&para;</a></h2>
 <table>
 <thead>

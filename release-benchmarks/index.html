@@ -1912,11 +1912,27 @@ plotted together.</p>
 <hr />
 <h2 id="pairwise-search-and-kernel-regression">Pairwise search and kernel regression<a class="headerlink" href="#pairwise-search-and-kernel-regression" title="Permanent link">&para;</a></h2>
 <h3 id="exact-1-nn-1024-4096-32-float32">Exact 1-NN (<code>1,024 × 4,096 × 32</code>, <code>float32</code>)<a class="headerlink" href="#exact-1-nn-1024-4096-32-float32" title="Permanent link">&para;</a></h3>
-<p><img alt="GPU exact 1-NN search latency on NVIDIA L4" src="../assets/bench-1nn-gpu-l4.svg" /></p>
-<p><img alt="CPU exact 1-NN search latency on 4 threads" src="../assets/bench-1nn-cpu.svg" /></p>
+<figure>
+  <img alt="GPU exact 1-NN search latency on NVIDIA L4" src="../assets/bench-1nn-gpu-l4.svg" />
+<br />
+<figcaption><strong>Figure 1.</strong> GPU exact 1-NN search latency (1,024 × 4,096 × 32, float32) on NVIDIA L4 across 21 warmed replicates.</figcaption>
+</figure>
+<figure>
+  <img alt="CPU exact 1-NN search latency on 4 threads" src="../assets/bench-1nn-cpu.svg" />
+<br />
+<figcaption><strong>Figure 2.</strong> CPU exact 1-NN search latency (1,024 × 4,096 × 32, float32) on 4 threads across 11 warmed replicates.</figcaption>
+</figure>
 <h3 id="gaussian-kernel-regression-1024-4096-32-float32">Gaussian kernel regression (<code>1,024 × 4,096 × 32</code>, <code>float32</code>)<a class="headerlink" href="#gaussian-kernel-regression-1024-4096-32-float32" title="Permanent link">&para;</a></h3>
-<p><img alt="GPU Gaussian kernel regression latency on NVIDIA L4" src="../assets/bench-rbf-gpu-l4.svg" /></p>
-<p><img alt="CPU Gaussian kernel regression latency on 4 threads" src="../assets/bench-rbf-cpu.svg" /></p>
+<figure>
+  <img alt="GPU Gaussian kernel regression latency on NVIDIA L4" src="../assets/bench-rbf-gpu-l4.svg" />
+<br />
+<figcaption><strong>Figure 3.</strong> GPU Gaussian / RBF kernel regression latency (1,024 × 4,096 × 32, float32) on NVIDIA L4 across 21 warmed replicates.</figcaption>
+</figure>
+<figure>
+  <img alt="CPU Gaussian kernel regression latency on 4 threads" src="../assets/bench-rbf-cpu.svg" />
+<br />
+<figcaption><strong>Figure 4.</strong> CPU Gaussian / RBF kernel regression latency (1,024 × 4,096 × 32, float32) on 4 threads across 11 warmed replicates.</figcaption>
+</figure>
 <h3 id="summary-table-1024-4096-32-float32">Summary table (<code>1,024 × 4,096 × 32</code>, <code>float32</code>)<a class="headerlink" href="#summary-table-1024-4096-32-float32" title="Permanent link">&para;</a></h3>
 <p>Warmed medians in milliseconds (lower is faster). Faiss and scikit-learn times
 exclude index construction. Implementations:
@@ -2026,8 +2042,16 @@ scaling and GPU throughput. On both NVIDIA L4 (<code>0dcb7d5</code> vs. <code>1.
 both the broadcasting NumPy form and the explicit operator form compile to the
 same tiled pairwise fold with zero host transfers and exact first-index
 tie/NaN semantics.</p>
-<p><img alt="GPU exact 1-NN latency scaling from 1,024 to 16,384 references on NVIDIA L4" src="../assets/bench-scaling-1nn-latency.svg" /></p>
-<p><img alt="GPU exact 1-NN global scratch memory scaling from 1,024 to 16,384 references on NVIDIA L4" src="../assets/bench-scaling-1nn-memory.svg" /></p>
+<figure>
+  <img alt="GPU exact 1-NN latency scaling from 1,024 to 16,384 references on NVIDIA L4" src="../assets/bench-scaling-1nn-latency.svg" />
+<br />
+<figcaption><strong>Figure 5.</strong> Exact 1-NN GPU latency scaling from 1,024 to 16,384 references (Q = 1,024, D = 32) on NVIDIA L4: tiled pairwise fold vs. 1.0.0 materialized baseline.</figcaption>
+</figure>
+<figure>
+  <img alt="GPU exact 1-NN global scratch memory scaling from 1,024 to 16,384 references on NVIDIA L4" src="../assets/bench-scaling-1nn-memory.svg" />
+<br />
+<figcaption><strong>Figure 6.</strong> Exact 1-NN global scratch memory scaling from 1,024 to 16,384 references: 21× reduction (64 MiB down to 3.0 MiB + 16 KiB shared memory per block).</figcaption>
+</figure>
 <table>
 <thead>
 <tr>
@@ -2095,9 +2119,21 @@ transfers (<a href="../gallery/#inverse-distance-smoothing">browse both programs
 <hr />
 <h2 id="forward-gpu-kernels-and-nanogpt-training">Forward GPU kernels and nanoGPT training<a class="headerlink" href="#forward-gpu-kernels-and-nanogpt-training" title="Permanent link">&para;</a></h2>
 <h3 id="forward-gpu-workloads-nvidia-l4-n-21-warmed-calls">Forward GPU workloads (NVIDIA L4, <code>n = 21</code> warmed calls)<a class="headerlink" href="#forward-gpu-workloads-nvidia-l4-n-21-warmed-calls" title="Permanent link">&para;</a></h3>
-<p><img alt="GBDT histogram and best-split latency on NVIDIA L4" src="../assets/bench-gbdt-l4.svg" /></p>
-<p><img alt="Causal self-attention latency on NVIDIA L4" src="../assets/bench-attn-l4.svg" /></p>
-<p><img alt="Linear cross-entropy latency on NVIDIA L4" src="../assets/bench-cce-l4.svg" /></p>
+<figure>
+  <img alt="GBDT histogram and best-split latency on NVIDIA L4" src="../assets/bench-gbdt-l4.svg" />
+<br />
+<figcaption><strong>Figure 7.</strong> GBDT gradient/Hessian histogram accumulation and best-split latency (262,144 × 256 bins) on NVIDIA L4.</figcaption>
+</figure>
+<figure>
+  <img alt="Causal self-attention latency on NVIDIA L4" src="../assets/bench-attn-l4.svg" />
+<br />
+<figcaption><strong>Figure 8.</strong> Causal self-attention latency (4 × 512 × 64, float32) on NVIDIA L4.</figcaption>
+</figure>
+<figure>
+  <img alt="Linear cross-entropy latency on NVIDIA L4" src="../assets/bench-cce-l4.svg" />
+<br />
+<figcaption><strong>Figure 9.</strong> Linear cross-entropy latency (512 × 128 × 2,048, float32) on NVIDIA L4.</figcaption>
+</figure>
 <table>
 <thead>
 <tr>
@@ -2141,8 +2177,16 @@ transfers (<a href="../gallery/#inverse-distance-smoothing">browse both programs
 </tbody>
 </table>
 <h3 id="end-to-end-nanogpt-training-nvidia-l4">End-to-end nanoGPT training (NVIDIA L4)<a class="headerlink" href="#end-to-end-nanogpt-training-nvidia-l4" title="Permanent link">&para;</a></h3>
-<p><img alt="Small nanoGPT training step times on NVIDIA L4" src="../assets/bench-nanogpt-small-l4.svg" /></p>
-<p><img alt="Medium nanoGPT training step times on NVIDIA L4" src="../assets/bench-nanogpt-med-l4.svg" /></p>
+<figure>
+  <img alt="Small nanoGPT training step times on NVIDIA L4" src="../assets/bench-nanogpt-small-l4.svg" />
+<br />
+<figcaption><strong>Figure 10.</strong> Small nanoGPT training step latency (B=16, T=64, C=128, L=2, H=4; forward + backward + Adam) on NVIDIA L4.</figcaption>
+</figure>
+<figure>
+  <img alt="Medium nanoGPT training step times on NVIDIA L4" src="../assets/bench-nanogpt-med-l4.svg" />
+<br />
+<figcaption><strong>Figure 11.</strong> Medium nanoGPT training step latency (B=32, T=128, C=256, L=4, H=4; forward + backward + Adam) on NVIDIA L4.</figcaption>
+</figure>
 <p>Each step runs the full forward pass, reverse-mode backpropagation, and Adam
 update (4 attention heads, median of 20 warmed steps in milliseconds). Parakeet
 and <a href="https://docs.jax.dev/en/latest/jit-compilation.html">JAX <code>jit</code></a> compile the
@@ -2200,13 +2244,37 @@ specialist C/C++/Cython libraries
 timing (<code>n = 11</code> warmed replicates).
 <a href="../assets/bio-benchmarks-m1pro.json">Download raw JSON</a>.</p>
 <h3 id="sequence-alignment-and-long-read-rna-mapping">Sequence alignment and long-read RNA mapping<a class="headerlink" href="#sequence-alignment-and-long-read-rna-mapping" title="Permanent link">&para;</a></h3>
-<p><img alt="Myers 64-bit edit distance latency on Apple M1 Pro" src="../assets/bench-bio-myers-m1pro.svg" /></p>
-<p><img alt="Affine-gap Gotoh alignment and traceback latency on Apple M1 Pro" src="../assets/bench-bio-gotoh-m1pro.svg" /></p>
-<p><img alt="SSHash and delta-map long-read RNA mapping latency on Apple M1 Pro" src="../assets/bench-bio-rna-m1pro.svg" /></p>
+<figure>
+  <img alt="Myers 64-bit edit distance latency on Apple M1 Pro" src="../assets/bench-bio-myers-m1pro.svg" />
+<br />
+<figcaption><strong>Figure 12.</strong> Myers 64-bit bit-vector edit distance (1,000 × 256 bp) on Apple M1 Pro (10 cores): Parakeet vs. edlib C++.</figcaption>
+</figure>
+<figure>
+  <img alt="Affine-gap Gotoh alignment and traceback latency on Apple M1 Pro" src="../assets/bench-bio-gotoh-m1pro.svg" />
+<br />
+<figcaption><strong>Figure 13.</strong> Affine-gap Gotoh global alignment with full traceback (200 × 128 bp) on Apple M1 Pro: Parakeet vs. Biopython C and Biotite Cython.</figcaption>
+</figure>
+<figure>
+  <img alt="SSHash and delta-map long-read RNA mapping latency on Apple M1 Pro" src="../assets/bench-bio-rna-m1pro.svg" />
+<br />
+<figcaption><strong>Figure 14.</strong> SSHash + Spearfish delta-map long-read RNA mapping (3.01 Mbp across 80 human Ensembl isoforms) on Apple M1 Pro.</figcaption>
+</figure>
 <h3 id="cheminformatics-structural-biology-and-bam-pileup">Cheminformatics, structural biology, and BAM pileup<a class="headerlink" href="#cheminformatics-structural-biology-and-bam-pileup" title="Permanent link">&para;</a></h3>
-<p><img alt="2048-bit Tanimoto 1-NN search latency on Apple M1 Pro" src="../assets/bench-bio-tanimoto-m1pro.svg" /></p>
-<p><img alt="Batched Kabsch 3D protein RMSD latency on Apple M1 Pro" src="../assets/bench-bio-kabsch-m1pro.svg" /></p>
-<p><img alt="6-channel BAM pileup latency on Apple M1 Pro" src="../assets/bench-bio-pileup-m1pro.svg" /></p>
+<figure>
+  <img alt="2048-bit Tanimoto 1-NN search latency on Apple M1 Pro" src="../assets/bench-bio-tanimoto-m1pro.svg" />
+<br />
+<figcaption><strong>Figure 15.</strong> 2048-bit Morgan fingerprint Tanimoto 1-NN search (256 × 8,192 compounds) on Apple M1 Pro: Parakeet vs. RDKit C++.</figcaption>
+</figure>
+<figure>
+  <img alt="Batched Kabsch 3D protein RMSD latency on Apple M1 Pro" src="../assets/bench-bio-kabsch-m1pro.svg" />
+<br />
+<figcaption><strong>Figure 16.</strong> Batched Kabsch 3D protein superposition and RMSD (2,000 × 128 CA atoms) on Apple M1 Pro: Parakeet vs. Biotite and NumPy.</figcaption>
+</figure>
+<figure>
+  <img alt="6-channel BAM pileup latency on Apple M1 Pro" src="../assets/bench-bio-pileup-m1pro.svg" />
+<br />
+<figcaption><strong>Figure 17.</strong> Single-pass 6-channel BAM alignment pileup (2M observations) on Apple M1 Pro: Parakeet fused IndexScatter vs. NumPy 6× bincount.</figcaption>
+</figure>
 <table>
 <thead>
 <tr>

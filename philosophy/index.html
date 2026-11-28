@@ -1597,8 +1597,8 @@ or SciPy.</p>
 <td>Native <code>float16</code> compute (widened to <code>float32</code>), object or string arrays</td>
 </tr>
 <tr>
-<td>Tuples, <code>NamedTuple</code>, fixed string-key dicts, <code>@dataclass</code> (pure methods, <code>@property</code>, <code>__call__</code>), <code>slice</code>, <code>range</code>, <code>zip</code>, <code>enumerate</code>, <code>itertools</code></td>
-<td>Dynamic dict keys, <code>set</code>, runtime string manipulation, arbitrary non-dataclass classes</td>
+<td>Tuples, <code>NamedTuple</code>, fixed string-key dicts, <code>@dataclass</code>, <code>par.nn.Module</code> (normal <code>__init__</code>, pure methods, <code>@property</code>, <code>__call__</code>), <code>par.Alphabet</code>, <code>par.Vocab</code>, <code>slice</code>, <code>range</code>, <code>zip</code>, <code>enumerate</code>, <code>itertools</code></td>
+<td>Dynamic dict keys, <code>set</code>, runtime string manipulation, arbitrary non-record classes</td>
 </tr>
 <tr>
 <td>Compile-time lists, CPU growable homogeneous lists, <code>par.fixed_list</code>, dynamic-shape array / <code>RaggedArray</code> loop rebinding</td>
@@ -1621,7 +1621,7 @@ or SciPy.</p>
   2D &amp; batched 3D <code>np.linalg</code> (<code>cholesky</code>, <code>det</code>, <code>solve</code>, <code>inv</code>, <code>qr</code>, <code>eigh</code>,
   <code>eigvalsh</code>, <code>svd</code>, <code>pinv</code>, <code>lstsq</code>, <code>norm</code>), and parallel <code>np.random</code>. Not
   built in: non-symmetric <code>eig</code>/<code>eigvals</code>, 4D+ <code>np.linalg</code> (wrap with
-  <code>par.map</code>), <code>np.fft.*</code> (see <code>examples/complex_fft_and_fasta.py</code> for a compiled
+  <code>par.map</code>), <code>np.fft.*</code> (see <code>examples/fft.py</code> for a compiled
   radix-2 FFT), <code>np.lexsort</code>/<code>np.isin</code>, and <code>scipy.*</code>.</li>
 <li><strong>Automatic differentiation:</strong> covers reverse mode (<code>grad</code>, <code>vjp</code>, <code>jacrev</code>),
   forward mode (<code>jvp</code>, <code>linearize</code>, <code>jacfwd</code>), <code>linear_transpose</code>, higher-order

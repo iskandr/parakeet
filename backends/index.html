@@ -1604,10 +1604,22 @@ Python exceptions.</p>
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">distances</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">C</span><span class="p">):</span>
 <a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>  <span class="k">return</span> <span class="n">par</span><span class="o">.</span><span class="n">allpairs</span><span class="p">(</span><span class="k">lambda</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">((</span><span class="n">a</span> <span class="o">-</span> <span class="n">b</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">),</span> <span class="n">X</span><span class="p">,</span> <span class="n">C</span><span class="p">)</span>
 </code></pre></div>
-<p>Kernels compile at runtime via CuPy's <code>RawKernel</code> (NVRTC), so only an NVIDIA
-driver and matching CuPy wheel are required (no standalone <code>nvcc</code> install). All
-dtypes including <code>float64</code> are supported. Enable TF32 Tensor Cores (<code>nvcuda::wmma</code>)
-on <code>sm_80+</code> GPUs with <code>par.config.tensor_cores = True</code> (or
+<p>Kernels are zero-header CUDA C++ (TF32 Tensor Cores use inline PTX
+<code>mma.sync.aligned.m16n8k8</code> with register-direct epilogues, avoiding <code>#include
+&lt;mma.h&gt;</code>) and compiled CUBIN binaries are cached persistently on disk under
+<code>config.cache_dir</code>. Select the CUDA kernel compiler via <code>config.cuda_compiler</code>
+(<code>PARAKEET_CUDA_COMPILER</code>):</p>
+<ul>
+<li><strong><code>"nvrtc"</code> (default):</strong> compiles via NVRTC with LLVM IR optimizations and
+  caches CUBINs on disk. Requires only an NVIDIA driver and matching CuPy wheel.</li>
+<li><strong><code>"ptx"</code>:</strong> emits PTX 7.8 directly from Parakeet's flat <code>ParLoop</code> IR for
+  elementwise, loop, atomic, and warp-reduce kernels (loaded through the CUDA
+  driver JIT), falling back to NVRTC for tiled GEMMs and libm ops.</li>
+<li><strong><code>"nvcc"</code>:</strong> compiles via standalone <code>nvcc --cubin -O3</code> when installed on
+  <code>PATH</code>.</li>
+</ul>
+<p>All dtypes including <code>float64</code> are supported. Enable TF32 Tensor Cores on
+<code>sm_80+</code> GPUs with <code>par.config.tensor_cores = True</code> (or
 <code>PARAKEET_TENSOR_CORES=1</code>).</p>
 <p><em>(TPUs are not supported: TPUs require XLA whole-program static-shape graphs,
 whereas Parakeet generates scalar C/MSL/CUDA kernels.)</em></p>

@@ -511,10 +511,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#loops-comprehensions-and-helpers" class="md-nav__link">
+  <a href="#four-styles-one-compiler" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Loops, comprehensions, and helpers
+        Four styles, one compiler
       
     </span>
   </a>
@@ -522,10 +522,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#gradients-in-one-line" class="md-nav__link">
+  <a href="#gradients-modules-and-optimizers" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Gradients in one line
+        Gradients, modules, and optimizers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sequences-alphabets-and-tokenization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sequences, alphabets, and tokenization
       
     </span>
   </a>
@@ -1478,10 +1489,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#loops-comprehensions-and-helpers" class="md-nav__link">
+  <a href="#four-styles-one-compiler" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Loops, comprehensions, and helpers
+        Four styles, one compiler
       
     </span>
   </a>
@@ -1489,10 +1500,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#gradients-in-one-line" class="md-nav__link">
+  <a href="#gradients-modules-and-optimizers" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Gradients in one line
+        Gradients, modules, and optimizers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sequences-alphabets-and-tokenization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sequences, alphabets, and tokenization
       
     </span>
   </a>
@@ -1589,54 +1611,100 @@ step:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">fast_rms</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">jit</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">x</span> <span class="o">*</span> <span class="n">x</span><span class="p">)))</span>
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">par</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">rms</span><span class="o">.</span><span class="n">fn</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>
 </code></pre></div>
-<h2 id="loops-comprehensions-and-helpers">Loops, comprehensions, and helpers<a class="headerlink" href="#loops-comprehensions-and-helpers" title="Permanent link">&para;</a></h2>
-<p>Anything in the <a href="../language/">compiled language</a> mixes freely. Helper functions
-are inlined automatically—they do not need <code>@par.jit</code>:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">sqr_dist</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>  <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">((</span><span class="n">a</span> <span class="o">-</span> <span class="n">b</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="nd">@par</span><span class="o">.</span><span class="n">jit</span>
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="k">def</span><span class="w"> </span><span class="nf">nearest</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">centroids</span><span class="p">):</span>
-<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>  <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">np</span><span class="o">.</span><span class="n">argmin</span><span class="p">([</span><span class="n">sqr_dist</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">c</span><span class="p">)</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">centroids</span><span class="p">])</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">X</span><span class="p">])</span>
+<h2 id="four-styles-one-compiler">Four styles, one compiler<a class="headerlink" href="#four-styles-one-compiler" title="Permanent link">&para;</a></h2>
+<p>Parakeet compiles NumPy broadcasting (<code>_numpy</code>), comprehensions (<code>_comp</code>),
+explicit loops (<code>_loop</code>), and data-parallel operators (<code>_par</code>) through the same
+optimizer. Helper functions inline automatically—they do not need <code>@par.jit</code>:</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="1:4"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><input id="__tabbed_1_4" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">NumPy (<code>_numpy</code>)</label><label for="__tabbed_1_2">Comprehension (<code>_comp</code>)</label><label for="__tabbed_1_3">Loop (<code>_loop</code>)</label><label for="__tabbed_1_4">Operators (<code>_par</code>)</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="o">--</span><span class="mi">8</span> <span class="o">&lt;</span> <span class="o">--</span><span class="s2">"examples/algebraic_gallery.py:nearest_numpy"</span>
 </code></pre></div>
-<p>When you want explicit data-parallel control over slices, pairs, scans, or
-histograms, use <a href="../operators/#map"><code>par.map</code></a>, <a href="../operators/#reduce"><code>par.reduce</code></a>,
-<a href="../operators/#fold"><code>par.fold</code></a>, <a href="../operators/#scan"><code>par.scan</code></a>,
-<a href="../operators/#allpairs"><code>par.allpairs</code></a>, or
-<a href="../operators/#scatter_add"><code>par.scatter_add</code></a>.</p>
-<h2 id="gradients-in-one-line">Gradients in one line<a class="headerlink" href="#gradients-in-one-line" title="Permanent link">&para;</a></h2>
-<p>Wrap any scalar-valued function with <code>par.grad</code> or <code>par.value_and_grad</code>. The
-forward and backward passes compile together into one native function:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">mse_loss</span><span class="p">(</span><span class="n">w</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>  <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">((</span><span class="n">np</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">x</span> <span class="o">@</span> <span class="n">w</span><span class="p">)</span> <span class="o">-</span> <span class="n">y</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>
-<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="n">loss_val</span><span class="p">,</span> <span class="n">dw</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">value_and_grad</span><span class="p">(</span><span class="n">mse_loss</span><span class="p">)(</span><span class="n">w</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="o">--</span><span class="mi">8</span> <span class="o">&lt;</span> <span class="o">--</span><span class="s2">"examples/algebraic_gallery.py:squared_distance"</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="o">--</span><span class="mi">8</span> <span class="o">&lt;</span> <span class="o">--</span><span class="s2">"examples/algebraic_gallery.py:nearest_comp"</span>
 </code></pre></div>
-<p>See <a href="../autodiff/">Automatic differentiation</a> for nested tuples, <code>@dataclass</code>
-parameters, <code>par.jvp</code>, <code>par.hvp</code>, and custom rules.</p>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="o">--</span><span class="mi">8</span> <span class="o">&lt;</span> <span class="o">--</span><span class="s2">"examples/algebraic_gallery.py:squared_distance"</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="o">--</span><span class="mi">8</span> <span class="o">&lt;</span> <span class="o">--</span><span class="s2">"examples/algebraic_gallery.py:nearest_loop"</span>
+</code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="o">--</span><span class="mi">8</span> <span class="o">&lt;</span> <span class="o">--</span><span class="s2">"examples/algebraic_gallery.py:squared_distance"</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="o">--</span><span class="mi">8</span> <span class="o">&lt;</span> <span class="o">--</span><span class="s2">"examples/algebraic_gallery.py:nearest_par"</span>
+</code></pre></div>
+</div>
+</div>
+</div>
+<p>See the <a href="../gallery/">Kernel gallery</a> for side-by-side comparisons across
+smoothing, histograms, tropical products, scans, attention, and cross-entropy.</p>
+<h2 id="gradients-modules-and-optimizers">Gradients, modules, and optimizers<a class="headerlink" href="#gradients-modules-and-optimizers" title="Permanent link">&para;</a></h2>
+<p>Wrap any scalar-valued function with <code>par.grad</code> or <code>par.value_and_grad</code>. You
+can differentiate plain NumPy functions, dicts/tuples, <code>@dataclass</code> records, or
+ordinary Python classes inheriting from <code>par.nn.Module</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="k">class</span><span class="w"> </span><span class="nc">TwoLayerMLP</span><span class="p">(</span><span class="n">par</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>  <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">width</span><span class="p">,</span> <span class="n">hidden</span><span class="p">,</span> <span class="n">rng</span><span class="p">):</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">fc1</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="n">width</span><span class="p">,</span> <span class="n">hidden</span><span class="p">,</span> <span class="n">rng</span><span class="o">=</span><span class="n">rng</span><span class="p">)</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">fc2</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="n">hidden</span><span class="p">,</span> <span class="n">width</span><span class="p">,</span> <span class="n">rng</span><span class="o">=</span><span class="n">rng</span><span class="p">)</span>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>  <span class="k">def</span><span class="w"> </span><span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">fc2</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">fc1</span><span class="p">(</span><span class="n">x</span><span class="p">)))</span>
+<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>
+<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>
+<a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="k">def</span><span class="w"> </span><span class="nf">mse_loss</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+<a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a>  <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">((</span><span class="n">model</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">-</span> <span class="n">y</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span>
+<a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a>
+<a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a>
+<a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a><span class="n">rng</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">default_rng</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+<a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a><span class="n">model</span> <span class="o">=</span> <span class="n">TwoLayerMLP</span><span class="p">(</span><span class="n">width</span><span class="o">=</span><span class="mi">32</span><span class="p">,</span> <span class="n">hidden</span><span class="o">=</span><span class="mi">64</span><span class="p">,</span> <span class="n">rng</span><span class="o">=</span><span class="n">rng</span><span class="p">)</span>
+<a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a><span class="n">x</span> <span class="o">=</span> <span class="n">rng</span><span class="o">.</span><span class="n">standard_normal</span><span class="p">((</span><span class="mi">128</span><span class="p">,</span> <span class="mi">32</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+<a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a><span class="n">y</span> <span class="o">=</span> <span class="n">rng</span><span class="o">.</span><span class="n">standard_normal</span><span class="p">((</span><span class="mi">128</span><span class="p">,</span> <span class="mi">32</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+<a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a>
+<a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a><span class="n">loss_and_grad</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">value_and_grad</span><span class="p">(</span><span class="n">mse_loss</span><span class="p">)</span>
+<a id="__codelineno-7-20" name="__codelineno-7-20" href="#__codelineno-7-20"></a><span class="n">opt</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">optim</span><span class="o">.</span><span class="n">Adam</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">lr</span><span class="o">=</span><span class="mf">1e-3</span><span class="p">)</span>
+<a id="__codelineno-7-21" name="__codelineno-7-21" href="#__codelineno-7-21"></a><span class="n">loss_val</span><span class="p">,</span> <span class="n">grads</span> <span class="o">=</span> <span class="n">loss_and_grad</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+<a id="__codelineno-7-22" name="__codelineno-7-22" href="#__codelineno-7-22"></a><span class="n">model</span> <span class="o">=</span> <span class="n">opt</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">grads</span><span class="p">)</span>
+</code></pre></div>
+<p>See <a href="../autodiff/">Automatic differentiation</a> and <a href="../gallery/nanogpt/">Train nanoGPT</a>
+for both helper-based and from-scratch functional training loops.</p>
+<h2 id="sequences-alphabets-and-tokenization">Sequences, alphabets, and tokenization<a class="headerlink" href="#sequences-alphabets-and-tokenization" title="Permanent link">&para;</a></h2>
+<p>To pass character sequences (DNA reads, protein chains, text corpora) into
+compiled code without <code>IntEnum</code> or dict boilerplate, use <code>par.Alphabet</code> (fixed
+categorical alphabets) or <code>par.Vocab</code> (corpus-derived tokenizers). Both compile
+down to a 256-entry lookup table:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="n">DNA</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">Alphabet</span><span class="p">(</span><span class="s2">"ACGT"</span><span class="p">)</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="n">GC</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">Alphabet</span><span class="o">.</span><span class="n">mask</span><span class="p">(</span><span class="s2">"GC"</span><span class="p">)</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="n">codes</span> <span class="o">=</span> <span class="n">DNA</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">"ACGTGCGT"</span><span class="p">)</span>  <span class="c1"># array([0, 1, 2, 3, 2, 1, 2, 3], dtype=uint8)</span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="n">vocab</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">Vocab</span><span class="o">.</span><span class="n">from_text</span><span class="p">(</span><span class="s2">"parakeet compiles numerical python."</span><span class="p">)</span>
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="n">tokens</span> <span class="o">=</span> <span class="n">vocab</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">"parakeet"</span><span class="p">)</span>
+</code></pre></div>
 <h2 id="picking-a-backend">Picking a backend<a class="headerlink" href="#picking-a-backend" title="Permanent link">&para;</a></h2>
 <p>By default (<code>backend="auto"</code>), Parakeet parallelizes across all CPU cores.
 Switch backends per function, per call, globally, or for a block:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nd">@par</span><span class="o">.</span><span class="n">jit</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">"metal"</span><span class="p">)</span>  <span class="c1"># per function ("cuda", "gpu", "c", "threads", ...)</span>
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">f</span><span class="p">(</span><span class="n">x</span><span class="p">):</span> <span class="o">...</span>
-<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
-<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>
-<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="n">f</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">_backend</span><span class="o">=</span><span class="s2">"c"</span><span class="p">)</span>  <span class="c1"># single call</span>
-<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="n">par</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">backend</span> <span class="o">=</span> <span class="s2">"threads"</span>  <span class="c1"># process-wide</span>
-<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="k">with</span> <span class="n">par</span><span class="o">.</span><span class="n">options</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">"c"</span><span class="p">,</span> <span class="n">num_threads</span><span class="o">=</span><span class="mi">1</span><span class="p">):</span>  <span class="c1"># scoped block</span>
-<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>  <span class="n">f</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="nd">@par</span><span class="o">.</span><span class="n">jit</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">"metal"</span><span class="p">)</span>  <span class="c1"># per function ("cuda", "gpu", "c", "threads", ...)</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">f</span><span class="p">(</span><span class="n">x</span><span class="p">):</span> <span class="o">...</span>
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>
+<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="n">f</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">_backend</span><span class="o">=</span><span class="s2">"c"</span><span class="p">)</span>  <span class="c1"># single call</span>
+<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="n">par</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">backend</span> <span class="o">=</span> <span class="s2">"threads"</span>  <span class="c1"># process-wide</span>
+<a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="k">with</span> <span class="n">par</span><span class="o">.</span><span class="n">options</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">"c"</span><span class="p">,</span> <span class="n">num_threads</span><span class="o">=</span><span class="mi">1</span><span class="p">):</span>  <span class="c1"># scoped block</span>
+<a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a>  <span class="n">f</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
 </code></pre></div>
 <p>See <a href="../backends/">Backends and GPUs</a> for Metal, CUDA, and keeping arrays
 resident on device with <code>par.to_device</code>.</p>
 <h2 id="errors-and-debugging">Errors and debugging<a class="headerlink" href="#errors-and-debugging" title="Permanent link">&para;</a></h2>
 <p>Anything outside the supported subset fails at compile time with your exact
 source line:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>parakeet.errors.UnsupportedError: numpy.fft.fft is not supported in compiled code
-<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>  File "demo.py", line 6, in spectrum
-<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>    return np.fft.fft(x)
-<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>           ^^^^^^^^^^^^^
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>parakeet.errors.UnsupportedError: numpy.fft.fft is not supported in compiled code
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>  File "demo.py", line 6, in spectrum
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>    return np.fft.fft(x)
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>           ^^^^^^^^^^^^^
 </code></pre></div>
 <p>Run any function uncompiled with <code>f(x, _backend="python")</code> to check whether an
 issue is in your algorithm or the compiler. To inspect the generated C or GPU
@@ -1644,12 +1712,12 @@ kernels, call <code>rms.specialize(x).source</code> (see
 <a href="../debugging/">Errors and debugging</a>).</p>
 <h2 id="where-to-go-next">Where to go next<a class="headerlink" href="#where-to-go-next" title="Permanent link">&para;</a></h2>
 <ul>
-<li><a href="../language/">The compiled language</a> — supported types, control flow, and
-  differences from CPython.</li>
+<li><a href="../language/">The compiled language</a> — supported types, <code>par.nn.Module</code>,
+  <code>par.Alphabet</code>/<code>par.Vocab</code>, and differences from CPython.</li>
 <li><a href="../operators/">Data-parallel operators</a> — <code>map</code>, <code>fold</code>, <code>scan</code>, <code>scatter_add</code>,
   and <code>wavefront</code>.</li>
-<li><a href="../gallery/">Kernel gallery</a> — runnable examples from nearest-neighbor search
-  to attention and nanoGPT.</li>
+<li><a href="../gallery/">Kernel gallery</a> — runnable four-flavor examples from nearest
+  neighbor to attention and nanoGPT.</li>
 <li><a href="../primitives/">Operators &amp; compilation walkthrough</a> — how Parakeet fuses and
   tiles your code under the hood.</li>
 </ul>

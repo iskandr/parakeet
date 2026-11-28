@@ -1455,7 +1455,13 @@ names raise <code>AttributeError</code> listing valid settings.</p>
 <td><code>tensor_cores</code></td>
 <td><code>False</code></td>
 <td><code>PARAKEET_TENSOR_CORES</code></td>
-<td>Enable TF32 Tensor Cores (<code>nvcuda::wmma</code>) on CUDA <code>sm_80+</code> (Metal FP32 <code>simdgroup_matrix</code> is exact IEEE FP32 and always enabled)</td>
+<td>Enable TF32 Tensor Cores (inline PTX <code>mma.sync</code>) on CUDA <code>sm_80+</code> (Metal FP32 <code>simdgroup_matrix</code> is exact IEEE FP32 and always enabled)</td>
+</tr>
+<tr>
+<td><code>cuda_compiler</code></td>
+<td><code>"nvrtc"</code></td>
+<td><code>PARAKEET_CUDA_COMPILER</code></td>
+<td>CUDA kernel compiler: <code>"nvrtc"</code> (default, zero-header NVRTC + CUBIN cache), <code>"ptx"</code> (direct PTX 7.8 + NVRTC fallback), or <code>"nvcc"</code> (<code>nvcc --cubin -O3</code>)</td>
 </tr>
 <tr>
 <td><code>cc</code></td>

@@ -1605,7 +1605,11 @@ that matches your input/output shape:</p>
   and no backward tape—even through long loops. Use it when <code>m ≫ n</code>, for
   directional derivatives, or inside forward-over-reverse <code>par.hvp</code>.</li>
 </ul>
-<p><img alt="Forward-mode JVP vs reverse-mode VJP and algebraic rematerialization" src="../assets/diag-autodiff.svg" /></p>
+<figure>
+  <img alt="Forward-mode JVP vs reverse-mode VJP" src="../assets/diag-autodiff-modes.svg" />
+<br />
+<figcaption><strong>Figure 1.</strong> Forward-mode JVP propagates tangents in one O(1)-memory pass (best when outputs m &gt;&gt; inputs n); reverse-mode VJP pulls cotangents back from scalar losses (best when inputs n &gt;&gt; outputs m).</figcaption>
+</figure>
 <p>The two modes are exact linear transposes of one another for any input <code>x</code>,
 tangent <code>v</code>, and cotangent <code>u</code>:</p>
 <div class="pk-eq">
