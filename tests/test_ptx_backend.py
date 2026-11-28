@@ -349,10 +349,9 @@ def test_ptx_real_gpu_differential_parity_and_cu_module_load():
   # Verify native cuModuleLoadDataEx / cuModuleGetFunction / cuModuleUnload directly
   native = try_load_native_cuda_rt()
   if native is not None:
-    minimal_ptx = (
-      ".version 7.8\n.target sm_80\n.address_size 64\n"
-      ".visible .entry pk_noop() {\n  ret;\n}\n"
-    ).encode("utf-8") + b"\x00"
+    minimal_ptx = (".version 7.8\n.target sm_80\n.address_size 64\n.visible .entry pk_noop() {\n  ret;\n}\n").encode(
+      "utf-8"
+    ) + b"\x00"
     mod_h, funcs = native.load_ptx_module(minimal_ptx, ["pk_noop"])
     assert mod_h and funcs["pk_noop"]
     native.unload_module(mod_h)
