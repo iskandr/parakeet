@@ -100,10 +100,11 @@ class Config:
   #: Use TF32 Tensor Cores (nvcuda::wmma) for float32 matmul on CUDA sm_80+ GPUs.
   #: (Apple Metal float32 simdgroup_matrix is full IEEE FP32 and enabled automatically.)
   tensor_cores: bool = field(default_factory=lambda: _env_bool("PARAKEET_TENSOR_CORES", False))
-  #: CUDA kernel compiler: "ptx" (direct PTX 7.8 + NVRTC fallback), "nvrtc", or "nvcc".
-  cuda_compiler: str = field(default_factory=lambda: os.environ.get("PARAKEET_CUDA_COMPILER", "ptx"))
-  #: Legacy boolean toggle for direct PTX (equivalent to cuda_compiler="ptx"/"nvrtc").
-  cuda_ptx: bool = field(default_factory=lambda: _env_bool("PARAKEET_CUDA_PTX", True))
+  #: CUDA kernel compiler: "nvrtc" (default, zero-header NVRTC + CUBIN cache),
+  #: "ptx" (direct PTX 7.8 + NVRTC fallback), or "nvcc" (standalone nvcc -O3).
+  cuda_compiler: str = field(default_factory=lambda: os.environ.get("PARAKEET_CUDA_COMPILER", "nvrtc"))
+  #: Optional boolean shorthand to enable direct PTX when cuda_compiler is unset.
+  cuda_ptx: bool = field(default_factory=lambda: _env_bool("PARAKEET_CUDA_PTX", False))
   #: Specialize tiled/GPU schedules on finite shape buckets & power-of-2
   #: divisibility (on demand, guarded at call time without recompiling
   #: unrelated dimensions or large aligned shapes).

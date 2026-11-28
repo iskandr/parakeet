@@ -609,9 +609,9 @@ class CuPyDriver:
   def _effective_compiler(self) -> str:
     if config.cuda_compiler == "nvcc":
       return "nvcc"
-    if config.cuda_compiler == "nvrtc" or not config.cuda_ptx:
-      return "nvrtc"
-    return "ptx"
+    if config.cuda_compiler == "ptx" or config.cuda_ptx:
+      return "ptx"
+    return "nvrtc"
 
   def _compile_nvcc_binary(self, code: str) -> bytes | None:
     """Compile zero-header CUDA C++ with ``nvcc --cubin -O3`` and cache on disk."""
