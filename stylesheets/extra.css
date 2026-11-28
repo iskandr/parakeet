@@ -153,7 +153,7 @@
   padding: 0.45rem 0.65rem;
 }
 
-.pk-prim-card p:last-child {
+.pk-prim-card p + p:last-child {
   margin-top: auto;
   font-size: 0.82rem;
   font-weight: 600;

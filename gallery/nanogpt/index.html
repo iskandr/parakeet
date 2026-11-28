@@ -823,7 +823,7 @@
   <span class="md-ellipsis">
     
   
-    Algebraic laws
+    Algebraic optimization
   
 
     
@@ -851,7 +851,7 @@
   <span class="md-ellipsis">
     
   
-    Rewrite rules catalog
+    Rewrite rules & thesis lineage
   
 
     
@@ -1764,7 +1764,7 @@ function and keep <code>(model, m, v)</code> resident on the device with <code>p
 <a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>  <span class="k">return</span> <span class="n">value</span><span class="p">,</span> <span class="n">model</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">v</span>
 </code></pre></div>
 <p>That compiles forward, backward, and Adam into a single zero-round-trip device
-step. See the <a href="../../release-benchmarks/#end-to-end-nanogpt-training-nvidia-l4">nanoGPT GPU benchmarks</a>
+step. See the <a href="../../release-benchmarks/#end-to-end-nanogpt-training-nvidia-a100">nanoGPT GPU benchmarks</a>
 for full timings comparing Parakeet FP32/TF32, PyTorch (<code>eager</code>, <code>SDPA</code>,
 <code>torch.compile</code>), and JAX.</p>
 

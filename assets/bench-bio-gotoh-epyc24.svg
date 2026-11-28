@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 266" width="680" height="266" role="img" aria-label="Affine-Gap Gotoh Alignment + Traceback (200 × 128 bp)">
+<rect x="0.5" y="0.5" width="679" height="265" rx="10" fill="#ffffff" stroke="#cbd5e1"/>
+<text x="20" y="28" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#0f172a">Affine-Gap Gotoh Alignment + Traceback (200 × 128 bp)</text>
+<text x="20" y="48" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#475569">Full 3-state traceback + RLE CIGAR vs. Biopython (score-only) &amp; Biotite.</text>
+<rect x="224.0" y="64.0" width="288.0" height="160.0" rx="5" fill="#fafbfc" stroke="#e2e8f0"/>
+<rect x="225.0" y="66.4" width="286.0" height="35.2" rx="3" fill="#f0fdfa"/>
+<text x="214.0" y="88.8" text-anchor="end" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#0f766e">Parakeet (multicore)</text>
+<rect x="224.0" y="73.5" width="22.9" height="21" rx="3.5" fill="#0d9488" fill-opacity="0.88"/>
+<circle cx="247.2" cy="84.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="246.8" cy="84.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="247.7" cy="84.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="247.6" cy="84.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="246.4" cy="84.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="246.2" cy="84.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="247.5" cy="84.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="246.9" cy="84.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="246.5" cy="84.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="247.7" cy="84.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="246.5" cy="84.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<text x="522.0" y="88.8" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="700" fill="#0f766e">2.10 ms (±0.09)</text>
+<rect x="225.0" y="106.4" width="286.0" height="35.2" rx="3" fill="#f0fdfa"/>
+<line x1="224.0" y1="104.0" x2="512.0" y2="104.0" stroke="#f1f5f9"/>
+<text x="214.0" y="128.8" text-anchor="end" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#0f766e">Parakeet (c, 1T)</text>
+<rect x="224.0" y="113.5" width="175.7" height="21" rx="3.5" fill="#0f766e" fill-opacity="0.88"/>
+<circle cx="398.9" cy="124.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="399.4" cy="124.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="416.8" cy="124.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="431.7" cy="124.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="399.7" cy="124.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="400.1" cy="124.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="400.9" cy="124.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="401.5" cy="124.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="399.1" cy="124.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="398.6" cy="124.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="398.7" cy="124.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<text x="522.0" y="128.8" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="700" fill="#0f766e">16.12 ms (±0.20)</text>
+<line x1="224.0" y1="144.0" x2="512.0" y2="144.0" stroke="#f1f5f9"/>
+<text x="214.0" y="168.8" text-anchor="end" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="500" fill="#0f172a">Biopython (C PairwiseAligner)</text>
+<rect x="224.0" y="153.5" width="154.9" height="21" rx="3.5" fill="#7c3aed" fill-opacity="0.88"/>
+<circle cx="383.1" cy="164.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="382.3" cy="164.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="379.2" cy="164.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="383.3" cy="164.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="378.6" cy="164.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="377.8" cy="164.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="378.9" cy="164.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="378.6" cy="164.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="379.6" cy="164.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="378.1" cy="164.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="378.5" cy="164.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<text x="522.0" y="168.8" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="500" fill="#0f172a">14.21 ms (±0.22)</text>
+<line x1="224.0" y1="184.0" x2="512.0" y2="184.0" stroke="#f1f5f9"/>
+<text x="214.0" y="208.8" text-anchor="end" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="500" fill="#0f172a">Biotite (Cython align_optimal)</text>
+<rect x="224.0" y="193.5" width="250.4" height="21" rx="3.5" fill="#7c3aed" fill-opacity="0.88"/>
+<circle cx="470.9" cy="204.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="474.4" cy="204.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="484.0" cy="204.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="473.7" cy="204.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<circle cx="477.9" cy="204.0" r="2.6" fill="#0f172a" fill-opacity="0.44"/>
+<text x="522.0" y="208.8" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="500" fill="#0f172a">22.98 ms (±0.39)</text>
+<text x="20" y="254" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" fill="#64748b">x86_64 / Linux (24 cores) · n=11 replicates (median bar + replicate dots; lower is faster)</text>
+</svg>

@@ -27,7 +27,7 @@
     
     
       
-        <title>Algebraic laws - Parakeet</title>
+        <title>Algebraic optimization - Parakeet</title>
       
     
     
@@ -82,7 +82,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#algebraic-laws" class="md-skip">
+        <a href="#algebraic-optimization" class="md-skip">
           Skip to content
         </a>
       
@@ -116,7 +116,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Algebraic laws
+              Algebraic optimization
             
           </span>
         </div>
@@ -847,7 +847,7 @@
   <span class="md-ellipsis">
     
   
-    Algebraic laws
+    Algebraic optimization
   
 
     
@@ -865,7 +865,7 @@
   <span class="md-ellipsis">
     
   
-    Algebraic laws
+    Algebraic optimization
   
 
     
@@ -902,10 +902,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#the-six-laws-at-a-glance" class="md-nav__link">
+  <a href="#stage-1-classical-fusion-eliminating-temporaries" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The six laws at a glance
+        Stage 1: Classical fusion (eliminating temporaries)
       
     </span>
   </a>
@@ -913,6 +913,40 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#stage-2-classical-tiling-staying-in-cache-and-sram" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stage 2: Classical tiling (staying in cache and SRAM)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#stage-3-breaking-three-walls-the-six-algebraic-laws" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stage 3: Breaking three walls (the six algebraic laws)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wall-1-associative-carry-monoids-laws-1-6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Wall 1: Associative carry monoids (Laws 1 &amp; 6)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Wall 1: Associative carry monoids (Laws 1 &amp; 6)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
   <a href="#law-1-rescaled-semiring-monoids" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -922,19 +956,36 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#law-2-algebraic-rematerialization-in-reverse-mode-ad" class="md-nav__link">
+        
+          <li class="md-nav__item">
+  <a href="#law-6-privatized-scatter-ordered-multi-state-carries" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Law 2: Algebraic rematerialization in reverse-mode AD
+        Law 6: Privatized scatter &amp; ordered multi-state carries
       
     </span>
   </a>
   
 </li>
+        
+      </ul>
+    </nav>
+  
+</li>
       
         <li class="md-nav__item">
+  <a href="#wall-2-reassociation-chunkwise-duality-laws-3-4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Wall 2: Reassociation &amp; chunkwise duality (Laws 3 &amp; 4)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Wall 2: Reassociation &amp; chunkwise duality (Laws 3 &amp; 4)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
   <a href="#law-3-bilinear-contraction-reassociation-shared-kv-tiling" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -944,8 +995,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#law-4-chunkwise-state-space-duality" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -955,8 +1006,36 @@
   </a>
   
 </li>
+        
+      </ul>
+    </nav>
+  
+</li>
       
         <li class="md-nav__item">
+  <a href="#wall-3-structure-preserving-shortcuts-laws-2-5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Wall 3: Structure-preserving shortcuts (Laws 2 &amp; 5)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Wall 3: Structure-preserving shortcuts (Laws 2 &amp; 5)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#law-2-algebraic-rematerialization-in-reverse-mode-ad" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Law 2: Algebraic rematerialization in reverse-mode AD
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#law-5-affine-tile-interval-mask-pruning" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -966,15 +1045,9 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#law-6-privatized-scatter-ordered-multi-state-carries" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Law 6: Privatized scatter &amp; ordered multi-state carries
-      
-    </span>
-  </a>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -1001,7 +1074,7 @@
   <span class="md-ellipsis">
     
   
-    Rewrite rules catalog
+    Rewrite rules & thesis lineage
   
 
     
@@ -1493,10 +1566,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#the-six-laws-at-a-glance" class="md-nav__link">
+  <a href="#stage-1-classical-fusion-eliminating-temporaries" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The six laws at a glance
+        Stage 1: Classical fusion (eliminating temporaries)
       
     </span>
   </a>
@@ -1504,6 +1577,40 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#stage-2-classical-tiling-staying-in-cache-and-sram" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stage 2: Classical tiling (staying in cache and SRAM)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#stage-3-breaking-three-walls-the-six-algebraic-laws" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stage 3: Breaking three walls (the six algebraic laws)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wall-1-associative-carry-monoids-laws-1-6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Wall 1: Associative carry monoids (Laws 1 &amp; 6)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Wall 1: Associative carry monoids (Laws 1 &amp; 6)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
   <a href="#law-1-rescaled-semiring-monoids" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1513,19 +1620,36 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#law-2-algebraic-rematerialization-in-reverse-mode-ad" class="md-nav__link">
+        
+          <li class="md-nav__item">
+  <a href="#law-6-privatized-scatter-ordered-multi-state-carries" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Law 2: Algebraic rematerialization in reverse-mode AD
+        Law 6: Privatized scatter &amp; ordered multi-state carries
       
     </span>
   </a>
   
 </li>
+        
+      </ul>
+    </nav>
+  
+</li>
       
         <li class="md-nav__item">
+  <a href="#wall-2-reassociation-chunkwise-duality-laws-3-4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Wall 2: Reassociation &amp; chunkwise duality (Laws 3 &amp; 4)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Wall 2: Reassociation &amp; chunkwise duality (Laws 3 &amp; 4)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
   <a href="#law-3-bilinear-contraction-reassociation-shared-kv-tiling" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1535,8 +1659,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#law-4-chunkwise-state-space-duality" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1546,8 +1670,36 @@
   </a>
   
 </li>
+        
+      </ul>
+    </nav>
+  
+</li>
       
         <li class="md-nav__item">
+  <a href="#wall-3-structure-preserving-shortcuts-laws-2-5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Wall 3: Structure-preserving shortcuts (Laws 2 &amp; 5)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Wall 3: Structure-preserving shortcuts (Laws 2 &amp; 5)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#law-2-algebraic-rematerialization-in-reverse-mode-ad" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Law 2: Algebraic rematerialization in reverse-mode AD
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#law-5-affine-tile-interval-mask-pruning" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1557,15 +1709,9 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#law-6-privatized-scatter-ordered-multi-state-carries" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Law 6: Privatized scatter &amp; ordered multi-state carries
-      
-    </span>
-  </a>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -1589,21 +1735,29 @@
   
 
 
-<h1 id="algebraic-laws">Algebraic laws<a class="headerlink" href="#algebraic-laws" title="Permanent link">&para;</a></h1>
-<p>Simple loop fusion eliminates element-wise temporaries, but harder bottlenecks
-remain whenever a program normalizes across a whole row (<code>O(N²)</code> attention or
-<code>O(M · V)</code> cross-entropy), chains matrix contractions, runs a long serial
-recurrence (<code>O(T)</code> depth), or saves a giant tape for reverse-mode AD.</p>
-<p>Instead of hardcoding model-specific "fused layers", Parakeet encodes these
-optimizations as <strong>six general algebraic laws</strong> over its
-<a href="../primitives/">index-space primitives</a>. Because the passes match operator
-algebra rather than neural-network layer names, the exact same passes optimize
-Gaussian kernel regression, exact 1-NN, GBDT histograms, and IIR filters
-alongside attention, cross-entropy, and state-space models.</p>
+<h1 id="algebraic-optimization">Algebraic optimization<a class="headerlink" href="#algebraic-optimization" title="Permanent link">&para;</a></h1>
+<p>Parakeet does not optimize programs by matching hardcoded neural-network layer
+names ("FuseAttention", "FuseLinearCrossEntropy"). Instead, every optimization
+lives at the level of <a href="../primitives/">coordinate-driven array operators</a> and
+follows one three-stage progression:</p>
+<ol>
+<li><strong>Eliminate temporaries (Fusion):</strong> merge producer-consumer chains, boolean
+   filters, and sibling traversals into single-pass loops.</li>
+<li><strong>Stay in fast memory (Tiling):</strong> block map-of-reduction nests into L1/L2
+   cache, registers, and GPU shared memory.</li>
+<li><strong>Break three algebraic walls (Laws 1–6):</strong> overcome row-wide normalizations,
+   chained contractions/recurrences, and masked or differentiated intermediates
+   that defeat classical fusion alone.</li>
+</ol>
+<p>Because these rewrites match mathematical structure rather than library APIs,
+the exact same passes accelerate Gaussian kernel regression, exact 1-NN, GBDT
+histograms, and IIR filters alongside causal attention, linear cross-entropy,
+and state-space models.</p>
+<hr />
 <h2 id="semantic-contract-real-algebra-vs-exact-order">Semantic contract: real algebra vs. exact order<a class="headerlink" href="#semantic-contract-real-algebra-vs-exact-order" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Associative / commutative rewrites</strong> (parallel reductions, monoidal tiling,
-  contraction reassociation, chunkwise scans, privatized scatter-add) assume
+<li><strong>Associative rewrites</strong> (parallel reductions, monoidal tiling, contraction
+  reassociation, chunkwise scans, privatized scatter-add) assume
   real-arithmetic associativity: floating-point rounding may differ in the last
   ULP relative to a left-to-right loop, just like NumPy's pairwise summation or
   cuBLAS.</li>
@@ -1611,62 +1765,91 @@ alongside attention, cross-entropy, and state-space models.</p>
   <code>argmin</code>/<code>argmax</code>, non-commutative <code>par.fold</code> merges, arbitrary user folds)
   preserve <strong>exact left-to-right merge order</strong>.</li>
 </ul>
-<h2 id="the-six-laws-at-a-glance">The six laws at a glance<a class="headerlink" href="#the-six-laws-at-a-glance" title="Permanent link">&para;</a></h2>
-<table>
-<thead>
-<tr>
-<th>Law</th>
-<th>Core idea</th>
-<th>Compiler pass</th>
-<th>Workloads</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><strong>1. Rescaled semiring monoids</strong></td>
-<td>Associative rescaling state <code>(m, l, o)</code></td>
-<td><code>monoidal tiling</code></td>
-<td>Softmax attention, Split-K decode, linear cross-entropy, RBF regression, 1-pass <code>logsumexp</code></td>
-</tr>
-<tr>
-<td><strong>2. Algebraic AD rematerialization</strong></td>
-<td>Recompute score tiles from sufficient statistics</td>
-<td><code>algebraic_vjp</code></td>
-<td>Attention backward, cross-entropy backward, 1-pass LayerNorm / RMSNorm VJP</td>
-</tr>
-<tr>
-<td><strong>3. Bilinear contraction reassociation</strong></td>
-<td>Reorder <code>(U @ Vᵀ) @ Wᵀ</code> + share KV head tiles</td>
-<td><code>contraction reassociation</code></td>
-<td>Multi-head latent attention (MLA), grouped-query attention (GQA), low-rank chains</td>
-</tr>
-<tr>
-<td><strong>4. Chunkwise state-space duality</strong></td>
-<td>Block-parallel affine / bilinear composition</td>
-<td><code>chunkwise scan</code></td>
-<td>Parallel IIR / EMA / Kalman filters, Mamba-2 &amp; gated linear attention</td>
-</tr>
-<tr>
-<td><strong>5. Affine tile-interval pruning</strong></td>
-<td>Propagate <code>[i₀, i₀+Bₘ-1] × [j₀, j₀+Bₙ-1]</code> bounds</td>
-<td><code>TileInterval</code></td>
-<td>Causal &amp; sliding-window masks, banded matrices, spatial cutoffs</td>
-</tr>
-<tr>
-<td><strong>6. Privatized scatter &amp; ordered carries</strong></td>
-<td>Thread-private histograms &amp; tiled ordered folds</td>
-<td><code>IndexScatter</code>, <code>pairwise fold tiling</code></td>
-<td>GBDT tree splits, exact 1-NN, multi-channel BAM pileup, <code>par.fold</code></td>
-</tr>
-</tbody>
-</table>
 <hr />
-<h2 id="law-1-rescaled-semiring-monoids">Law 1: Rescaled semiring monoids<a class="headerlink" href="#law-1-rescaled-semiring-monoids" title="Permanent link">&para;</a></h2>
-<p><strong>The problem.</strong> Softmax attention, linear cross-entropy, and Gaussian kernel
-regression all normalize by a row-wide <code>max</code> and <code>sum(exp(...))</code> before taking a
-weighted sum—naively requiring <code>O(N · M)</code> or <code>O(M · V)</code> buffers.</p>
-<p><strong>The law.</strong> Maintaining the running maximum <code>m</code>, normalizing sum <code>l</code>, and
-unnormalized output <code>o</code> forms an associative monoid <code>(S, ⊕, e)</code>:</p>
+<h2 id="stage-1-classical-fusion-eliminating-temporaries">Stage 1: Classical fusion (eliminating temporaries)<a class="headerlink" href="#stage-1-classical-fusion-eliminating-temporaries" title="Permanent link">&para;</a></h2>
+<p>Before lowering operators to loops, Parakeet collapses three kinds of wasted
+memory traffic:</p>
+<figure>
+  <img alt="Vertical, filter-reduce, and sibling fusion collapse memory passes" src="../assets/diag-fusion.svg" />
+<br />
+<figcaption><strong>Figure 1.</strong> Stage 1 fusion merges vertical producer-consumer chains, boolean filter-reductions, and sibling passes into single-pass loops with zero temporary arrays.</figcaption>
+</figure>
+<div class="pk-xform">
+<div class="pk-xform-col pk-xform-col--before">
+<div class="pk-xform-title">Naive execution <span class="pk-xform-badge">allocates intermediates</span></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Vertical chain: 3 passes, 2 temporaries</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">x</span> <span class="o">*</span> <span class="n">alpha</span><span class="p">)</span> <span class="o">+</span> <span class="n">beta</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="c1"># Filter-reduce: allocates compacted array</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="n">s</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="n">x</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">])</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="c1"># Sibling passes: reads x (or idx) twice</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="n">lo</span><span class="p">,</span> <span class="n">hi</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">x</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+</code></pre></div>
+</div>
+<div class="pk-xform-col pk-xform-col--after">
+<div class="pk-xform-title">After Stage 1 fusion <span class="pk-xform-badge">1 pass · 0 temporaries</span></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Single fused parallel map</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">y</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">tanh</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="n">alpha</span><span class="p">)</span> <span class="o">+</span> <span class="n">beta</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="c1"># Guarded reduction, zero index allocation</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="n">s</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">N</span><span class="p">)</span> <span class="k">if</span> <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">)</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="c1"># Single-pass multi-fold (or multi-channel scatter)</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="n">lo</span><span class="p">,</span> <span class="n">hi</span> <span class="o">=</span> <span class="n">fold2</span><span class="p">(</span><span class="nb">min</span><span class="p">,</span> <span class="nb">max</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>
+</code></pre></div>
+</div>
+</div>
+<hr />
+<h2 id="stage-2-classical-tiling-staying-in-cache-and-sram">Stage 2: Classical tiling (staying in cache and SRAM)<a class="headerlink" href="#stage-2-classical-tiling-staying-in-cache-and-sram" title="Permanent link">&para;</a></h2>
+<p>Fusion alone does not fix nested contractions like <code>C = A @ B</code> or min-plus
+matrix products: computing <code>C[i, j]</code> reads an entire row of <code>A</code> and column of
+<code>B</code>, sweeping DRAM over and over.</p>
+<p>When an <code>IndexMap</code> wraps an <code>IndexReduce</code>, Parakeet blocks the iteration space
+into an <code>IndexTile</code> with explicit <code>TileStage</code> buffers:</p>
+<ul>
+<li><strong>CPU:</strong> L1/L2 cache blocking + <code>2×4</code> register jamming + target-aware
+  reduction interchange (<code>np.sum(X, axis=0)</code> hoists strided inner reductions
+  outside contiguous strips).</li>
+<li><strong>Apple Metal:</strong> <code>threadgroup</code> shared-memory staging + automatic IEEE FP32
+  <code>simdgroup_matrix</code> hardware tiles.</li>
+<li><strong>NVIDIA CUDA:</strong> <code>__shared__</code> double-buffered <code>cp.async</code> staging + opt-in
+  TF32 <code>mma.sync</code> Tensor Cores (<code>config.tensor_cores = True</code>).</li>
+</ul>
+<hr />
+<h2 id="stage-3-breaking-three-walls-the-six-algebraic-laws">Stage 3: Breaking three walls (the six algebraic laws)<a class="headerlink" href="#stage-3-breaking-three-walls-the-six-algebraic-laws" title="Permanent link">&para;</a></h2>
+<p>Classical fusion and tiling hit <strong>three hard walls</strong> on modern workloads:</p>
+<div class="pk-prim-grid">
+<div class="pk-prim-card">
+<div class="pk-prim-head"><strong>Wall 1: Row-wide nonlinear bottlenecks</strong></div>
+<p>Softmax (<code>max</code> + <code>sum(exp)</code>), <code>argmin</code>, and shared-bin histograms depend on a
+whole row before producing outputs. <strong>Laws 1 &amp; 6</strong> lift the accumulator into
+an associative carry state (rescaled <code>(m, l, o)</code> monoids or ordered
+<code>(best, idx)</code> carries) so tiles stream in <code>O(1)</code> scratch memory.</p>
+</div>
+<div class="pk-prim-card">
+<div class="pk-prim-head"><strong>Wall 2: Chained contractions &amp; serial recurrences</strong></div>
+<p>Matrix chains <code>(U @ Vᵀ) @ Wᵀ</code> blow up FLOPs in the wrong order, and <code>for t:</code>
+recurrences have <code>O(T)</code> serial depth. <strong>Laws 3 &amp; 4</strong> reassociate bilinear
+contractions and fold recurrences into parallel <code>C = 64</code> chunkwise GEMMs.</p>
+</div>
+<div class="pk-prim-card pk-prim-card--wide">
+<div class="pk-prim-head"><strong>Wall 3: Giant backward tapes &amp; masked-out tiles</strong></div>
+<p>Reverse-mode AD naively saves <code>O(T²)</code> attention scores, and causal/window masks
+waste half (or 99%) of the tiles. <strong>Laws 2 &amp; 5</strong> save only compact <code>O(T·D)</code>
+sufficient statistics for on-chip recomputation and prune dead tiles statically
+via coordinate intervals.</p>
+</div>
+</div>
+<p>Below is each law paired with the exact code transformation it performs.</p>
+<hr />
+<h2 id="wall-1-associative-carry-monoids-laws-1-6">Wall 1: Associative carry monoids (Laws 1 &amp; 6)<a class="headerlink" href="#wall-1-associative-carry-monoids-laws-1-6" title="Permanent link">&para;</a></h2>
+<h3 id="law-1-rescaled-semiring-monoids">Law 1: Rescaled semiring monoids<a class="headerlink" href="#law-1-rescaled-semiring-monoids" title="Permanent link">&para;</a></h3>
+<p>Softmax attention, linear cross-entropy, and Gaussian/RBF kernel regression all
+normalize by a row-wide <code>max</code> and <code>sum(exp(...))</code> before taking a weighted
+sum—naively allocating <code>O(N · M)</code> or <code>O(M · V)</code> intermediates.</p>
+<p>Tracking the running maximum <code>m</code>, normalizing denominator <code>l</code>, and unnormalized
+output <code>o</code> forms an associative monoid <code>(S, ⊕, e)</code>:</p>
 <div class="pk-eq">
 m = max(m₁, m₂)<br>
 (m₁, l₁, o₁) ⊕ (m₂, l₂, o₂) = (<br>
@@ -1676,179 +1859,163 @@ m = max(m₁, m₂)<br>
 )
 </div>
 
-<p>Because <code>⊕</code> is associative, tiles can be reduced in cache or GPU shared memory
-and merged in any grouping without materializing the full score matrix:</p>
+<p>Because <code>⊕</code> is associative, tiles reduce in cache or GPU shared memory and
+merge in any grouping with zero score-matrix allocation:</p>
 <figure>
   <img alt="Causal attention compiled from naive O(T^2) buffers to tiled monoid with block skipping" src="../assets/diag-attention-tiling.svg" />
 <br />
-<figcaption><strong>Figure 1.</strong> Law 1 + Law 5: naive causal attention materializes three O(T²) buffers, while Parakeet streams (m, l, o) tiles on-chip and skips upper-triangular blocks before loading K or V.</figcaption>
+<figcaption><strong>Figure 2.</strong> Law 1 + Law 5: naive causal attention allocates three O(T²) buffers, while Parakeet streams (m, l, o) tiles on-chip and skips upper-triangular blocks before loading K or V.</figcaption>
 </figure>
-<p><strong>Where it fires:</strong></p>
+<p><strong>Triggered automatically by <code>monoidal tiling</code> on:</strong></p>
 <ul>
-<li><strong>Tiled softmax attention (<code>flash_monoid</code>):</strong> streams <code>K, V</code> tiles against <code>Q</code>
-  with zero <code>S</code>/<code>P</code> allocation.</li>
-<li><strong>Split-K decoding (<code>split_k=True</code>):</strong> when query count is tiny (decode) and
-  <code>T_kv</code> is long, splits <code>T_kv</code> across GPU threadblocks and merges partial
-  <code>(mₚ, lₚ, oₚ)</code> summaries with <code>⊕</code>.</li>
-<li><strong>Tiled linear cross-entropy (<code>monoid_lse</code>):</strong> tiles <code>H @ W</code> over vocabulary
-  <code>V</code> with the scalar <code>(m, l)</code> monoid, eliminating the <code>M × V</code> logit tensor.</li>
+<li><strong>Softmax attention (<code>flash_monoid</code>):</strong> streams <code>K, V</code> tiles against <code>Q</code> with
+  zero <code>S</code>/<code>P</code> allocation (and splits <code>T_kv</code> across threadblocks for short-query
+  <code>split_k</code> decode).</li>
+<li><strong>Linear cross-entropy (<code>monoid_lse</code>):</strong> tiles <code>H @ W</code> over vocabulary <code>V</code>
+  using the scalar <code>(m, l)</code> monoid, eliminating the <code>M × V</code> logit tensor.</li>
 <li><strong>Gaussian / RBF kernel regression (<code>score_op="sqdist"</code>):</strong> fuses
-  <code>-γ · ‖xᵢ − yⱼ‖²</code> into the same <code>O(N + M)</code> streaming kernel.</li>
+  <code>-γ · ‖xᵢ − yⱼ‖²</code> into the exact same streaming kernel.</li>
 </ul>
-<hr />
-<h2 id="law-2-algebraic-rematerialization-in-reverse-mode-ad">Law 2: Algebraic rematerialization in reverse-mode AD<a class="headerlink" href="#law-2-algebraic-rematerialization-in-reverse-mode-ad" title="Permanent link">&para;</a></h2>
-<p><strong>The problem.</strong> A naive reverse-mode tape saves every forward intermediate,
-bringing back <code>O(T²)</code> memory for attention and <code>O(M · V)</code> memory for linear
-cross-entropy.</p>
-<p><strong>The law.</strong> Before loop lowering, <code>parakeet/transforms/algebraic_vjp.py</code>
-substitutes sufficient-statistic adjoints that save only compact <code>O(T · D)</code>
-tensors and recompute score tiles on-chip during backpropagation:</p>
-<figure>
-  <img alt="Algebraic rematerialization saves only (Q, K, V, O, lse) and recomputes score tiles on-chip" src="../assets/diag-rematerialization.svg" />
-<br />
-<figcaption><strong>Figure 2.</strong> Law 2: algebraic rematerialization replaces O(T²) attention tapes and O(M·V) logit tapes with O(T·D) sufficient statistics, recomputing score tiles on-chip during backpropagation.</figcaption>
-</figure>
-<p><strong>Where it fires:</strong></p>
+<h3 id="law-6-privatized-scatter-ordered-multi-state-carries">Law 6: Privatized scatter &amp; ordered multi-state carries<a class="headerlink" href="#law-6-privatized-scatter-ordered-multi-state-carries" title="Permanent link">&para;</a></h3>
+<p>Two core patterns sit outside standard dense linear algebra:</p>
 <ul>
-<li><strong>Attention backward (<code>flash_monoid_bwd</code>):</strong> saves <code>(Q, K, V, O, lse)</code>,
-  computes <code>Dᵢ = ∑_d dO[i, d] · O[i, d]</code>, and recomputes <code>P = exp(S − lse)</code> and
-  <code>dS = P · (dO @ Vᵀ − D)</code> tile-by-tile (also composes with forward-over-reverse
-  <code>par.hvp</code>).</li>
-<li><strong>Linear cross-entropy backward (<code>cce_bwd</code>):</strong> saves <code>(H, W, targets, lse)</code>
-  and recomputes <code>p[i, v] = exp(hᵢ · wᵥ − lseᵢ)</code> on-chip.</li>
-<li><strong>LayerNorm / RMSNorm &amp; softmax VJPs:</strong> collapses multi-pass backward graphs
-  into one pass (<code>dS = P · (dP − ∑ P · dP)</code>, dropping the <code>max</code> adjoint).</li>
+<li><strong>Ordered pairwise tile folds (<code>pairwise fold tiling</code>):</strong> <code>Fold.carries</code>
+  tracks multiple scalar fields <code>(min_dist, idx)</code> or <code>(weight_sum, value_sum)</code>
+  across L1/SRAM score tiles merged strictly left-to-right—eliminating
+  <code>O(Q · R)</code> distance matrices in exact 1-NN and inverse-distance smoothing
+  while preserving NumPy's exact first-index rule on ties and NaNs.</li>
+<li><strong>Keyed histogram fusion (<code>IndexScatter</code>):</strong> sibling <code>par.scatter_add</code>,
+  <code>np.add.at</code>, inverted <code>[np.sum(v[idx == b]) for b in range(n)]</code>, or
+  <code>for i: h[idx[i]] += v[i]</code> loops sharing an index array merge into one
+  thread-privatized CPU pass or atomic GPU pass (e.g. GBDT grad/Hessian
+  histograms and 6-channel BAM pileups).</li>
 </ul>
+<figure>
+  <img alt="Exact 1-NN tiled pairwise fold preserves first-index tie semantics in 8 KiB L1 / 16 KiB SRAM" src="../assets/diag-pairwise-1nn.svg" />
+<br />
+<figcaption><strong>Figure 3.</strong> Law 6: exact 1-NN streams 16×128 score tiles in 8 KiB L1 / 16 KiB SRAM and merges (min_dist, idx) carries in strict left-to-right order.</figcaption>
+</figure>
 <hr />
-<h2 id="law-3-bilinear-contraction-reassociation-shared-kv-tiling">Law 3: Bilinear contraction reassociation &amp; shared-KV tiling<a class="headerlink" href="#law-3-bilinear-contraction-reassociation-shared-kv-tiling" title="Permanent link">&para;</a></h2>
-<p><strong>The problem.</strong> Chaining two bilinear contractions (<code>(X @ A) @ B</code>, or latent
-attention <code>K = C_kv @ W_uk</code>, <code>V = C_kv @ W_uv</code>, <code>O = softmax(Q @ Kᵀ) @ V</code>) can
-cost orders of magnitude more FLOPs and memory in the wrong parenthesization.</p>
-<p><strong>The law.</strong> For a single-use intermediate <code>T = U @ Vᵀ</code> feeding <code>Y = W @ T</code>:</p>
+<h2 id="wall-2-reassociation-chunkwise-duality-laws-3-4">Wall 2: Reassociation &amp; chunkwise duality (Laws 3 &amp; 4)<a class="headerlink" href="#wall-2-reassociation-chunkwise-duality-laws-3-4" title="Permanent link">&para;</a></h2>
+<h3 id="law-3-bilinear-contraction-reassociation-shared-kv-tiling">Law 3: Bilinear contraction reassociation &amp; shared-KV tiling<a class="headerlink" href="#law-3-bilinear-contraction-reassociation-shared-kv-tiling" title="Permanent link">&para;</a></h3>
+<p>Chaining two bilinear contractions (<code>(U @ Vᵀ) @ Wᵀ</code>, such as latent attention
+<code>K = C_kv @ W_uk</code>, <code>V = C_kv @ W_uv</code>) can cost orders of magnitude more FLOPs
+and memory in the wrong parenthesization:</p>
 <div class="pk-eq">
-(U · Vᵀ) · Wᵀ  =  U · (Vᵀ · Wᵀ) &nbsp;&nbsp;— pick min( U·K·(R + P),  P·R·(K + U) ) FLOPs
+For A: (M, K), B: (K, R), C: (R, P): &nbsp;&nbsp;(A · B) · C  =  A · (B · C) &nbsp;&nbsp;— pick min( M·R·(K + P),  K·P·(M + R) ) FLOPs
 </div>
 
 <div class="pk-xform">
 <div class="pk-xform-col pk-xform-col--before">
 <div class="pk-xform-title">Expanded (prefill optimal) <span class="pk-xform-badge">materializes K, V</span></div>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">K</span> <span class="o">=</span> <span class="n">C_kv</span> <span class="o">@</span> <span class="n">W_uk</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">V</span> <span class="o">=</span> <span class="n">C_kv</span> <span class="o">@</span> <span class="n">W_uv</span>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">O</span> <span class="o">=</span> <span class="n">softmax</span><span class="p">(</span><span class="n">Q</span> <span class="o">@</span> <span class="n">K</span><span class="o">.</span><span class="n">T</span><span class="p">)</span> <span class="o">@</span> <span class="n">V</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">K</span> <span class="o">=</span> <span class="n">C_kv</span> <span class="o">@</span> <span class="n">W_uk</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">V</span> <span class="o">=</span> <span class="n">C_kv</span> <span class="o">@</span> <span class="n">W_uv</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">O</span> <span class="o">=</span> <span class="n">softmax</span><span class="p">(</span><span class="n">Q</span> <span class="o">@</span> <span class="n">K</span><span class="o">.</span><span class="n">T</span><span class="p">)</span> <span class="o">@</span> <span class="n">V</span>
 </code></pre></div>
 </div>
 <div class="pk-xform-col pk-xform-col--after">
 <div class="pk-xform-title">Absorbed (decode optimal) <span class="pk-xform-badge">stays in latent C_kv</span></div>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">Q_abs</span> <span class="o">=</span> <span class="n">Q</span> <span class="o">@</span> <span class="n">W_uk</span><span class="o">.</span><span class="n">T</span>  <span class="c1"># absorb W_uk into Q</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">O</span> <span class="o">=</span> <span class="p">(</span><span class="n">softmax</span><span class="p">(</span><span class="n">Q_abs</span> <span class="o">@</span> <span class="n">C_kv</span><span class="o">.</span><span class="n">T</span><span class="p">)</span> <span class="o">@</span> <span class="n">C_kv</span><span class="p">)</span> <span class="o">@</span> <span class="n">W_uv</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">Q_abs</span> <span class="o">=</span> <span class="n">Q</span> <span class="o">@</span> <span class="n">W_uk</span><span class="o">.</span><span class="n">T</span>  <span class="c1"># absorb W_uk into Q</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">O</span> <span class="o">=</span> <span class="p">(</span><span class="n">softmax</span><span class="p">(</span><span class="n">Q_abs</span> <span class="o">@</span> <span class="n">C_kv</span><span class="o">.</span><span class="n">T</span><span class="p">)</span> <span class="o">@</span> <span class="n">C_kv</span><span class="p">)</span> <span class="o">@</span> <span class="n">W_uv</span>
 </code></pre></div>
 </div>
 </div>
-<p><code>parakeet/transforms/reassociate.py</code> emits a runtime shape-guarded branch so
-short-query decode runs tiled Law 1 attention directly over the compressed
-latent <code>C_kv</code>, while long-query prefill automatically takes the lower-FLOP
-expanded branch.</p>
-<p><strong>Shared-KV head-group tiling (GQA):</strong> when a head-group axis <code>G</code> of <code>Q</code>
-broadcasts against a single KV head, Parakeet folds <code>G</code> into the query row
-(<code>i_eff = g * T_q + i</code>) so all <code>G</code> query heads share one SRAM load of <code>K</code> and
-<code>V</code>.</p>
-<hr />
-<h2 id="law-4-chunkwise-state-space-duality">Law 4: Chunkwise state-space duality<a class="headerlink" href="#law-4-chunkwise-state-space-duality" title="Permanent link">&para;</a></h2>
-<p><strong>The problem.</strong> Plain Python recurrences (<code>for t in range(T): s = a[t] * s + b[t]</code>)
-have <code>O(T)</code> serial depth and leave multi-core CPUs and GPUs idle.</p>
-<p><strong>The law.</strong> Affine maps compose associatively,
-<code>(a₂, b₂) ∘ (a₁, b₁) = (a₂ · a₁, a₂ · b₁ + b₂)</code>.
-<code>parakeet/transforms/tile_scan.py</code> partitions time into chunks of <code>C = 64</code> and
-rewrites both scalar affine loops (EMA, IIR, Kalman) and bilinear matrix-state
-loops (Mamba-2 / gated linear attention) into a division-free parallel scan:</p>
+<p><code>contraction reassociation</code> emits a runtime shape-guarded branch so short-query
+decode runs tiled Law 1 attention directly over compressed <code>C_kv</code>, while
+long-query prefill takes the lower-FLOP expanded branch. For grouped-query
+attention (GQA), the head-group axis <code>G</code> folds into the query tile so all <code>G</code>
+query heads share one SRAM load of <code>K</code> and <code>V</code>.</p>
+<h3 id="law-4-chunkwise-state-space-duality">Law 4: Chunkwise state-space duality<a class="headerlink" href="#law-4-chunkwise-state-space-duality" title="Permanent link">&para;</a></h3>
+<p>Plain Python recurrences (<code>for t in range(T): s = a[t] * s + b[t]</code>) have <code>O(T)</code>
+serial depth. Because affine maps compose associatively,
+<code>(a₂, b₂) ∘ (a₁, b₁) = (a₂ · a₁, a₂ · b₁ + b₂)</code>, <code>chunkwise scan</code> partitions
+time into chunks of <code>C = 64</code> and turns both scalar affine loops (EMA, IIR,
+Kalman) and bilinear matrix-state loops (Mamba-2) into division-free parallel
+scans and GEMMs:</p>
 <figure>
   <img alt="Law 4 rewrites an O(T) serial recurrence into 4 parallel chunked steps" src="../assets/diag-chunkwise-scan.svg" />
 <br />
-<figcaption><strong>Figure 3.</strong> Law 4: chunkwise state-space duality splits an O(T) serial recurrence into parallel intra-chunk matmuls, a 64× shorter inter-chunk scan, and parallel state readout.</figcaption>
+<figcaption><strong>Figure 4.</strong> Law 4: chunkwise state-space duality splits an O(T) serial recurrence into parallel intra-chunk matmuls, a 64× shorter inter-chunk scan, and parallel state readout.</figcaption>
 </figure>
 <div class="pk-xform">
 <div class="pk-xform-col pk-xform-col--before">
 <div class="pk-xform-title">What you write <span class="pk-xform-badge">O(T) serial depth</span></div>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">T</span><span class="p">):</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>  <span class="n">S</span> <span class="o">=</span> <span class="n">a</span><span class="p">[</span><span class="n">t</span><span class="p">]</span> <span class="o">*</span> <span class="n">S</span> <span class="o">+</span> <span class="n">k</span><span class="p">[</span><span class="n">t</span><span class="p">][:,</span> <span class="kc">None</span><span class="p">]</span> <span class="o">*</span> <span class="n">v</span><span class="p">[</span><span class="n">t</span><span class="p">][</span><span class="kc">None</span><span class="p">,</span> <span class="p">:]</span>
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>  <span class="n">out</span><span class="p">[</span><span class="n">t</span><span class="p">]</span> <span class="o">=</span> <span class="n">q</span><span class="p">[</span><span class="n">t</span><span class="p">]</span> <span class="o">@</span> <span class="n">S</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">T</span><span class="p">):</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>  <span class="n">S</span> <span class="o">=</span> <span class="n">a</span><span class="p">[</span><span class="n">t</span><span class="p">]</span> <span class="o">*</span> <span class="n">S</span> <span class="o">+</span> <span class="n">k</span><span class="p">[</span><span class="n">t</span><span class="p">][:,</span> <span class="kc">None</span><span class="p">]</span> <span class="o">*</span> <span class="n">v</span><span class="p">[</span><span class="n">t</span><span class="p">][</span><span class="kc">None</span><span class="p">,</span> <span class="p">:]</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>  <span class="n">out</span><span class="p">[</span><span class="n">t</span><span class="p">]</span> <span class="o">=</span> <span class="n">q</span><span class="p">[</span><span class="n">t</span><span class="p">]</span> <span class="o">@</span> <span class="n">S</span>
 </code></pre></div>
 </div>
 <div class="pk-xform-col pk-xform-col--after">
 <div class="pk-xform-title">Compiled schedule (C = 64) <span class="pk-xform-badge">64× shorter scan + GEMMs</span></div>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">L</span><span class="p">,</span> <span class="n">A</span> <span class="o">=</span> <span class="n">chunk_decay_products</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">C</span><span class="o">=</span><span class="mi">64</span><span class="p">)</span>  <span class="c1"># parallel, zero-safe</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">Y_intra</span> <span class="o">=</span> <span class="p">((</span><span class="n">Q_c</span> <span class="o">@</span> <span class="n">K_c</span><span class="o">.</span><span class="n">T</span><span class="p">)</span> <span class="o">*</span> <span class="n">L</span><span class="p">)</span> <span class="o">@</span> <span class="n">V_c</span>  <span class="c1"># parallel over chunks</span>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">B_c</span> <span class="o">=</span> <span class="n">K_scaled</span><span class="o">.</span><span class="n">T</span> <span class="o">@</span> <span class="n">V_c</span>  <span class="c1"># parallel chunk summaries</span>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="n">S_in</span> <span class="o">=</span> <span class="n">scan_affine</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">B_c</span><span class="p">)</span>  <span class="c1"># 64x shorter recurrence</span>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="n">out</span> <span class="o">=</span> <span class="n">Y_intra</span> <span class="o">+</span> <span class="p">(</span><span class="n">Q_c</span> <span class="o">@</span> <span class="n">S_in</span><span class="p">)</span>  <span class="c1"># parallel readout</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">L</span><span class="p">,</span> <span class="n">A</span> <span class="o">=</span> <span class="n">chunk_decay_products</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">C</span><span class="o">=</span><span class="mi">64</span><span class="p">)</span>  <span class="c1"># parallel, zero-safe</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">Y_intra</span> <span class="o">=</span> <span class="p">((</span><span class="n">Q_c</span> <span class="o">@</span> <span class="n">K_c</span><span class="o">.</span><span class="n">T</span><span class="p">)</span> <span class="o">*</span> <span class="n">L</span><span class="p">)</span> <span class="o">@</span> <span class="n">V_c</span>  <span class="c1"># parallel over chunks</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="n">B_c</span> <span class="o">=</span> <span class="n">K_scaled</span><span class="o">.</span><span class="n">T</span> <span class="o">@</span> <span class="n">V_c</span>  <span class="c1"># parallel chunk summaries</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="n">S_in</span> <span class="o">=</span> <span class="n">scan_affine</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">B_c</span><span class="p">)</span>  <span class="c1"># 64× shorter recurrence</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="n">out</span> <span class="o">=</span> <span class="n">Y_intra</span> <span class="o">+</span> <span class="p">(</span><span class="n">Q_c</span> <span class="o">@</span> <span class="n">S_in</span><span class="p">)</span>  <span class="c1"># parallel readout</span>
 </code></pre></div>
 </div>
 </div>
-<p>Because <code>chunkwise scan</code> runs before <code>tiling</code>, the matrix products in Steps 1,
-2, and 4 flow directly into CPU register tiling, Metal <code>simdgroup_matrix</code>, and
-CUDA TF32 WMMA Tensor Cores.</p>
+<p>Because <code>chunkwise scan</code> runs before Stage 2 tiling, the chunk GEMMs flow
+directly into CPU register tiles, Metal <code>simdgroup_matrix</code>, and CUDA TF32
+Tensor Cores.</p>
 <hr />
-<h2 id="law-5-affine-tile-interval-mask-pruning">Law 5: Affine tile-interval mask pruning<a class="headerlink" href="#law-5-affine-tile-interval-mask-pruning" title="Permanent link">&para;</a></h2>
-<p><strong>The problem.</strong> Causal masks (<code>j &lt;= i</code>), sliding windows (<code>i - j &lt;= W</code>), and
-banded matrices evaluate millions of entries that are immediately discarded.</p>
-<p><strong>The law.</strong> <code>TileInterval</code> (<code>parakeet/transforms/analysis.py</code>) propagates
-coordinate intervals <code>[i₀, i₀ + Bₘ − 1] × [j₀, j₀ + Bₙ − 1]</code> through affine
-index predicates to classify every tile statically:</p>
-<table>
-<thead>
-<tr>
-<th>Tile condition</th>
-<th>Example (causal <code>j &lt;= i</code>)</th>
-<th>Action emitted</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Always false</td>
-<td><code>j₀ &gt; i₀ + Bₘ − 1</code></td>
-<td><strong>Skip tile</strong> before loading <code>K</code> or <code>V</code></td>
-</tr>
-<tr>
-<td>Always true</td>
-<td><code>j₀ + Bₙ − 1 ≤ i₀</code></td>
-<td><strong>Branchless inner loop</strong> (mask check removed)</td>
-</tr>
-<tr>
-<td>Boundary / mixed</td>
-<td><code>i₀ − Bₙ &lt; j₀ ≤ i₀ + Bₘ − 1</code></td>
-<td>Evaluate per-element mask</td>
-</tr>
-</tbody>
-</table>
-<p>Sliding-window masks (<code>(j &lt;= i) &amp; (i - j &lt;= W)</code>) automatically drop from
+<h2 id="wall-3-structure-preserving-shortcuts-laws-2-5">Wall 3: Structure-preserving shortcuts (Laws 2 &amp; 5)<a class="headerlink" href="#wall-3-structure-preserving-shortcuts-laws-2-5" title="Permanent link">&para;</a></h2>
+<h3 id="law-2-algebraic-rematerialization-in-reverse-mode-ad">Law 2: Algebraic rematerialization in reverse-mode AD<a class="headerlink" href="#law-2-algebraic-rematerialization-in-reverse-mode-ad" title="Permanent link">&para;</a></h3>
+<p>A naive reverse-mode tape saves every forward intermediate, bringing back
+<code>O(T²)</code> memory for attention and <code>O(M · V)</code> memory for cross-entropy. Before
+loop lowering, <code>algebraic_vjp</code> substitutes sufficient-statistic adjoints that
+save only <code>O(T · D)</code> tensors and recompute score tiles on-chip during
+backpropagation:</p>
+<figure>
+  <img alt="Algebraic rematerialization saves only (Q, K, V, O, lse) and recomputes score tiles on-chip" src="../assets/diag-rematerialization.svg" />
+<br />
+<figcaption><strong>Figure 5.</strong> Law 2: algebraic rematerialization replaces O(T²) attention tapes and O(M·V) logit tapes with O(T·D) sufficient statistics, recomputing score tiles on-chip during backpropagation.</figcaption>
+</figure>
+<ul>
+<li><strong>Attention backward (<code>flash_monoid_bwd</code>):</strong> saves <code>(Q, K, V, O, lse)</code>,
+  recomputes <code>P = exp(S − lse)</code> and <code>dS = P · (dO @ Vᵀ − D)</code> tile-by-tile, and
+  composes with forward-over-reverse <code>par.hvp</code>.</li>
+<li><strong>Cross-entropy backward (<code>cce_bwd</code>):</strong> saves <code>(H, W, targets, lse)</code> and
+  recomputes <code>p[i, v] = exp(hᵢ · wᵥ − lseᵢ)</code> on-chip.</li>
+<li><strong>LayerNorm / RMSNorm &amp; softmax VJPs:</strong> collapse multi-pass backward graphs
+  into one pass (<code>dS = P · (dP − ∑ P · dP)</code>, dropping the <code>max</code> adjoint).</li>
+</ul>
+<h3 id="law-5-affine-tile-interval-mask-pruning">Law 5: Affine tile-interval mask pruning<a class="headerlink" href="#law-5-affine-tile-interval-mask-pruning" title="Permanent link">&para;</a></h3>
+<p>Causal masks (<code>j &lt;= i</code>), sliding windows (<code>i - j &lt;= W</code>), and banded matrices
+evaluate millions of entries that are immediately discarded. <code>TileInterval</code>
+propagates each tile's coordinate box <code>[i₀, i₀ + Bₘ − 1] × [j₀, j₀ + Bₙ − 1]</code>
+through affine index predicates to classify every tile before loading data:</p>
+<div class="pk-xform">
+<div class="pk-xform-col pk-xform-col--before">
+<div class="pk-xform-title">Causal predicate on tile (i₀, j₀) <span class="pk-xform-badge">naive: check every element</span></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Naive: loads K, V for every (i0, j0) tile</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="c1"># and evaluates (i &gt;= j) inside the inner loop.</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="k">for</span> <span class="n">j0</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">T</span><span class="p">,</span> <span class="n">BN</span><span class="p">):</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>  <span class="n">load</span><span class="p">(</span><span class="n">K</span><span class="p">[</span><span class="n">j0</span> <span class="p">:</span> <span class="n">j0</span> <span class="o">+</span> <span class="n">BN</span><span class="p">],</span> <span class="n">V</span><span class="p">[</span><span class="n">j0</span> <span class="p">:</span> <span class="n">j0</span> <span class="o">+</span> <span class="n">BN</span><span class="p">])</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>  <span class="n">score</span> <span class="o">=</span> <span class="n">dot</span><span class="p">(</span><span class="n">Q</span><span class="p">,</span> <span class="n">K</span><span class="p">)</span> <span class="k">if</span> <span class="n">i</span> <span class="o">&gt;=</span> <span class="n">j</span> <span class="k">else</span> <span class="o">-</span><span class="mf">1e9</span>
+</code></pre></div>
+</div>
+<div class="pk-xform-col pk-xform-col--after">
+<div class="pk-xform-title">TileInterval classification <span class="pk-xform-badge">skip empty · branchless interior</span></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="k">for</span> <span class="n">j0</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">T</span><span class="p">,</span> <span class="n">BN</span><span class="p">):</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>  <span class="k">if</span> <span class="n">j0</span> <span class="o">&gt;</span> <span class="n">i0</span> <span class="o">+</span> <span class="n">BM</span> <span class="o">-</span> <span class="mi">1</span><span class="p">:</span>  <span class="c1"># always false -&gt; skip tile</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>    <span class="k">continue</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>  <span class="n">load</span><span class="p">(</span><span class="n">K</span><span class="p">[</span><span class="n">j0</span> <span class="p">:</span> <span class="n">j0</span> <span class="o">+</span> <span class="n">BN</span><span class="p">],</span> <span class="n">V</span><span class="p">[</span><span class="n">j0</span> <span class="p">:</span> <span class="n">j0</span> <span class="o">+</span> <span class="n">BN</span><span class="p">])</span>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>  <span class="k">if</span> <span class="n">j0</span> <span class="o">+</span> <span class="n">BN</span> <span class="o">-</span> <span class="mi">1</span> <span class="o">&lt;=</span> <span class="n">i0</span><span class="p">:</span>  <span class="c1"># always true  -&gt; branchless inner loop</span>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>    <span class="n">accumulate_branchless</span><span class="p">(</span><span class="n">Q</span><span class="p">,</span> <span class="n">K</span><span class="p">,</span> <span class="n">V</span><span class="p">)</span>
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>  <span class="k">else</span><span class="p">:</span>  <span class="c1"># diagonal tile -&gt; per-element mask</span>
+<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>    <span class="n">accumulate_masked</span><span class="p">(</span><span class="n">Q</span><span class="p">,</span> <span class="n">K</span><span class="p">,</span> <span class="n">V</span><span class="p">)</span>
+</code></pre></div>
+</div>
+</div>
+<p>Sliding-window masks (<code>(j &lt;= i) &amp; (i - j &lt;= W)</code>) drop automatically from
 <code>O(N²)</code> to <code>O(N · W)</code> work. For runtime boolean mask arrays, GPU threadblocks
 cooperatively check whether any entry in the tile is true and skip empty tiles
 before loading values.</p>
 <hr />
-<h2 id="law-6-privatized-scatter-ordered-multi-state-carries">Law 6: Privatized scatter &amp; ordered multi-state carries<a class="headerlink" href="#law-6-privatized-scatter-ordered-multi-state-carries" title="Permanent link">&para;</a></h2>
-<p>Two patterns dominate outside dense linear algebra: accumulating into shared
-bins (<code>np.bincount</code>, <code>par.scatter_add</code>) and folding structured state (<code>argmin</code>,
-Welford variance, <code>par.fold</code>).</p>
-<ul>
-<li><strong>Keyed histogram fusion:</strong> sibling <code>IndexScatter</code> statements sharing an index
-  array (e.g. GBDT gradient/Hessian histograms or 6-channel BAM pileups) merge
-  into one traversal, lowered with thread-private bins on CPU and parallel
-  atomics on GPU.</li>
-<li><strong>Ordered pairwise tile folds:</strong> <code>Fold.carries</code> tracks multiple scalar fields
-  in one pass while preserving chunk order. <code>pairwise fold tiling</code> fuses a
-  pairwise score producer directly into an ordered fold over L1 / shared-memory
-  tiles, eliminating <code>O(Q · R)</code> distance matrices in both broadcasting NumPy and
-  nested-map 1-NN:</li>
-</ul>
-<figure>
-  <img alt="Exact 1-NN tiled pairwise fold preserves first-index tie semantics in 8 KiB L1 / 16 KiB SRAM" src="../assets/diag-pairwise-1nn.svg" />
-<br />
-<figcaption><strong>Figure 4.</strong> Law 6: pairwise fold tiling streams 16×128 score tiles in L1/SRAM and merges multi-field (min_dist, idx) carries in strict left-to-right order to preserve first-index tie and NaN rules.</figcaption>
-</figure>
-<hr />
-<p><strong>Next:</strong> <a href="../rewrites/">Rewrite rules catalog</a> lists every fusion, tiling, and
-differentiation rule and compares Parakeet 1.x with the 2013–2014 theses. See
-also the <a href="../gallery/">Kernel gallery</a> for runnable examples across all six laws.</p>
+<p><strong>Next:</strong> <a href="../rewrites/">Rewrite rules &amp; thesis lineage</a> gives the exact pass-by-pass
+reference and shows how Parakeet 1.x evolved from the 2013–2014 NYU theses. See
+the <a href="../gallery/">Kernel gallery</a> for runnable examples of every law.</p>
 
 
 
