@@ -1,4 +1,6 @@
-"""Matrix multiplication four ways: operator, adverb, comprehension, loops."""
+"""Matrix multiplication in Parakeet's four standard styles:
+``_numpy``, ``_comp``, ``_loop``, and ``_par``.
+"""
 
 import numpy as np
 
@@ -6,22 +8,17 @@ import parakeet as par
 
 
 @par.jit
-def matmult_operator(X, Y):
+def matmult_numpy(X, Y):
   return X @ Y
 
 
 @par.jit
-def matmult_allpairs(X, Y):
-  return par.allpairs(np.dot, X, Y.T)
-
-
-@par.jit
-def matmult_comprehension(X, Y):
+def matmult_comp(X, Y):
   return np.array([[np.dot(x, y) for y in Y.T] for x in X])
 
 
 @par.jit
-def matmult_loops(X, Y):
+def matmult_loop(X, Y):
   out = np.zeros((X.shape[0], Y.shape[1]))
   for i in range(X.shape[0]):
     for j in range(Y.shape[1]):
@@ -30,12 +27,18 @@ def matmult_loops(X, Y):
   return out
 
 
+@par.jit
+def matmult_par(X, Y):
+  return par.allpairs(np.dot, X, Y.T)
+
+
 def main(n: int = 120):
   rng = np.random.default_rng(5)
   X, Y = rng.random((n, n + 3)), rng.random((n + 3, n - 2))
-  for f in (matmult_operator, matmult_allpairs, matmult_comprehension, matmult_loops):
-    assert np.allclose(f(X, Y), X @ Y), f.__name__
-  return X @ Y
+  ref = X @ Y
+  for fn in (matmult_numpy, matmult_comp, matmult_loop, matmult_par):
+    assert np.allclose(fn(X, Y), ref), fn.__name__
+  return ref
 
 
 if __name__ == "__main__":

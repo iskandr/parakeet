@@ -13,7 +13,7 @@ hide:
 
 <p class="pk-lead">A data-parallel compiler for numerical Python.</p>
 
-Write ordinary NumPy, Python loops, comprehensions, or explicit data-parallel
+Write ordinary NumPy, Python comprehensions, loops, or explicit data-parallel
 operators ([`par.map`](operators.md#map), [`par.reduce`](operators.md#reduce),
 [`par.fold`](operators.md#fold), [`par.scan`](operators.md#scan),
 [`par.allpairs`](operators.md#allpairs)). Parakeet specializes your function
@@ -34,8 +34,8 @@ import parakeet as par
 
 
 @par.jit
-def nearest(x, y):
-  delta = x[:, None, :] - y[None, :, :]
+def nearest_numpy(queries, references):
+  delta = queries[:, None, :] - references[None, :, :]
   d2 = np.sum(delta ** np.float32(2), axis=2)
   return np.argmin(d2, axis=1)
 ```
@@ -66,9 +66,10 @@ GPU.
 <div class="pk-prim-card" markdown>
 <div class="pk-prim-head"><strong>Idiomatic Python &amp; NumPy</strong></div>
 
-Write NumPy expressions, comprehensions, explicit loops, `@dataclass` modules,
-or explicit operators (`par.map`, `par.fold`, `par.scan`, `par.scatter_add`,
-`par.wavefront`). Unsupported constructs fail loudly with your exact source line.
+Write NumPy expressions, comprehensions, explicit loops, Pythonic
+`par.nn.Module` / `@dataclass` objects, or explicit operators (`par.map`,
+`par.fold`, `par.scan`, `par.scatter_add`, `par.wavefront`). Unsupported
+constructs fail loudly with your exact source line.
 
 [Compiled language](language.md) · [Operators](operators.md)
 </div>
@@ -87,7 +88,7 @@ cache or GPU shared memory without materializing giant intermediates.
 <div class="pk-prim-head"><strong>Composable Gradients</strong></div>
 
 `par.grad`, `par.value_and_grad`, `par.jvp`, `par.vjp`, and `par.hvp`
-differentiate directly through loops, arrays, and `@dataclass` parameters—so
+differentiate directly through loops, arrays, and `par.nn.Module` parameters—so
 forward pass, backward pass, and optimizer compile into one native step.
 
 [Automatic differentiation](autodiff.md)
@@ -105,34 +106,24 @@ device across calls with `par.to_device`.
 
 </div>
 
-## NumPy, comprehensions, operators, or loops
+## Four recurring styles
 
-Write whichever style fits your algorithm. The first three functions below
-compile to the same single-pass parallel loop with no temporary arrays; the
-explicit `for` loop compiles to a single sequential C loop:
+Throughout the docs and [gallery](gallery.md), examples use consistent suffixes
+so you can recognize each style at a glance:
+
+* `*_numpy` — NumPy broadcasting and array expressions
+* `*_comp` — Python comprehensions
+* `*_loop` — explicit Python `for` loops
+* `*_par` — explicit Parakeet operators (`par.map`, `par.allpairs`, `par.fold`,
+  `par.imap`, `par.scatter_add`, `par.scan`)
+* `*_helpers` — wrapped `par.nn` / `par.optim` helpers where applicable
+
+For elementwise work like `tanh(x * alpha) + beta`, `_numpy`, `_comp`, and
+`_par` compile to the same single-pass parallel loop with zero temporary
+arrays; `_loop` compiles to a single sequential C loop:
 
 ```python
-@par.jit
-def via_numpy(x, alpha=0.5, beta=0.3):
-  return np.tanh(x * alpha) + beta
-
-
-@par.jit
-def via_comprehension(x, alpha=0.5, beta=0.3):
-  return np.array([np.tanh(xi * alpha) + beta for xi in x])
-
-
-@par.jit
-def via_operator(x, alpha=0.5, beta=0.3):
-  return par.map(lambda xi: np.tanh(xi * alpha) + beta, x)
-
-
-@par.jit
-def via_loop(x, alpha=0.5, beta=0.3):
-  y = np.empty_like(x, dtype=float)
-  for i in range(len(x)):
-    y[i] = np.tanh(x[i] * alpha) + beta
-  return y
+--8 < --"examples/tanh_rescale.py:tanh_rescale_four_ways"
 ```
 
 ## Where to go next

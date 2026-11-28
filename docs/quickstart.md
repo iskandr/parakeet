@@ -46,42 +46,89 @@ fast_rms = par.jit(lambda x: np.sqrt(np.mean(x * x)))
 par.run(rms.fn, x)
 ```
 
-## Loops, comprehensions, and helpers
+## Four styles, one compiler
 
-Anything in the [compiled language](language.md) mixes freely. Helper functions
-are inlined automatically—they do not need `@par.jit`:
+Parakeet compiles NumPy broadcasting (`_numpy`), comprehensions (`_comp`),
+explicit loops (`_loop`), and data-parallel operators (`_par`) through the same
+optimizer. Helper functions inline automatically—they do not need `@par.jit`:
+
+=== "NumPy (`_numpy`)"
+
+    ```python
+    --8 < --"examples/algebraic_gallery.py:nearest_numpy"
+    ```
+
+=== "Comprehension (`_comp`)"
+
+    ```python
+    --8 < --"examples/algebraic_gallery.py:squared_distance"
+
+    --8 < --"examples/algebraic_gallery.py:nearest_comp"
+    ```
+
+=== "Loop (`_loop`)"
+
+    ```python
+    --8 < --"examples/algebraic_gallery.py:squared_distance"
+
+    --8 < --"examples/algebraic_gallery.py:nearest_loop"
+    ```
+
+=== "Operators (`_par`)"
+
+    ```python
+    --8 < --"examples/algebraic_gallery.py:squared_distance"
+
+    --8 < --"examples/algebraic_gallery.py:nearest_par"
+    ```
+
+See the [Kernel gallery](gallery.md) for side-by-side comparisons across
+smoothing, histograms, tropical products, scans, attention, and cross-entropy.
+
+## Gradients, modules, and optimizers
+
+Wrap any scalar-valued function with `par.grad` or `par.value_and_grad`. You
+can differentiate plain NumPy functions, dicts/tuples, `@dataclass` records, or
+ordinary Python classes inheriting from `par.nn.Module`:
 
 ```python
-def sqr_dist(a, b):
-  return np.sum((a - b) ** 2)
+class TwoLayerMLP(par.nn.Module):
+  def __init__(self, width, hidden, rng):
+    self.fc1 = par.nn.Linear(width, hidden, rng=rng)
+    self.fc2 = par.nn.Linear(hidden, width, rng=rng)
+
+  def __call__(self, x):
+    return self.fc2(np.tanh(self.fc1(x)))
 
 
-@par.jit
-def nearest(X, centroids):
-  return np.array([np.argmin([sqr_dist(x, c) for c in centroids]) for x in X])
+def mse_loss(model, x, y):
+  return np.mean((model(x) - y) ** 2)
+
+
+loss_and_grad = par.value_and_grad(mse_loss)
+opt = par.optim.Adam(model, lr=1e-3)
+loss_val, grads = loss_and_grad(model, x, y)
+model = opt.update(model, grads)
 ```
 
-When you want explicit data-parallel control over slices, pairs, scans, or
-histograms, use [`par.map`](operators.md#map), [`par.reduce`](operators.md#reduce),
-[`par.fold`](operators.md#fold), [`par.scan`](operators.md#scan),
-[`par.allpairs`](operators.md#allpairs), or
-[`par.scatter_add`](operators.md#scatter_add).
+See [Automatic differentiation](autodiff.md) and [Train nanoGPT](gallery/nanogpt.md)
+for both helper-based and from-scratch functional training loops.
 
-## Gradients in one line
+## Sequences, alphabets, and tokenization
 
-Wrap any scalar-valued function with `par.grad` or `par.value_and_grad`. The
-forward and backward passes compile together into one native function:
+To pass character sequences (DNA reads, protein chains, text corpora) into
+compiled code without `IntEnum` or dict boilerplate, use `par.Alphabet` (fixed
+categorical alphabets) or `par.Vocab` (corpus-derived tokenizers). Both compile
+down to a 256-entry lookup table:
 
 ```python
-def mse_loss(w, x, y):
-  return np.mean((np.tanh(x @ w) - y) ** 2)
+DNA = par.Alphabet("ACGT")
+GC = par.Alphabet.mask("GC")
+codes = DNA.encode("ACGTGCGT")  # array([0, 1, 2, 3, 2, 1, 2, 3], dtype=uint8)
 
-
-loss_val, dw = par.value_and_grad(mse_loss)(w, x, y)
+vocab = par.Vocab.from_text("parakeet compiles numerical python.")
+tokens = vocab.encode("parakeet")
 ```
-
-See [Automatic differentiation](autodiff.md) for nested tuples, `@dataclass`
-parameters, `par.jvp`, `par.hvp`, and custom rules.
 
 ## Picking a backend
 
@@ -121,11 +168,11 @@ kernels, call `rms.specialize(x).source` (see
 
 ## Where to go next
 
-* [The compiled language](language.md) — supported types, control flow, and
-  differences from CPython.
+* [The compiled language](language.md) — supported types, `par.nn.Module`,
+  `par.Alphabet`/`par.Vocab`, and differences from CPython.
 * [Data-parallel operators](operators.md) — `map`, `fold`, `scan`, `scatter_add`,
   and `wavefront`.
-* [Kernel gallery](gallery.md) — runnable examples from nearest-neighbor search
-  to attention and nanoGPT.
+* [Kernel gallery](gallery.md) — runnable four-flavor examples from nearest
+  neighbor to attention and nanoGPT.
 * [Operators & compilation walkthrough](primitives.md) — how Parakeet fuses and
   tiles your code under the hood.

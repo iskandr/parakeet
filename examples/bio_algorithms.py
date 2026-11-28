@@ -201,7 +201,7 @@ def myers_edit_distance(pattern, text):
 # 3. O(N) Monotone-deque minimizer sketching over canonical 2-bit k-mers
 # ---------------------------------------------------------------------------
 
-DNA_CODE = {"A": 0, "a": 0, "C": 1, "c": 1, "G": 2, "g": 2, "T": 3, "t": 3}
+DNA = par.Alphabet("ACGT", unknown=4)
 
 
 def _hash_u64(x):
@@ -235,7 +235,7 @@ def minimizer_sketch(seq_bytes, k=15, w=10):
   last_emitted_pos = -1
 
   for i, ch in enumerate(seq_bytes):
-    code = DNA_CODE.get(ch, 4)
+    code = DNA[ch]
     if code >= 4:
       valid_run = head = tail = count = 0
       fwd = rev = np.uint64(0)

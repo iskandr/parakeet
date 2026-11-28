@@ -448,7 +448,7 @@ def inflate_bgzf_blocks(data, comp_starts, comp_ends, uncomp_offsets):
 # 3. Compiled FASTQ slab QC + Overlapped double-buffered CPU I/O orchestrator
 # ---------------------------------------------------------------------------
 
-GC_BASE = {"G": 1, "C": 1, "g": 1, "c": 1}
+GC = par.Alphabet.mask("GC", ignore_case=True)
 
 
 @par.jit
@@ -460,7 +460,7 @@ def fastq_slab_qc(fastq_bytes):
   def read_stats(r):
     seq = lines[4 * r + 1]
     qual = lines[4 * r + 3]
-    gc = np.sum(GC_BASE[seq].astype(np.int64))
+    gc = np.sum(GC[seq].astype(np.int64))
     qsum = np.sum(qual.astype(np.int64) - 33)
     return len(seq), gc, qsum
 

@@ -12,7 +12,8 @@ supported and where compiled code intentionally differs from CPython.
 | NumPy scalars (`np.float32(1)`, `np.complex64(1+2j)`) | Exact scalar dtype (`complex` lowers to unboxed `(re, im)` pairs) |
 | NumPy arrays | `bool`, `int8`–`int64`, `uint8`–`uint64`, `float32`, `float64`, `complex64`, `complex128`; any rank and strides |
 | Tuples (arbitrarily nested) | Compile-time structures (zero runtime overhead) |
-| `NamedTuple` and `@dataclass` (frozen or mutable) | Compile-time records with pure methods, `@property`, `__call__`, and functional field rebinding (`obj.x = v`) |
+| `NamedTuple`, `@dataclass`, and `par.nn.Module` | Compile-time records with normal `__init__`, pure methods, `@property`, `__call__`, and functional field rebinding (`obj.x = v`) |
+| `par.Alphabet` and `par.Vocab` | 256-entry categorical lookup tables for ASCII sequences and character tokenization (`DNA[seq]`, `vocab.encode(text)`) |
 | Fixed string-key `dict` | Compile-time record keyed by literal strings (key order is part of the type) |
 | Lists & comprehensions | Numeric literals/comprehensions build arrays; local `[]` lists unbox at compile time or promote to growable CPU buffers in dynamic loops |
 | `slice`, `range`, `zip`, `enumerate`, `itertools` | Supported as values and zero-allocation iterators (`pairwise`, `islice`, `chain`, `product`, `batched`) |
@@ -98,19 +99,40 @@ def f(x):
 * **Shape rebinding:** variables holding arrays or `RaggedArray`s can be rebound
   to new shapes across `for` / `while` iterations (for example `active = active[mask]`).
 
-## Dataclasses and fixed records
+## Objects, `par.nn.Module`, and records
 
-`NamedTuple`s, `@dataclass`es (frozen or non-frozen), and fixed string-key
-`dict`s can cross the `@par.jit` boundary and hold arrays, scalars, static
-metadata, or nested records.
+`NamedTuple`s, `@dataclass`es (frozen or non-frozen), fixed string-key `dict`s,
+and ordinary Python classes inheriting from `par.nn.Module` (or setting
+`__parakeet_record__ = True`) can cross the `@par.jit` boundary and hold
+arrays, scalars, static metadata, or nested records.
 
-* Pure methods, `@property`, `@staticmethod`, `@classmethod`, and `__call__`
-  inline at compile time with zero `PyObject` overhead.
-* Local field updates (`obj.x = v`, `obj.x += v`) on non-frozen dataclasses
-  functionally rebind the compile-time record (value semantics, no heap
-  mutation).
+* Standard `__init__` runs in Python when constructing the object; inside
+  `@par.jit` and `par.value_and_grad`, Parakeet unpacks `self.__dict__` into a
+  typed compile-time record with zero `PyObject` overhead.
+* Pure methods, `@property`, `@staticmethod`, `@classmethod`, `__call__`, and
+  `__getitem__` inline at compile time.
+* Local field updates (`obj.x = v`, `obj.x += v`) functionally rebind the
+  compile-time record (value semantics, no heap mutation).
 * Returning a record reconstructs its Python type while preserving NumPy view
   semantics for array fields.
+* `par.tree_map` and `par.tree_map_arrays` walk nested tuples, dicts,
+  dataclasses, and `par.nn.Module` trees both in Python and inside `@par.jit`.
+
+## Strings, alphabets, and tokenization
+
+Strings and `list[str]` passed into `@par.jit` are packed into dense `uint8`
+arrays (fixed length) or `RaggedArray[uint8]` (variable length). To map ASCII
+characters to compact integer categories—whether DNA bases, GC masks, or
+language-model tokens—use `par.Alphabet` or `par.Vocab`:
+
+```python
+DNA = par.Alphabet("ACGT")  # 'A'->0, 'C'->1, 'G'->2, 'T'->3 (case-insensitive)
+GC = par.Alphabet.mask("GC")  # 1 for G/C, 0 elsewhere
+vocab = par.Vocab.from_text(corpus)  # sorted character vocabulary -> int64 IDs
+```
+
+Indexing `DNA[seq]` or `GC[seq]` inside `@par.jit` compiles directly to a
+256-byte LUT gather with no `IntEnum` or dictionary boilerplate.
 
 ## Differences from CPython / NumPy
 

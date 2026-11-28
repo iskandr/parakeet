@@ -69,7 +69,7 @@ or SciPy.
   2D & batched 3D `np.linalg` (`cholesky`, `det`, `solve`, `inv`, `qr`, `eigh`,
   `eigvalsh`, `svd`, `pinv`, `lstsq`, `norm`), and parallel `np.random`. Not
   built in: non-symmetric `eig`/`eigvals`, 4D+ `np.linalg` (wrap with
-  `par.map`), `np.fft.*` (see `examples/complex_fft_and_fasta.py` for a compiled
+  `par.map`), `np.fft.*` (see `examples/fft.py` for a compiled
   radix-2 FFT), `np.lexsort`/`np.isin`, and `scipy.*`.
 * **Automatic differentiation:** covers reverse mode (`grad`, `vjp`, `jacrev`),
   forward mode (`jvp`, `linearize`, `jacfwd`), `linear_transpose`, higher-order

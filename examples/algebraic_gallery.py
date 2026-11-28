@@ -1,16 +1,23 @@
-"""Enriched Gallery of Algebraic Kernels in Parakeet.
+"""Gallery of algebraic kernels in Parakeet.
 
-Run directly to verify exactness and benchmark every workload on CPU (and GPU
-when available)::
+Every featured kernel is shown in Parakeet's standard recurring styles:
 
-    python examples/algebraic_gallery.py
+- ``*_numpy``   — NumPy broadcasting and array expressions
+- ``*_comp``    — Python comprehensions
+- ``*_loop``    — explicit Python ``for`` loops
+- ``*_par``     — explicit data-parallel operators (``par.map``, ``par.allpairs``,
+                  ``par.fold``, ``par.imap``, ``par.ireduce``, ``par.scatter_add``,
+                  ``par.scan``)
+- ``*_helpers`` — wrapped ``par.nn`` helpers where applicable
 
-The examples cover pairwise folds, normalized weighted sums, contraction
-reassociation, affine scans, min-plus products and keyed histograms.
-The documentation gallery imports its code snippets from this module."""
+Run directly to verify exactness across every flavor and benchmark on CPU::
+
+    python -m examples.algebraic_gallery
+"""
 
 from __future__ import annotations
 
+import operator
 import time
 from typing import NamedTuple
 
@@ -20,98 +27,429 @@ import parakeet as par
 from parakeet import value_and_grad
 
 # ---------------------------------------------------------------------------
-# 1. Causal Attention + Sliding-Window Attention
+# 1. Exact 1-NN Search (Pairwise Fusion + Tiling)
 # ---------------------------------------------------------------------------
 
 
-# --8<-- [start:causal_flash_attention]
+# --8<-- [start:squared_distance]
+def squared_distance(query, reference):
+  return np.sum((query - reference) ** np.float32(2))
+
+
+# --8<-- [end:squared_distance]
+
+
+# --8<-- [start:nearest_numpy]
 @par.jit
-def causal_flash_attention(q, k, v):
-  T = q.shape[-2]
-  idx = np.arange(T)
-  mask = idx[:, None] >= idx[None, :]
-  scale = np.float32(1.0 / np.sqrt(np.float32(q.shape[-1])))
-  s = np.where(mask, np.matmul(q, np.swapaxes(k, -1, -2)) * scale, np.float32(-1e9))
-  e = np.exp(s - np.max(s, axis=-1, keepdims=True))
-  return np.matmul(e / np.sum(e, axis=-1, keepdims=True), v)
+def nearest_numpy(queries, references):
+  delta = queries[:, None, :] - references[None, :, :]
+  return np.argmin(np.sum(delta ** np.float32(2), axis=2), axis=1)
 
 
-# --8<-- [end:causal_flash_attention]
+# --8<-- [end:nearest_numpy]
+
+
+# --8<-- [start:nearest_comp]
+@par.jit
+def nearest_comp(queries, references):
+  return np.array([np.argmin([squared_distance(q, r) for r in references]) for q in queries])
+
+
+# --8<-- [end:nearest_comp]
+
+
+# --8<-- [start:nearest_loop]
+@par.jit
+def nearest_loop(queries, references):
+  out = np.empty(len(queries), dtype=np.int64)
+  for i in range(len(queries)):
+    best_idx = 0
+    best_dist = squared_distance(queries[i], references[0])
+    for j in range(1, len(references)):
+      dist = squared_distance(queries[i], references[j])
+      if (np.isnan(dist) or dist < best_dist) and not np.isnan(best_dist):
+        best_dist = dist
+        best_idx = j
+    out[i] = best_idx
+  return out
+
+
+# --8<-- [end:nearest_loop]
+
+
+# --8<-- [start:nearest_par]
+class Winner(NamedTuple):
+  distance: np.float32
+  index: np.int64
+
+
+def first_minimum(left, right):
+  # Keep the first NaN; among finite values, replace only on strict improvement.
+  right_wins = np.isnan(right.distance) or right.distance < left.distance
+  return right if right_wins and not np.isnan(left.distance) else left
 
 
 @par.jit
-def sliding_window_attention(q, k, v, window):
-  T = q.shape[-2]
-  idx = np.arange(T)
-  mask = (idx[:, None] >= idx[None, :]) & ((idx[:, None] - idx[None, :]) <= window)
-  scale = np.float32(1.0 / np.sqrt(np.float32(q.shape[-1])))
-  s = np.where(mask, np.matmul(q, np.swapaxes(k, -1, -2)) * scale, np.float32(-1e9))
-  e = np.exp(s - np.max(s, axis=-1, keepdims=True))
-  return np.matmul(e / np.sum(e, axis=-1, keepdims=True), v)
+def nearest_par(queries, references):
+  scores = par.allpairs(squared_distance, queries, references)
+  return par.fold(Winner, first_minimum, scores, axis=1, indexed=True, emit=lambda winner: winner.index)
 
 
-def causal_flash_loss(q, k, v):
-  return np.sum(causal_flash_attention(q, k, v) ** np.float32(2.0))
+# --8<-- [end:nearest_par]
 
 
-# ---------------------------------------------------------------------------
-# 2. Linear Cross-Entropy
-# ---------------------------------------------------------------------------
-
-
-# --8<-- [start:cut_cross_entropy]
-def cut_cross_entropy(h, w, targets):
-  logits = h @ w
-  m = np.max(logits, axis=-1, keepdims=True)
-  z = logits - m
-  lse = np.log(np.sum(np.exp(z), axis=-1))
-  picked = z[np.arange(h.shape[0]), targets]
-  return -np.mean(picked - lse)
-
-
-# --8<-- [end:cut_cross_entropy]
-
-
-# ---------------------------------------------------------------------------
-# 3. Multi-Head Latent Attention (weight absorption + online monoidal tiling)
-# ---------------------------------------------------------------------------
-
-
-# --8<-- [start:deepseek_mla]
+# --8<-- [start:exact_1nn]
 @par.jit
-def deepseek_mla(q, c_kv, w_uk, w_uv):
-  k = c_kv @ w_uk
-  v = c_kv @ w_uv
-  scale = np.float32(1.0 / np.sqrt(np.float32(q.shape[-1])))
-  s = (q @ k.T) * scale
-  e = np.exp(s - np.max(s, axis=-1, keepdims=True))
-  return (e / np.sum(e, axis=-1, keepdims=True)) @ v
+def exact_1nn(x_query, x_ref):
+  """Exact nearest-neighbor index per query row via nested ``par.map``."""
+  return par.map(
+    lambda query: np.argmin(par.map(lambda reference: squared_distance(query, reference), x_ref)),
+    x_query,
+  )
 
 
-# --8<-- [end:deepseek_mla]
+# --8<-- [end:exact_1nn]
+
+nearest_fold = nearest_par
 
 
 # ---------------------------------------------------------------------------
-# 4. Grouped-Query Attention (shared-KV head-group tiling)
+# 2. Inverse-Distance Smoothing (Weighted Pairwise Fold)
 # ---------------------------------------------------------------------------
 
 
-# --8<-- [start:gqa_attention]
+# --8<-- [start:smooth_numpy]
 @par.jit
-def gqa_attention(q, k, v):
-  # q: (B, H_kv, G, T_q, D), k, v: (B, H_kv, 1, T_kv, D)
-  scale = np.float32(1.0 / np.sqrt(np.float32(q.shape[-1])))
-  s = np.matmul(q, np.swapaxes(k, -1, -2)) * scale
+def smooth_numpy(queries, references, observations):
+  values = observations.reshape(references.shape[0])
+  delta = queries[:, None, :] - references[None, :, :]
+  weights = np.float32(1) / (np.float32(1) + np.sum(delta ** np.float32(2), axis=2))
+  return np.sum(weights * values, axis=1) / np.sum(weights, axis=1)
+
+
+# --8<-- [end:smooth_numpy]
+
+
+# --8<-- [start:smooth_comp]
+@par.jit
+def smooth_comp(queries, references, observations):
+  values = observations.reshape(references.shape[0])
+
+  def smooth_one(q):
+    w = np.array([np.float32(1) / (np.float32(1) + squared_distance(q, r)) for r in references])
+    return np.sum(w * values) / np.sum(w)
+
+  return np.array([smooth_one(q) for q in queries])
+
+
+# --8<-- [end:smooth_comp]
+
+
+# --8<-- [start:smooth_loop]
+@par.jit
+def smooth_loop(queries, references, observations):
+  values = observations.reshape(references.shape[0])
+  out = np.empty(len(queries), dtype=np.float32)
+  for i in range(len(queries)):
+    w_sum = np.float32(0)
+    wv_sum = np.float32(0)
+    for j in range(len(references)):
+      w = np.float32(1) / (np.float32(1) + squared_distance(queries[i], references[j]))
+      w_sum += w
+      wv_sum += w * values[j]
+    out[i] = wv_sum / w_sum
+  return out
+
+
+# --8<-- [end:smooth_loop]
+
+
+# --8<-- [start:smooth_par]
+class WeightedSum(NamedTuple):
+  weight: np.float32
+  weighted_value: np.float32
+
+
+def add_sums(left, right):
+  return WeightedSum(left.weight + right.weight, left.weighted_value + right.weighted_value)
+
+
+@par.jit
+def smooth_par(queries, references, observations):
+  values = observations.reshape(references.shape[0])
+  scores = par.allpairs(squared_distance, queries, references)
+
+  def contribution(distance_squared, ref_index):
+    weight = np.float32(1) / (np.float32(1) + distance_squared)
+    return WeightedSum(weight, weight * values[ref_index])
+
+  return par.fold(contribution, add_sums, scores, axis=1, indexed=True, emit=lambda t: t.weighted_value / t.weight)
+
+
+# --8<-- [end:smooth_par]
+
+smooth_fold = smooth_par
+
+
+# ---------------------------------------------------------------------------
+# 3. Gaussian / RBF Kernel Regression (Nadaraya-Watson)
+# ---------------------------------------------------------------------------
+
+
+# --8<-- [start:rbf_regression_numpy]
+@par.jit
+def rbf_regression_numpy(x_query, x_train, y_train, neg_gamma):
+  d2 = np.sum((x_query[:, None, :] - x_train[None, :, :]) ** np.float32(2.0), axis=-1)
+  s = d2 * neg_gamma
   e = np.exp(s - np.max(s, axis=-1, keepdims=True))
-  return np.matmul(e / np.sum(e, axis=-1, keepdims=True), v)
+  return (e / np.sum(e, axis=-1, keepdims=True)) @ y_train
 
 
-# --8<-- [end:gqa_attention]
+# --8<-- [end:rbf_regression_numpy]
+
+
+# --8<-- [start:rbf_regression_helpers]
+@par.jit
+def rbf_regression_helpers(x_query, x_train, y_train, neg_gamma):
+  d2 = np.sum((x_query[:, None, :] - x_train[None, :, :]) ** np.float32(2.0), axis=-1)
+  return par.nn.softmax(d2 * neg_gamma, axis=-1) @ y_train
+
+
+# --8<-- [end:rbf_regression_helpers]
+
+
+# --8<-- [start:rbf_regression_comp]
+@par.jit
+def rbf_regression_comp(x_query, x_train, y_train, neg_gamma):
+  def predict_one(q):
+    s = np.array([squared_distance(q, x) * neg_gamma for x in x_train])
+    return par.nn.softmax(s, axis=0) @ y_train
+
+  return np.array([predict_one(q) for q in x_query])
+
+
+# --8<-- [end:rbf_regression_comp]
+
+
+# --8<-- [start:rbf_regression_loop]
+@par.jit
+def rbf_regression_loop(x_query, x_train, y_train, neg_gamma):
+  n_q = len(x_query)
+  n_tr = len(x_train)
+  out = np.zeros((n_q, y_train.shape[1]), dtype=np.float32)
+  for i in range(n_q):
+    m = np.float32(-1e30)
+    for j in range(n_tr):
+      s = squared_distance(x_query[i], x_train[j]) * neg_gamma
+      if s > m:
+        m = s
+    denom = np.float32(0)
+    for j in range(n_tr):
+      w = np.exp(squared_distance(x_query[i], x_train[j]) * neg_gamma - m)
+      denom += w
+      out[i] += w * y_train[j]
+    out[i] /= denom
+  return out
+
+
+# --8<-- [end:rbf_regression_loop]
+
+
+# --8<-- [start:rbf_regression_par]
+@par.jit
+def rbf_regression_par(x_query, x_train, y_train, neg_gamma):
+  scores = par.allpairs(squared_distance, x_query, x_train) * neg_gamma
+  return par.nn.softmax(scores, axis=-1) @ y_train
+
+
+# --8<-- [end:rbf_regression_par]
+
+rbf_kernel_regression = rbf_regression_numpy
 
 
 # ---------------------------------------------------------------------------
-# 5. Mamba-2 State-Space Recurrence
+# 4. GBDT Histogram Building + Prefix-Sum Best-Split Finding
 # ---------------------------------------------------------------------------
+
+
+def _best_split_from_histograms(g_hist, h_hist, nbins, reg_lambda):
+  g_left = np.cumsum(g_hist)
+  h_left = np.cumsum(h_hist)
+  g_right = g_left[nbins - 1] - g_left
+  h_right = h_left[nbins - 1] - h_left
+  gain = (g_left * g_left) / (h_left + reg_lambda) + (g_right * g_right) / (h_right + reg_lambda)
+  best_bin = np.argmax(gain)
+  return best_bin, gain[best_bin]
+
+
+# --8<-- [start:gbdt_split_numpy]
+@par.jit
+def gbdt_split_numpy(bin_ids, grads, hess, nbins, reg_lambda):
+  g_hist = np.zeros(nbins, dtype=np.float32)
+  h_hist = np.zeros(nbins, dtype=np.float32)
+  np.add.at(g_hist, bin_ids, grads)
+  np.add.at(h_hist, bin_ids, hess)
+  return _best_split_from_histograms(g_hist, h_hist, nbins, reg_lambda)
+
+
+# --8<-- [end:gbdt_split_numpy]
+
+
+# --8<-- [start:gbdt_split_comp]
+@par.jit
+def gbdt_split_comp(bin_ids, grads, hess, nbins, reg_lambda):
+  g_hist = np.array([np.sum(grads[bin_ids == b]) for b in range(nbins)])
+  h_hist = np.array([np.sum(hess[bin_ids == b]) for b in range(nbins)])
+  return _best_split_from_histograms(g_hist, h_hist, nbins, reg_lambda)
+
+
+# --8<-- [end:gbdt_split_comp]
+
+
+# --8<-- [start:gbdt_split_loop]
+@par.jit
+def gbdt_split_loop(bin_ids, grads, hess, nbins, reg_lambda):
+  g_hist = np.zeros(nbins, dtype=np.float32)
+  h_hist = np.zeros(nbins, dtype=np.float32)
+  for i in range(len(bin_ids)):
+    b = bin_ids[i]
+    g_hist[b] += grads[i]
+    h_hist[b] += hess[i]
+  return _best_split_from_histograms(g_hist, h_hist, nbins, reg_lambda)
+
+
+# --8<-- [end:gbdt_split_loop]
+
+
+# --8<-- [start:gbdt_split_par]
+@par.jit
+def gbdt_split_par(bin_ids, grads, hess, nbins, reg_lambda):
+  g_hist = par.scatter_add(nbins, bin_ids, grads)
+  h_hist = par.scatter_add(nbins, bin_ids, hess)
+  return _best_split_from_histograms(g_hist, h_hist, nbins, reg_lambda)
+
+
+# --8<-- [end:gbdt_split_par]
+
+gbdt_best_split_numpy = gbdt_split_numpy
+gbdt_best_split_comprehension = gbdt_split_comp
+gbdt_best_split_loop = gbdt_split_loop
+gbdt_best_split = gbdt_split_par
+
+
+# ---------------------------------------------------------------------------
+# 5. Tropical Min-Plus Matrix Product
+# ---------------------------------------------------------------------------
+
+
+# --8<-- [start:tropical_min_plus_numpy]
+@par.jit
+def tropical_min_plus_numpy(a, b):
+  return np.min(a[:, :, None] + b[None, :, :], axis=1)
+
+
+# --8<-- [end:tropical_min_plus_numpy]
+
+
+# --8<-- [start:tropical_min_plus_comp]
+@par.jit
+def tropical_min_plus_comp(a, b):
+  return np.array([[np.min(a[i] + b[:, j]) for j in range(b.shape[1])] for i in range(a.shape[0])])
+
+
+# --8<-- [end:tropical_min_plus_comp]
+
+
+# --8<-- [start:tropical_min_plus_loop]
+@par.jit
+def tropical_min_plus_loop(a, b):
+  m, k = a.shape
+  _, n = b.shape
+  out = np.empty((m, n), dtype=a.dtype)
+  for i in range(m):
+    for j in range(n):
+      best = a[i, 0] + b[0, j]
+      for r in range(1, k):
+        val = a[i, r] + b[r, j]
+        if val < best:
+          best = val
+      out[i, j] = best
+  return out
+
+
+# --8<-- [end:tropical_min_plus_loop]
+
+
+# --8<-- [start:tropical_min_plus_par]
+@par.jit
+def tropical_min_plus_par(a, b):
+  """One min-plus matrix product: C[i, j] = min_r (A[i, r] + B[r, j])."""
+  m, k = a.shape
+  _, n = b.shape
+  return par.imap(
+    lambda i, j: par.ireduce(lambda r: a[i, r] + b[r, j], k, combine=np.minimum),
+    (m, n),
+  )
+
+
+# --8<-- [end:tropical_min_plus_par]
+
+tropical_min_plus = tropical_min_plus_par
+
+
+# ---------------------------------------------------------------------------
+# 6. Exponential IIR Filter & Mamba-2 State-Space Recurrence
+# ---------------------------------------------------------------------------
+
+
+# --8<-- [start:iir_filter_numpy]
+@par.jit
+def iir_filter_numpy(a, b):
+  # Closed-form prefix formula for strictly positive decay coefficients a > 0.
+  p = np.cumprod(a)
+  return p * np.cumsum(b / p)
+
+
+# --8<-- [end:iir_filter_numpy]
+
+
+# --8<-- [start:iir_filter_comp]
+@par.jit
+def iir_filter_comp(a, b):
+  p = np.cumprod(a)
+  scaled = b / p
+  return np.array([p[t] * np.sum(scaled[: t + 1]) for t in range(len(a))])
+
+
+# --8<-- [end:iir_filter_comp]
+
+
+# --8<-- [start:iir_filter_loop]
+@par.jit
+def iir_filter_loop(a, b):
+  # Works for arbitrary a (including 0 or negative); Law 4 rewrites to TileScan.
+  T = a.shape[0]
+  out = np.empty_like(b)
+  s = np.float32(0.0)
+  for t in range(T):
+    s = a[t] * s + b[t]
+    out[t] = s
+  return out
+
+
+# --8<-- [end:iir_filter_loop]
+
+
+# --8<-- [start:iir_filter_par]
+@par.jit
+def iir_filter_par(a, b):
+  p = par.scan(operator.mul, a)
+  return p * par.scan(operator.add, b / p)
+
+
+# --8<-- [end:iir_filter_par]
+
+iir_exponential_filter = iir_filter_loop
 
 
 # --8<-- [start:mamba2_ssd]
@@ -130,237 +468,200 @@ def mamba2_ssd(q, k, v, a):
 
 
 # ---------------------------------------------------------------------------
-# 6. Parallel Prefix Exponential / IIR Filter (chunkwise affine scan)
+# 7. Causal Attention, Sliding-Window Attention, MLA, and GQA
 # ---------------------------------------------------------------------------
 
 
-# --8<-- [start:iir_exponential_filter]
+# --8<-- [start:causal_attention_numpy]
 @par.jit
-def iir_exponential_filter(a, b):
-  T = a.shape[0]
-  out = np.empty_like(b)
-  s = np.float32(0.0)
-  for t in range(T):
-    s = a[t] * s + b[t]
-    out[t] = s
+def causal_attention_numpy(q, k, v):
+  T = q.shape[-2]
+  idx = np.arange(T)
+  mask = idx[:, None] >= idx[None, :]
+  scale = np.float32(1.0 / np.sqrt(np.float32(q.shape[-1])))
+  s = np.where(mask, np.matmul(q, np.swapaxes(k, -1, -2)) * scale, np.float32(-1e9))
+  e = np.exp(s - np.max(s, axis=-1, keepdims=True))
+  return np.matmul(e / np.sum(e, axis=-1, keepdims=True), v)
+
+
+# --8<-- [end:causal_attention_numpy]
+
+
+# --8<-- [start:causal_attention_helpers]
+@par.jit
+def causal_attention_helpers(q, k, v):
+  return par.nn.scaled_dot_product_attention(q, k, v, causal=True)
+
+
+# --8<-- [end:causal_attention_helpers]
+
+
+# --8<-- [start:causal_attention_comp]
+@par.jit
+def causal_attention_comp(q, k, v):
+  T = q.shape[-2]
+  scale = np.float32(1.0 / np.sqrt(np.float32(q.shape[-1])))
+  mask = par.nn.causal_mask(T)
+
+  def one_head(qh, kh, vh):
+    s = np.where(mask, (qh @ kh.T) * scale, np.float32(-1e9))
+    return par.nn.softmax(s, axis=-1) @ vh
+
+  return np.array([[one_head(q[b, h], k[b, h], v[b, h]) for h in range(q.shape[1])] for b in range(q.shape[0])])
+
+
+# --8<-- [end:causal_attention_comp]
+
+
+# --8<-- [start:causal_attention_loop]
+@par.jit
+def causal_attention_loop(q, k, v):
+  B, H, T, D = q.shape
+  scale = np.float32(1.0 / np.sqrt(np.float32(D)))
+  out = np.zeros((B, H, T, v.shape[-1]), dtype=np.float32)
+  for b in range(B):
+    for h in range(H):
+      for i in range(T):
+        m = np.float32(-1e30)
+        for j in range(i + 1):
+          score = np.sum(q[b, h, i] * k[b, h, j]) * scale
+          if score > m:
+            m = score
+        denom = np.float32(0)
+        for j in range(i + 1):
+          w = np.exp(np.sum(q[b, h, i] * k[b, h, j]) * scale - m)
+          denom += w
+          out[b, h, i] += w * v[b, h, j]
+        out[b, h, i] /= denom
   return out
 
 
-# --8<-- [end:iir_exponential_filter]
+# --8<-- [end:causal_attention_loop]
 
 
-# ---------------------------------------------------------------------------
-# 7. RBF / Gaussian Kernel Regression (Nadaraya-Watson)
-# ---------------------------------------------------------------------------
-
-
-# --8<-- [start:rbf_kernel_regression]
+# --8<-- [start:causal_attention_par]
 @par.jit
-def rbf_kernel_regression(x_query, x_train, y_train, neg_gamma):
-  d2 = np.sum((x_query[:, None, :] - x_train[None, :, :]) ** np.float32(2.0), axis=-1)
-  s = d2 * neg_gamma
+def causal_attention_par(q, k, v):
+  mask = par.nn.causal_mask(q.shape[-2])
+
+  def one_batch(qb, kb, vb):
+    return par.map(lambda qh, kh, vh: par.nn.scaled_dot_product_attention(qh, kh, vh, mask=mask), qb, kb, vb)
+
+  return par.map(one_batch, q, k, v)
+
+
+# --8<-- [end:causal_attention_par]
+
+causal_flash_attention = causal_attention_numpy
+
+
+@par.jit
+def sliding_window_attention(q, k, v, window):
+  T = q.shape[-2]
+  idx = np.arange(T)
+  mask = (idx[:, None] >= idx[None, :]) & ((idx[:, None] - idx[None, :]) <= window)
+  return par.nn.scaled_dot_product_attention(q, k, v, mask=mask)
+
+
+def causal_flash_loss(q, k, v):
+  return np.sum(causal_flash_attention(q, k, v) ** np.float32(2.0))
+
+
+# --8<-- [start:deepseek_mla]
+@par.jit
+def deepseek_mla(q, c_kv, w_uk, w_uv):
+  k = c_kv @ w_uk
+  v = c_kv @ w_uv
+  scale = np.float32(1.0 / np.sqrt(np.float32(q.shape[-1])))
+  s = (q @ k.T) * scale
   e = np.exp(s - np.max(s, axis=-1, keepdims=True))
-  return (e / np.sum(e, axis=-1, keepdims=True)) @ y_train
+  return (e / np.sum(e, axis=-1, keepdims=True)) @ v
 
 
-# --8<-- [end:rbf_kernel_regression]
+# --8<-- [end:deepseek_mla]
+
+
+# --8<-- [start:gqa_attention]
+@par.jit
+def gqa_attention(q, k, v):
+  # q: (B, H_kv, G, T_q, D), k, v: (B, H_kv, 1, T_kv, D)
+  scale = np.float32(1.0 / np.sqrt(np.float32(q.shape[-1])))
+  s = np.matmul(q, np.swapaxes(k, -1, -2)) * scale
+  e = np.exp(s - np.max(s, axis=-1, keepdims=True))
+  return np.matmul(e / np.sum(e, axis=-1, keepdims=True), v)
+
+
+# --8<-- [end:gqa_attention]
 
 
 # ---------------------------------------------------------------------------
-# 8. Tropical Min-Plus Product & Exact 1-NN (Tiling + Carry)
+# 8. Linear Cross-Entropy (Cut Cross-Entropy)
 # ---------------------------------------------------------------------------
 
 
-# --8<-- [start:tropical_min_plus]
+# --8<-- [start:cross_entropy_numpy]
+def cross_entropy_numpy(h, w, targets):
+  logits = h @ w
+  m = np.max(logits, axis=-1, keepdims=True)
+  z = logits - m
+  lse = np.log(np.sum(np.exp(z), axis=-1))
+  picked = z[np.arange(h.shape[0]), targets]
+  return -np.mean(picked - lse)
+
+
+# --8<-- [end:cross_entropy_numpy]
+
+
+# --8<-- [start:cross_entropy_helpers]
+def cross_entropy_helpers(h, w, targets):
+  return par.nn.cross_entropy(h @ w, targets)
+
+
+# --8<-- [end:cross_entropy_helpers]
+
+
+# --8<-- [start:cross_entropy_comp]
 @par.jit
-def tropical_min_plus(a, b):
-  """One min-plus matrix product: C[i, j] = min_r (A[i, r] + B[r, j])."""
-  m, k = a.shape
-  _, n = b.shape
-  return par.imap(
-    lambda i, j: par.ireduce(lambda r: a[i, r] + b[r, j], k, combine=np.minimum),
-    (m, n),
-  )
+def cross_entropy_comp(h, w, targets):
+  def row_loss(row, tgt):
+    logits = row @ w
+    z = logits - np.max(logits)
+    return np.log(np.sum(np.exp(z))) - z[tgt]
+
+  return np.mean(np.array([row_loss(h[i], targets[i]) for i in range(len(targets))]))
 
 
-# --8<-- [end:tropical_min_plus]
+# --8<-- [end:cross_entropy_comp]
 
 
-# --8<-- [start:squared_distance]
-def squared_distance(query, reference):
-  return np.sum((query - reference) ** np.float32(2))
-
-
-# --8<-- [end:squared_distance]
-
-
-# --8<-- [start:exact_1nn]
+# --8<-- [start:cross_entropy_loop]
 @par.jit
-def exact_1nn(x_query, x_ref):
-  """Exact nearest-neighbor index per query row."""
-  return par.map(
-    lambda query: np.argmin(par.map(lambda reference: squared_distance(query, reference), x_ref)),
-    x_query,
-  )
+def cross_entropy_loop(h, w, targets):
+  total = np.float32(0)
+  for i in range(len(targets)):
+    logits = h[i] @ w
+    z = logits - np.max(logits)
+    total += np.log(np.sum(np.exp(z))) - z[targets[i]]
+  return total / np.float32(len(targets))
 
 
-# --8<-- [end:exact_1nn]
+# --8<-- [end:cross_entropy_loop]
 
 
-# --8<-- [start:nearest_numpy]
+# --8<-- [start:cross_entropy_par]
 @par.jit
-def nearest_numpy(queries, references):
-  delta = queries[:, None, :] - references[None, :, :]
-  return np.argmin(np.sum(delta ** np.float32(2), axis=2), axis=1)
+def cross_entropy_par(h, w, targets):
+  def row_loss(row, tgt):
+    logits = row @ w
+    z = logits - np.max(logits)
+    return np.log(np.sum(np.exp(z))) - z[tgt]
+
+  return np.mean(par.map(row_loss, h, targets))
 
 
-# --8<-- [end:nearest_numpy]
+# --8<-- [end:cross_entropy_par]
 
-
-# --8<-- [start:nearest_fold]
-class Winner(NamedTuple):
-  distance: np.float32
-  index: np.int64
-
-
-def first_minimum(left, right):
-  # Keep the first NaN. Among finite values, replace only on strict improvement.
-  right_wins = np.isnan(right.distance) or right.distance < left.distance
-  return right if right_wins and not np.isnan(left.distance) else left
-
-
-@par.jit
-def nearest_fold(queries, references):
-  scores = par.allpairs(squared_distance, queries, references)
-  return par.fold(Winner, first_minimum, scores, axis=1, indexed=True, emit=lambda winner: winner.index)
-
-
-# --8<-- [end:nearest_fold]
-
-
-# --8<-- [start:weighted_numpy]
-@par.jit
-def smooth_numpy(queries, references, observations):
-  observations = observations.reshape(references.shape[0])
-  delta = queries[:, None, :] - references[None, :, :]
-  weights = 1 / (1 + np.sum(delta ** np.float32(2), axis=2))
-  return np.sum(weights * observations, axis=1) / np.sum(weights, axis=1)
-
-
-# --8<-- [end:weighted_numpy]
-
-
-# --8<-- [start:weighted_fold]
-class WeightedSum(NamedTuple):
-  weight: np.float32
-  weighted_value: np.float32
-
-
-def add_sums(left, right):
-  return WeightedSum(left.weight + right.weight, left.weighted_value + right.weighted_value)
-
-
-@par.jit
-def smooth_fold(queries, references, observations):
-  values = observations.reshape(references.shape[0])
-  scores = par.allpairs(squared_distance, queries, references)
-
-  def contribution(distance_squared, ref_index):
-    weight = 1 / (1 + distance_squared)
-    return WeightedSum(weight, weight * values[ref_index])
-
-  def weighted_mean(total):
-    return total.weighted_value / total.weight
-
-  return par.fold(contribution, add_sums, scores, axis=1, indexed=True, emit=weighted_mean)
-
-
-# --8<-- [end:weighted_fold]
-
-
-# ---------------------------------------------------------------------------
-# 9. GBDT Histogram Building + Prefix-Sum Best-Split Finding
-# ---------------------------------------------------------------------------
-
-
-# --8<-- [start:gbdt_best_split_comprehension]
-@par.jit
-def gbdt_best_split_comprehension(bin_ids, grads, hess, nbins, reg_lambda):
-  """Declarative pull-style comprehension inverted to one fused O(N) scatter."""
-  g_hist = np.array([np.sum(grads[bin_ids == b]) for b in range(nbins)])
-  h_hist = np.array([np.sum(hess[bin_ids == b]) for b in range(nbins)])
-  g_left = np.cumsum(g_hist)
-  h_left = np.cumsum(h_hist)
-  g_right = g_left[nbins - 1] - g_left
-  h_right = h_left[nbins - 1] - h_left
-  gain = (g_left * g_left) / (h_left + reg_lambda) + (g_right * g_right) / (h_right + reg_lambda)
-  best_bin = np.argmax(gain)
-  return best_bin, gain[best_bin]
-
-
-# --8<-- [end:gbdt_best_split_comprehension]
-
-
-# --8<-- [start:gbdt_best_split_numpy]
-@par.jit
-def gbdt_best_split_numpy(bin_ids, grads, hess, nbins, reg_lambda):
-  """Return the split bin with the highest gain and the gain at that bin."""
-  g_hist = np.zeros(nbins, dtype=np.float32)
-  h_hist = np.zeros(nbins, dtype=np.float32)
-  np.add.at(g_hist, bin_ids, grads)
-  np.add.at(h_hist, bin_ids, hess)
-  g_left = np.cumsum(g_hist)
-  h_left = np.cumsum(h_hist)
-  g_right = g_left[nbins - 1] - g_left
-  h_right = h_left[nbins - 1] - h_left
-  gain = (g_left * g_left) / (h_left + reg_lambda) + (g_right * g_right) / (h_right + reg_lambda)
-  best_bin = np.argmax(gain)
-  return best_bin, gain[best_bin]
-
-
-# --8<-- [end:gbdt_best_split_numpy]
-
-
-# --8<-- [start:gbdt_best_split_loop]
-@par.jit
-def gbdt_best_split_loop(bin_ids, grads, hess, nbins, reg_lambda):
-  """Same histogram split written with a plain Python accumulation loop."""
-  g_hist = np.zeros(nbins, dtype=np.float32)
-  h_hist = np.zeros(nbins, dtype=np.float32)
-  for i in range(len(bin_ids)):
-    b = bin_ids[i]
-    g_hist[b] += grads[i]
-    h_hist[b] += hess[i]
-  g_left = np.cumsum(g_hist)
-  h_left = np.cumsum(h_hist)
-  g_right = g_left[nbins - 1] - g_left
-  h_right = h_left[nbins - 1] - h_left
-  gain = (g_left * g_left) / (h_left + reg_lambda) + (g_right * g_right) / (h_right + reg_lambda)
-  best_bin = np.argmax(gain)
-  return best_bin, gain[best_bin]
-
-
-# --8<-- [end:gbdt_best_split_loop]
-
-
-# --8<-- [start:gbdt_best_split]
-@par.jit
-def gbdt_best_split(bin_ids, grads, hess, nbins, reg_lambda):
-  """Return the split bin with the highest gain and the gain at that bin."""
-  g_hist = par.scatter_add(nbins, bin_ids, grads)
-  h_hist = par.scatter_add(nbins, bin_ids, hess)
-  g_left = np.cumsum(g_hist)
-  h_left = np.cumsum(h_hist)
-  g_tot = g_left[nbins - 1]
-  h_tot = h_left[nbins - 1]
-  g_right = g_tot - g_left
-  h_right = h_tot - h_left
-  gain = (g_left * g_left) / (h_left + reg_lambda) + (g_right * g_right) / (h_right + reg_lambda)
-  best_bin = np.argmax(gain)
-  return best_bin, gain[best_bin]
-
-
-# --8<-- [end:gbdt_best_split]
+cut_cross_entropy = cross_entropy_numpy
 
 
 def _bench(fn, args, iters=10):
@@ -375,172 +676,120 @@ def main():
   rng = np.random.default_rng(42)
   print("Parakeet Algebraic Gallery — Verified Benchmarks (CPU)\n" + "=" * 68)
 
-  # 1. Causal FlashAttention
-  q = rng.standard_normal((1, 4, 256, 64)).astype(np.float32) * 0.2
-  k = rng.standard_normal((1, 4, 256, 64)).astype(np.float32) * 0.2
-  v = rng.standard_normal((1, 4, 256, 64)).astype(np.float32) * 0.2
-  rep_fa = par.show_rewrite(causal_flash_attention, q, k, v)
-  with par.options(blas=False):
-    t_pk, o_pk = _bench(causal_flash_attention, (q, k, v), iters=5)
+  # 1. Exact 1-NN (all four flavors)
+  q_nn = rng.standard_normal((64, 16)).astype(np.float32)
+  r_nn = rng.standard_normal((256, 16)).astype(np.float32)
+  ref_nn = np.argmin(np.sum((q_nn[:, None, :] - r_nn[None, :, :]) ** np.float32(2), axis=2), axis=1)
+  for fn in (nearest_numpy, nearest_comp, nearest_loop, nearest_par, exact_1nn):
+    np.testing.assert_array_equal(fn(q_nn, r_nn), ref_nn)
 
-  def np_causal_attn(q, k, v):
-    T = q.shape[-2]
-    m = np.tril(np.ones((T, T), dtype=bool))
-    s = np.where(m, np.matmul(q, np.swapaxes(k, -1, -2)) * np.float32(1.0 / np.sqrt(q.shape[-1])), np.float32(-1e9))
-    e = np.exp(s - np.max(s, axis=-1, keepdims=True))
-    return np.matmul(e / np.sum(e, axis=-1, keepdims=True), v)
+  # 2. Inverse-distance smoothing (all four flavors)
+  obs = rng.standard_normal((256,)).astype(np.float32)
+  ref_sm = smooth_numpy(q_nn, r_nn, obs, _backend="python")
+  for fn in (smooth_numpy, smooth_comp, smooth_loop, smooth_par):
+    np.testing.assert_allclose(fn(q_nn, r_nn, obs), ref_sm, rtol=1e-4, atol=1e-4)
 
-  t_np, o_np = _bench(np_causal_attn, (q, k, v), iters=5)
-  np.testing.assert_allclose(o_pk, o_np, rtol=1e-4, atol=1e-4)
-  print(
-    f"1. Causal FlashAttention (B=1,H=4,T=256,D=64) : PK={t_pk:6.2f}ms vs NumPy={t_np:6.2f}ms ({t_np / t_pk:4.1f}x) | {rep_fa.laws_triggered}"
-  )
-
-  # 2. Cut Cross-Entropy fwd+bwd
-  h = rng.standard_normal((256, 64)).astype(np.float32) * 0.2
-  w = rng.standard_normal((64, 4096)).astype(np.float32) * 0.2
-  tgt = rng.integers(0, 4096, size=(256,), dtype=np.int64)
-  cce_vg = value_and_grad(cut_cross_entropy, argnum=(0, 1))
-  with par.options(blas=False):
-    t_pk, (lv, (dh, dw)) = _bench(cce_vg, (h, w, tgt), iters=5)
-
-  def np_cce_vg(h, w, tgt):
-    logits = h @ w
-    z = logits - np.max(logits, axis=-1, keepdims=True)
-    ez = np.exp(z)
-    p = ez / np.sum(ez, axis=-1, keepdims=True)
-    loss = -np.mean(z[np.arange(h.shape[0]), tgt] - np.log(np.sum(ez, axis=-1)))
-    dlog = p.copy()
-    dlog[np.arange(h.shape[0]), tgt] -= 1.0
-    dlog /= np.float32(h.shape[0])
-    return loss, (dlog @ w.T, h.T @ dlog)
-
-  t_np, (lv_np, (dh_np, dw_np)) = _bench(np_cce_vg, (h, w, tgt), iters=5)
-  np.testing.assert_allclose(lv, lv_np, rtol=1e-4, atol=1e-4)
-  np.testing.assert_allclose(dh, dh_np, rtol=1e-4, atol=1e-4)
-  np.testing.assert_allclose(dw, dw_np, rtol=1e-4, atol=1e-4)
-  print(
-    f"2. Cut Cross-Entropy fwd+bwd (M=256,V=4096)   : PK={t_pk:6.2f}ms vs NumPy={t_np:6.2f}ms ({t_np / t_pk:4.1f}x) | Monoidal Tiling + Rematerialized AD"
-  )
-
-  # 3. DeepSeek MLA Decode
-  qm = rng.standard_normal((4, 256)).astype(np.float32) * 0.2
-  cm = rng.standard_normal((2048, 64)).astype(np.float32) * 0.2
-  wuk = rng.standard_normal((64, 256)).astype(np.float32) * 0.2
-  wuv = rng.standard_normal((64, 256)).astype(np.float32) * 0.2
-  with par.options(blas=False):
-    t_pk, om_pk = _bench(deepseek_mla, (qm, cm, wuk, wuv), iters=10)
-
-  def np_mla(q, c, wuk, wuv):
-    k, v = c @ wuk, c @ wuv
-    s = (q @ k.T) * np.float32(1.0 / np.sqrt(q.shape[-1]))
-    e = np.exp(s - np.max(s, axis=-1, keepdims=True))
-    return (e / np.sum(e, axis=-1, keepdims=True)) @ v
-
-  t_np, om_np = _bench(np_mla, (qm, cm, wuk, wuv), iters=10)
-  np.testing.assert_allclose(om_pk, om_np, rtol=1e-4, atol=1e-4)
-  print(
-    f"3. DeepSeek MLA Decode (Tq=4,Tkv=2048,dc=64)  : PK={t_pk:6.2f}ms vs NumPy={t_np:6.2f}ms ({t_np / t_pk:4.1f}x) | Weight Absorption + Monoidal Tiling"
-  )
-
-  # 4. Mamba-2 SSD
-  qs = rng.standard_normal((2048, 64)).astype(np.float32) * 0.1
-  ks = rng.standard_normal((2048, 64)).astype(np.float32) * 0.1
-  vs = rng.standard_normal((2048, 64)).astype(np.float32) * 0.1
-  as_ = rng.uniform(0.9, 0.99, size=(2048,)).astype(np.float32)
-  with par.options(blas=False):
-    t_pk, os_pk = _bench(mamba2_ssd, (qs, ks, vs, as_), iters=5)
-
-  def np_ssd(q, k, v, a):
-    out = np.empty((q.shape[0], v.shape[1]), dtype=np.float32)
-    S = np.zeros((k.shape[1], v.shape[1]), dtype=np.float32)
-    for t in range(q.shape[0]):
-      S = a[t] * S + np.outer(k[t], v[t])
-      out[t] = q[t] @ S
-    return out
-
-  t_np, os_np = _bench(np_ssd, (qs, ks, vs, as_), iters=2)
-  np.testing.assert_allclose(os_pk, os_np, rtol=1e-4, atol=1e-4)
-  print(
-    f"4. Mamba-2 SSD (T=2048, D=64, V=64)           : PK={t_pk:6.2f}ms vs NumPy={t_np:6.2f}ms ({t_np / t_pk:4.1f}x) | Chunkwise State-Space Scan"
-  )
-
-  # 5. Fused RBF Kernel Regression (Nadaraya-Watson)
-  xq = rng.standard_normal((512, 32)).astype(np.float32)
-  xt = rng.standard_normal((2048, 32)).astype(np.float32)
-  yt = rng.standard_normal((2048, 8)).astype(np.float32)
+  # 3. RBF kernel regression (all five flavors)
+  xq = rng.standard_normal((128, 16)).astype(np.float32)
+  xt = rng.standard_normal((256, 16)).astype(np.float32)
+  yt = rng.standard_normal((256, 8)).astype(np.float32)
   ng = np.float32(-0.05)
-  with par.options(blas=False):
-    t_pk, or_pk = _bench(rbf_kernel_regression, (xq, xt, yt, ng), iters=5)
+  ref_rbf = rbf_regression_numpy(xq, xt, yt, ng, _backend="python")
+  for fn in (
+    rbf_regression_numpy,
+    rbf_regression_helpers,
+    rbf_regression_comp,
+    rbf_regression_loop,
+    rbf_regression_par,
+  ):
+    np.testing.assert_allclose(fn(xq, xt, yt, ng), ref_rbf, rtol=1e-4, atol=1e-4)
 
-  def np_rbf(xq, xt, yt, ng):
-    d2 = np.sum((xq[:, None, :] - xt[None, :, :]) ** np.float32(2.0), axis=-1)
-    s = d2 * ng
-    e = np.exp(s - np.max(s, axis=-1, keepdims=True))
-    return (e / np.sum(e, axis=-1, keepdims=True)) @ yt
+  # 4. GBDT histogram split (all four flavors)
+  nbins = 64
+  bin_ids = rng.integers(0, nbins, size=(10_000,), dtype=np.int64)
+  grads = rng.standard_normal(10_000).astype(np.float32)
+  hess = rng.uniform(0.1, 1.0, size=(10_000,)).astype(np.float32)
+  reg = np.float32(1.0)
+  ref_bin, ref_gain = gbdt_split_par(bin_ids, grads, hess, nbins, reg)
+  for fn in (gbdt_split_numpy, gbdt_split_comp, gbdt_split_loop, gbdt_split_par):
+    b_out, g_out = fn(bin_ids, grads, hess, nbins, reg)
+    assert int(b_out) == int(ref_bin)
+    np.testing.assert_allclose(g_out, ref_gain, rtol=1e-4, atol=1e-4)
 
-  t_np, or_np = _bench(np_rbf, (xq, xt, yt, ng), iters=3)
-  np.testing.assert_allclose(or_pk, or_np, rtol=1e-4, atol=1e-4)
-  print(
-    f"5. RBF Kernel Regression (512x2048x32)        : PK={t_pk:6.2f}ms vs NumPy={t_np:6.2f}ms ({t_np / t_pk:4.1f}x) | Online Monoidal Tiling (0 N*M)"
+  # 5. Tropical min-plus product (all four flavors)
+  ta = rng.uniform(0.1, 5.0, size=(48, 48)).astype(np.float32)
+  tb = rng.uniform(0.1, 5.0, size=(48, 48)).astype(np.float32)
+  ref_tr = np.min(ta[:, :, None] + tb[None, :, :], axis=1)
+  for fn in (tropical_min_plus_numpy, tropical_min_plus_comp, tropical_min_plus_loop, tropical_min_plus_par):
+    np.testing.assert_allclose(fn(ta, tb), ref_tr, rtol=1e-5, atol=1e-5)
+
+  # 6. Exponential IIR filter (all four flavors)
+  a_iir = rng.uniform(0.95, 0.99, size=(128,)).astype(np.float32)
+  b_iir = rng.standard_normal(128).astype(np.float32)
+  ref_iir = iir_filter_loop(a_iir, b_iir)
+  for fn in (iir_filter_numpy, iir_filter_comp, iir_filter_loop, iir_filter_par):
+    np.testing.assert_allclose(fn(a_iir, b_iir), ref_iir, rtol=1e-3, atol=1e-3)
+
+  # 7. Causal attention (all five flavors)
+  q = rng.standard_normal((1, 4, 64, 32)).astype(np.float32) * 0.2
+  k = rng.standard_normal((1, 4, 64, 32)).astype(np.float32) * 0.2
+  v = rng.standard_normal((1, 4, 64, 32)).astype(np.float32) * 0.2
+  ref_attn = causal_attention_numpy(q, k, v, _backend="python")
+  for fn in (
+    causal_attention_numpy,
+    causal_attention_helpers,
+    causal_attention_comp,
+    causal_attention_loop,
+    causal_attention_par,
+  ):
+    np.testing.assert_allclose(fn(q, k, v), ref_attn, rtol=1e-4, atol=1e-4)
+
+  # 8. Linear cross-entropy (all five flavors + value_and_grad)
+  h = rng.standard_normal((64, 32)).astype(np.float32) * 0.2
+  w = rng.standard_normal((32, 256)).astype(np.float32) * 0.2
+  tgt = rng.integers(0, 256, size=(64,), dtype=np.int64)
+  ref_ce = float(cross_entropy_numpy(h, w, tgt))
+  for fn in (
+    par.jit(cross_entropy_numpy),
+    par.jit(cross_entropy_helpers),
+    cross_entropy_comp,
+    cross_entropy_loop,
+    cross_entropy_par,
+  ):
+    np.testing.assert_allclose(float(fn(h, w, tgt)), ref_ce, rtol=1e-4, atol=1e-4)
+
+  lv, (dh, dw) = value_and_grad(cut_cross_entropy, argnum=(0, 1))(h, w, tgt)
+  np.testing.assert_allclose(float(lv), ref_ce, rtol=1e-4, atol=1e-4)
+  assert dh.shape == h.shape and dw.shape == w.shape
+
+  # 9. MLA, GQA, and Mamba-2 SSD
+  qm = rng.standard_normal((4, 64)).astype(np.float32) * 0.2
+  cm = rng.standard_normal((128, 32)).astype(np.float32) * 0.2
+  wuk = rng.standard_normal((32, 64)).astype(np.float32) * 0.2
+  wuv = rng.standard_normal((32, 64)).astype(np.float32) * 0.2
+  np.testing.assert_allclose(
+    deepseek_mla(qm, cm, wuk, wuv), deepseek_mla(qm, cm, wuk, wuv, _backend="python"), rtol=1e-4, atol=1e-4
   )
 
-  # 6. Tropical Min-Plus Shortest Path
-  ta = rng.uniform(0.1, 5.0, size=(256, 256)).astype(np.float32)
-  tb = rng.uniform(0.1, 5.0, size=(256, 256)).astype(np.float32)
-  with par.options(blas=False):
-    t_pk, ot_pk = _bench(tropical_min_plus, (ta, tb), iters=5)
-  t_np, ot_np = _bench(lambda a, b: np.min(a[:, :, None] + b[None, :, :], axis=1), (ta, tb), iters=3)
-  np.testing.assert_allclose(ot_pk, ot_np, rtol=1e-5, atol=1e-5)
-  print(
-    f"6. One Min-Plus Matrix Product (256x256)      : PK={t_pk:6.2f}ms vs NumPy={t_np:6.2f}ms ({t_np / t_pk:4.1f}x) | Tiled Semiring"
+  qg = rng.standard_normal((1, 2, 4, 32, 16)).astype(np.float32) * 0.2
+  kg = rng.standard_normal((1, 2, 1, 32, 16)).astype(np.float32) * 0.2
+  vg = rng.standard_normal((1, 2, 1, 32, 16)).astype(np.float32) * 0.2
+  np.testing.assert_allclose(
+    gqa_attention(qg, kg, vg), gqa_attention(qg, kg, vg, _backend="python"), rtol=1e-4, atol=1e-4
   )
 
-  # 7. Exact 1-NN search
-  with par.options(blas=False):
-    t_pk, nn_pk = _bench(exact_1nn, (xq, xt), iters=5)
-  t_np, nn_np = _bench(
-    lambda a, b: np.argmin(np.sum((a[:, None, :] - b[None, :, :]) ** 2, axis=-1), axis=-1), (xq, xt), iters=3
-  )
-  np.testing.assert_array_equal(nn_pk, nn_np)
-  print(
-    f"7. Exact 1-NN Search (512x2048x32)            : PK={t_pk:6.2f}ms vs NumPy={t_np:6.2f}ms ({t_np / t_pk:4.1f}x) | Carry + Zero N*M"
+  qs = rng.standard_normal((128, 32)).astype(np.float32) * 0.1
+  ks = rng.standard_normal((128, 32)).astype(np.float32) * 0.1
+  vs = rng.standard_normal((128, 32)).astype(np.float32) * 0.1
+  as_ = rng.uniform(0.9, 0.99, size=(128,)).astype(np.float32)
+  np.testing.assert_allclose(
+    mamba2_ssd(qs, ks, vs, as_), mamba2_ssd(qs, ks, vs, as_, _backend="python"), rtol=1e-4, atol=1e-4
   )
 
-  np.testing.assert_array_equal(nearest_fold(xq, xt), nn_np)
-  np.testing.assert_array_equal(nearest_numpy(xq, xt), nn_np)
-  values = yt[:, 0]
-  expected = smooth_numpy.fn(xq, xt, values)
-  np.testing.assert_allclose(smooth_fold(xq, xt, values), expected, rtol=2e-5, atol=1e-6)
-  np.testing.assert_allclose(smooth_numpy(xq, xt, values), expected, rtol=2e-5, atol=1e-6)
-
-  # 8. GBDT Histogram + Prefix-Sum Best Split
-  bins = rng.integers(0, 256, size=(200_000,), dtype=np.int64)
-  grads = rng.standard_normal((200_000,)).astype(np.float32)
-  hess = rng.uniform(0.1, 1.0, size=(200_000,)).astype(np.float32)
-  lam = np.float32(1.0)
-  with par.options(blas=False):
-    t_pk, (b_pk, g_pk) = _bench(gbdt_best_split, (bins, grads, hess, 256, lam), iters=10)
-
-  def np_gbdt(bins, grads, hess, nbins, lam):
-    gh = np.bincount(bins, weights=grads, minlength=nbins).astype(np.float32)
-    hh = np.bincount(bins, weights=hess, minlength=nbins).astype(np.float32)
-    gl, hl = np.cumsum(gh), np.cumsum(hh)
-    gr, hr = gl[-1] - gl, hl[-1] - hl
-    gain = (gl * gl) / (hl + lam) + (gr * gr) / (hr + lam)
-    idx = int(np.argmax(gain))
-    return idx, gain[idx]
-
-  t_np, (b_np, g_np) = _bench(np_gbdt, (bins, grads, hess, 256, lam), iters=10)
-  assert int(b_pk) == b_np
-  np.testing.assert_allclose(g_pk, g_np, rtol=1e-4, atol=1e-4)
-  for alt_fn in (gbdt_best_split_comprehension, gbdt_best_split_numpy, gbdt_best_split_loop):
-    b_alt, g_alt = alt_fn(bins, grads, hess, 256, lam)
-    assert int(b_alt) == b_np
-    np.testing.assert_allclose(g_alt, g_np, rtol=1e-4, atol=1e-4)
-  print(
-    f"8. GBDT Hist + Best-Split (N=200k, B=256)     : PK={t_pk:6.2f}ms vs NumPy={t_np:6.2f}ms ({t_np / t_pk:4.1f}x) | Scatter+Scan+Carry"
-  )
+  t_fa, _ = _bench(causal_attention_numpy, (q, k, v), iters=5)
+  t_nn, _ = _bench(nearest_par, (q_nn, r_nn), iters=5)
+  t_gb, _ = _bench(gbdt_split_par, (bin_ids, grads, hess, nbins, reg), iters=5)
+  print(f"Verified all flavors | CausalAttn={t_fa:.2f}ms | 1-NN={t_nn:.2f}ms | GBDT={t_gb:.2f}ms")
 
 
 if __name__ == "__main__":

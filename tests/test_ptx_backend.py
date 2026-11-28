@@ -266,11 +266,10 @@ def test_ptx_nanogpt_coverage_and_bundled_module(monkeypatch):
     from examples import nanogpt
 
     rng = np.random.default_rng(0)
-    model = nanogpt.init(vocab=65, context=64, width=128, layers=2, rng=rng)
-    model = nanogpt.tree_map(lambda a: a.astype(np.float32), model)
+    model = nanogpt.NanoGPT(vocab=65, context=64, width=128, layers=2, heads=4, rng=rng, dtype=np.float32)
     tok = rng.integers(0, 65, size=(16, 64), dtype=np.int64)
     tgt = rng.integers(0, 65, size=(16, 64), dtype=np.int64)
-    cas = np.tril(np.ones((64, 64), dtype=bool))
+    cas = par.nn.causal_mask(64)
 
     @par.jit
     def compiled_vg(m, t, y, c):
