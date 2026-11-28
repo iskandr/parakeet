@@ -62,72 +62,96 @@ without a single special case for broadcasting or transposes.
 
 ---
 
-## From Python and `par.*` to the seven primitives
+## From Python and `par.*` to the eight primitives
 
-Everything you write in NumPy, Python, or `par.*` lowers into **six source
-primitives**, and the locality optimizer adds a **seventh (`IndexTile`)** when
-blocking reductions for CPU cache or GPU shared memory:
+Everything you write in NumPy, Python, or `par.*` lowers into **seven source
+primitives** (grouped below into six families, with `IndexFilter` and
+`IndexExpand` sharing the dynamic-length card), and the locality optimizer adds
+an **eighth (`IndexTile`)** when blocking reductions for CPU cache or GPU shared
+memory:
 
-| Internal primitive | Surface NumPy / Python idioms | `par.*` operators that reduce here | What it captures |
-|---|---|---|---|
-| **[`IndexMap`](#map)** | Element-wise ufuncs, broadcasting, slices/views materialized, `np.where`, comprehensions, `@` / `einsum` outer grid | `par.map`, `par.each`, `par.imap`, `par.allpairs`, `par.outer_map`, `par.parfor`, `par.pmap1`/`pmap2` | Independent work at every coordinate `(i, j, …)` |
-| **[`IndexReduce`](#reduce-and-fold)** | `np.sum`, `prod`, `min`, `max`, `mean`, `var`, `std`, `all`, `any`, `argmin`, `argmax`, inner dot of `@` / `einsum` | `par.reduce`, `par.ireduce`, `par.fold`, `par.topk_fold` | Associative reduction or ordered multi-field (`Carry`) fold |
-| **[`IndexScan`](#scan)** | `np.cumsum`, `np.cumprod`, affine/bilinear `for t in range(T):` loops | `par.scan` | Running prefix accumulation where step `t` depends on `0..t` |
-| **[`IndexFilter`](#filter-and-expand)** | Boolean masking `x[mask]`, `np.nonzero`, `np.flatnonzero` | `par.filter`, `par.filter_reduce` (with `IndexReduce`), `par.split_bytes` | 1-to-0/1 stream compaction by predicate |
-| **[`IndexExpand`](#filter-and-expand)** | Variable-length emission into `RaggedArray` | `par.flatmap`, `par.filter_pairs` | Two-pass 1-to-K ragged compaction (count → prefix sum → emit) |
-| **[`IndexScatter`](#scatter)** | `np.bincount`, `np.add.at`, canonical `for i: out[idx[i]] += v`, inverted `[np.sum(v[idx == b]) for b in range(n)]` | `par.scatter_add`, `par.segmented_histogram2d` | Associative accumulation into shared output bins |
-| **[`IndexWavefront`](#wavefront)** | Anti-diagonal and banded 2D DP recurrences | `par.wavefront`, `par.batched_wavefront`, `par.soft_align` | Cell `(i, j)` depends on `(i−1, j)`, `(i, j−1)`, `(i−1, j−1)` |
-| **[`IndexTile`](#tile)** *(optimizer-emitted)* | Emitted automatically from `IndexMap` wrapping `IndexReduce` (`@`, `einsum`, 1-NN, attention, RBF) | *(Never written directly)* | Blocked execution with staged L1/L2 cache, register, or GPU SRAM tiles |
+<div class="pk-prim-grid" markdown>
 
-### The seven primitives in brief
+<div class="pk-prim-card" id="map" markdown>
+<div class="pk-prim-head"><strong><code>IndexMap</code></strong> · independent N-D grid</div>
 
-#### Map (`IndexMap`) {#map}
+Evaluates a pure body independently at every coordinate of an N-D box. Vertical
+chains collapse (`np.tanh(x * a) + b`), sibling maps merge (`sin(x), cos(x)`),
+and nested maps flatten into one parallel grid.
 
-Evaluates a pure body independently at every coordinate of an N-D box. Because
-iterations are independent, vertical chains collapse (`np.tanh(x * a) + b`),
-sibling maps merge (`sin(x), cos(x)`), and nested maps flatten into one
-multi-dimensional grid for CPU threads and GPUs.
+* **NumPy / Python:** ufuncs, broadcasting, slices, `np.where`, comprehensions, `@` / `einsum` outer grid
+* **`par.*`:** `par.map`, `par.each`, `par.imap`, `par.allpairs`, `par.outer_map`, `par.parfor`
+</div>
 
-#### Reduce and Fold (`IndexReduce`) {#reduce-and-fold}
+<div class="pk-prim-card" id="reduce-and-fold" markdown>
+<div class="pk-prim-head"><strong><code>IndexReduce</code></strong> · reductions &amp; ordered folds</div>
 
-Combines values across a reduction box into one or more scalar accumulators.
-Associative combiners (`+`, `*`, `min`, `max`, bitwise ops) split across
-threads and SIMD lanes. Structured state—like `(best_val, best_idx)` in
-`argmin` or Welford variance in `par.fold`—attaches as `Carry` fields that
-merge in strict left-to-right order so ties and NaNs stay exact.
+Combines values across a reduction box into scalar accumulators. Associative
+combiners (`+`, `*`, `min`, `max`, bitwise ops) split across threads and SIMD
+lanes; structured `Carry` state (`argmin`, Welford variance, `par.fold`) merges
+in strict left-to-right order so ties and NaNs stay exact.
 
-#### Scan (`IndexScan`) {#scan}
+* **NumPy / Python:** `sum`, `prod`, `min`, `max`, `mean`, `var`, `argmin`, `argmax`, inner dot of `@` / `einsum`
+* **`par.*`:** `par.reduce`, `par.ireduce`, `par.fold`, `par.topk_fold`
+</div>
 
-Computes running prefixes (`np.cumsum`, `par.scan`) via a 3-stage parallel
-chunk scan. Consumer maps fuse directly into the scan's `emit` block
-(`np.cumsum(x) * 2 + 1` in one pass), and plain Python affine/bilinear `for`
-loops rewrite via [Law 4 chunkwise duality](algebra.md#law-4-chunkwise-state-space-duality).
+<div class="pk-prim-card" id="scan" markdown>
+<div class="pk-prim-head"><strong><code>IndexScan</code></strong> · running prefixes &amp; recurrences</div>
 
-#### Filter and Expand (`IndexFilter`, `IndexExpand`) {#filter-and-expand}
+Computes running prefixes via a 3-stage parallel chunk scan. Consumer maps fuse
+directly into `emit` (`np.cumsum(x) * 2 + 1` in one pass), and affine/bilinear
+`for t:` loops rewrite via [Law 4 chunkwise duality](algebra.md#law-4-chunkwise-state-space-duality).
+
+* **NumPy / Python:** `np.cumsum`, `np.cumprod`, affine/bilinear `for t in range(T):` loops
+* **`par.*`:** `par.scan`
+</div>
+
+<div class="pk-prim-card" id="filter-and-expand" markdown>
+<div class="pk-prim-head"><strong><code>IndexFilter</code> &amp; <code>IndexExpand</code></strong> · compaction &amp; ragged emission</div>
 
 Compacts sparse or variable-length outputs without serial locks. Chained
-filters merge (`x[p][q]` → `p and q`), and `IndexFilter` followed by
-`IndexReduce` collapses into a zero-allocation guarded loop (`np.sum(x[x > 0])`).
+filters merge (`x[p][q]`), `Filter` + `Reduce` collapses into a guarded
+zero-allocation loop (`np.sum(x[x > 0])`), and `IndexExpand` emits `RaggedArray`s
+in two passes (count → prefix sum → emit).
 
-#### Scatter (`IndexScatter`) {#scatter}
+* **NumPy / Python:** boolean masks `x[mask]`, `np.nonzero`, `np.flatnonzero`
+* **`par.*`:** `par.filter`, `par.filter_reduce`, `par.split_bytes`, `par.flatmap`, `par.filter_pairs`
+</div>
+
+<div class="pk-prim-card" id="scatter" markdown>
+<div class="pk-prim-head"><strong><code>IndexScatter</code></strong> · keyed histograms &amp; bin updates</div>
 
 Accumulates associatively into indexed bins. Sibling histograms sharing an
-index array merge into a single pass, lower to thread-privatized bins on CPU
-and atomics on GPU, and differentiate to a gather (`g[idx]`) under `par.grad`.
+index array merge into one pass, lower to thread-privatized bins on CPU and
+atomics on GPU, and differentiate to a gather (`g[idx]`) under `par.grad`.
 
-#### Wavefront (`IndexWavefront`) {#wavefront}
+* **NumPy / Python:** `np.bincount`, `np.add.at`, `for i: out[idx[i]] += v`, inverted `[np.sum(v[idx == b]) for b in range(n)]`
+* **`par.*`:** `par.scatter_add`, `par.segmented_histogram2d`
+</div>
+
+<div class="pk-prim-card" id="wavefront" markdown>
+<div class="pk-prim-head"><strong><code>IndexWavefront</code></strong> · anti-diagonal 2D DP</div>
 
 Schedules 2D dynamic programming along parallel anti-diagonals in `O(M)`
-rolling memory, never allocating the full `M × N` DP table.
+rolling memory whenever cell `(i, j)` depends on `(i−1, j)`, `(i, j−1)`, and
+`(i−1, j−1)`, avoiding full `M × N` DP table allocation.
 
-#### Tile (`IndexTile`) {#tile}
+* **NumPy / Python:** banded &amp; anti-diagonal 2D recurrences
+* **`par.*`:** `par.wavefront`, `par.batched_wavefront`, `par.soft_align`
+</div>
+
+<div class="pk-prim-card pk-prim-card--wide" id="tile" markdown>
+<div class="pk-prim-head"><strong><code>IndexTile</code></strong> · optimizer-emitted locality blocking</div>
 
 Following [Hielscher (2013)](https://cs.nyu.edu/media/publications/eric_h.pdf),
-middle-end locality passes rewrite `IndexMap` wrapping `IndexReduce` into
-nested `IndexTile` operators with explicit `TileStage` buffers—driving CPU
-L1/L2 cache blocking, `2×4` register jamming, GPU `__shared__` /
-`threadgroup` memory, Metal `simdgroup_matrix`, and CUDA TF32 WMMA from one
-representation.
+never written directly: middle-end passes rewrite `IndexMap` wrapping
+`IndexReduce` (`@`, `einsum`, 1-NN, attention, RBF) into nested `IndexTile`
+operators with explicit `TileStage` buffers—driving CPU L1/L2 cache blocking,
+`2×4` register jamming, GPU `__shared__` / `threadgroup` memory, Metal
+`simdgroup_matrix`, and CUDA TF32 `mma.sync` from one representation.
+</div>
+
+</div>
 
 <figure markdown="span">
   ![Vertical, filter-reduce, and sibling fusion collapse memory passes](assets/diag-fusion.svg)
@@ -330,6 +354,6 @@ print(spec.source)  # host C
 print(spec.kernels)  # CUDA or Metal kernels
 ```
 
-**Next:** [Algebraic laws](algebra.md) explains the six mathematical identities
+**Next:** [Algebraic optimization](algebra.md) explains the six mathematical identities
 that eliminate `O(N²)` memory, parallelize `O(T)` recurrences, and rematerialize
 gradients without quadratic tapes.

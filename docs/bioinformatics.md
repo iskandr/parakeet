@@ -104,7 +104,7 @@ exponential recurrences rewrite automatically into
 
 [`examples/bio_algorithms.py`](https://github.com/iskandr/parakeet/blob/master/examples/bio_algorithms.py)
 implements seven textbook algorithms in compiled Python/NumPy
-([see head-to-head timings](release-benchmarks.md#bioinformatics-and-structural-biology-apple-m1-pro-10-cores)):
+([see head-to-head timings](release-benchmarks.md#bioinformatics-and-structural-biology-24-core-amd-epyc)):
 
 | Algorithm | Function | Key Parakeet mechanisms |
 |---|---|---|

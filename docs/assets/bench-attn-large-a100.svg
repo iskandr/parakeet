@@ -1,0 +1,187 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 372" width="680" height="372" role="img" aria-label="Large-Scale Causal Attention on NVIDIA A100 (4 × 16 × 4,096 × 64)">
+<rect x="0.5" y="0.5" width="679" height="371" rx="10" fill="#ffffff" stroke="#cbd5e1"/>
+<text x="20" y="28" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#0f172a">Large-Scale Causal Attention on NVIDIA A100 (4 × 16 × 4,096 × 64)</text>
+<text x="20" y="48" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#475569">Online monoidal tiling + Law 5 causal block skipping vs. SDPA, JAX, and CuPy.</text>
+<circle cx="25.0" cy="66" r="4.5" fill="#0d9488"/>
+<text x="34.0" y="70" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" fill="#0f766e">Parakeet</text>
+<circle cx="109.4" cy="66" r="4.5" fill="#2563eb"/>
+<text x="118.4" y="70" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="500" fill="#0f172a">Compiled / Specialist</text>
+<circle cx="282.2" cy="66" r="4.5" fill="#7c3aed"/>
+<text x="291.2" y="70" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="500" fill="#0f172a">JAX jit</text>
+<circle cx="359.8" cy="66" r="4.5" fill="#64748b"/>
+<text x="368.8" y="70" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="500" fill="#0f172a">NumPy / CuPy</text>
+<rect x="218.0" y="84.0" width="316.0" height="228.0" rx="5" fill="#fafbfc" stroke="#e2e8f0" stroke-width="1"/>
+<line x1="241.5" y1="84.0" x2="241.5" y2="312.0" stroke="#f1f5f9" stroke-width="1"/>
+<text x="241.5" y="330.0" text-anchor="middle" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12" fill="#64748b">5</text>
+<line x1="314.7" y1="84.0" x2="314.7" y2="312.0" stroke="#e2e8f0" stroke-width="1"/>
+<text x="314.7" y="330.0" text-anchor="middle" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12" fill="#64748b">10</text>
+<line x1="387.8" y1="84.0" x2="387.8" y2="312.0" stroke="#f1f5f9" stroke-width="1"/>
+<text x="387.8" y="330.0" text-anchor="middle" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12" fill="#64748b">20</text>
+<line x1="484.4" y1="84.0" x2="484.4" y2="312.0" stroke="#f1f5f9" stroke-width="1"/>
+<text x="484.4" y="330.0" text-anchor="middle" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12" fill="#64748b">50</text>
+<text x="376.0" y="348.0" text-anchor="middle" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#64748b">Latency (ms, log scale, lower is better)</text>
+<text x="208.0" y="107.8" text-anchor="end" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="500" fill="#0f172a">PyTorch SDPA (cuDNN)</text>
+<line x1="269.1" y1="103.0" x2="272.2" y2="103.0" stroke="#2563eb" stroke-opacity="0.55" stroke-width="2.0"/>
+<circle cx="269.6" cy="107.8" r="2.8" fill="#2563eb" fill-opacity="0.34"/>
+<circle cx="269.7" cy="102.1" r="2.8" fill="#2563eb" fill-opacity="0.34"/>
+<circle cx="269.9" cy="105.8" r="2.8" fill="#2563eb" fill-opacity="0.34"/>
+<circle cx="271.2" cy="101.0" r="2.8" fill="#2563eb" fill-opacity="0.34"/>
+<circle cx="270.3" cy="98.7" r="2.8" fill="#2563eb" fill-opacity="0.34"/>
+<circle cx="271.4" cy="108.8" r="2.8" fill="#2563eb" fill-opacity="0.34"/>
+<circle cx="269.5" cy="109.3" r="2.8" fill="#2563eb" fill-opacity="0.34"/>
+<circle cx="271.7" cy="105.0" r="2.8" fill="#2563eb" fill-opacity="0.34"/>
+<circle cx="270.1" cy="100.4" r="2.8" fill="#2563eb" fill-opacity="0.34"/>
+<circle cx="269.1" cy="107.5" r="2.8" fill="#2563eb" fill-opacity="0.34"/>
+<circle cx="270.5" cy="109.1" r="2.8" fill="#2563eb" fill-opacity="0.34"/>
+<circle cx="271.6" cy="103.4" r="2.8" fill="#2563eb" fill-opacity="0.34"/>
+<circle cx="270.6" cy="98.8" r="2.8" fill="#2563eb" fill-opacity="0.34"/>
+<circle cx="270.6" cy="108.1" r="2.8" fill="#2563eb" fill-opacity="0.34"/>
+<circle cx="272.2" cy="99.8" r="2.8" fill="#2563eb" fill-opacity="0.34"/>
+<circle cx="271.8" cy="102.3" r="2.8" fill="#2563eb" fill-opacity="0.34"/>
+<circle cx="270.9" cy="102.2" r="2.8" fill="#2563eb" fill-opacity="0.34"/>
+<circle cx="270.7" cy="105.3" r="2.8" fill="#2563eb" fill-opacity="0.34"/>
+<circle cx="271.9" cy="104.3" r="2.8" fill="#2563eb" fill-opacity="0.34"/>
+<circle cx="271.4" cy="97.9" r="2.8" fill="#2563eb" fill-opacity="0.34"/>
+<circle cx="271.4" cy="106.8" r="2.8" fill="#2563eb" fill-opacity="0.34"/>
+<rect x="268.7" y="96.0" width="4.0" height="14.0" rx="3" fill="#2563eb" fill-opacity="0.30" stroke="#2563eb" stroke-width="1.6"/>
+<circle cx="270.7" cy="103.0" r="5.0" fill="#2563eb" stroke="#ffffff" stroke-width="1.5"/>
+<text x="544.0" y="107.8" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="500" fill="#0f172a">6.59 ms<tspan dx="3" font-weight="400" font-size="11" fill="#64748b">±0.043</tspan></text>
+<line x1="218.0" y1="122.0" x2="534.0" y2="122.0" stroke="#f1f5f9" stroke-width="1"/>
+<text x="208.0" y="145.8" text-anchor="end" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="500" fill="#0f172a">torch.compile (SDPA)</text>
+<line x1="271.7" y1="141.0" x2="273.9" y2="141.0" stroke="#2563eb" stroke-opacity="0.55" stroke-width="2.0"/>
+<circle cx="273.3" cy="143.1" r="2.8" fill="#2563eb" fill-opacity="0.34"/>
+<circle cx="273.6" cy="136.0" r="2.8" fill="#2563eb" fill-opacity="0.34"/>
+<circle cx="272.2" cy="142.7" r="2.8" fill="#2563eb" fill-opacity="0.34"/>
+<circle cx="273.4" cy="138.2" r="2.8" fill="#2563eb" fill-opacity="0.34"/>
+<circle cx="272.2" cy="137.4" r="2.8" fill="#2563eb" fill-opacity="0.34"/>
+<circle cx="273.7" cy="137.4" r="2.8" fill="#2563eb" fill-opacity="0.34"/>
+<circle cx="273.8" cy="134.9" r="2.8" fill="#2563eb" fill-opacity="0.34"/>
+<circle cx="273.1" cy="147.6" r="2.8" fill="#2563eb" fill-opacity="0.34"/>
+<circle cx="271.7" cy="138.7" r="2.8" fill="#2563eb" fill-opacity="0.34"/>
+<circle cx="272.4" cy="146.5" r="2.8" fill="#2563eb" fill-opacity="0.34"/>
+<circle cx="272.3" cy="146.9" r="2.8" fill="#2563eb" fill-opacity="0.34"/>
+<circle cx="273.3" cy="140.8" r="2.8" fill="#2563eb" fill-opacity="0.34"/>
+<circle cx="273.8" cy="147.5" r="2.8" fill="#2563eb" fill-opacity="0.34"/>
+<circle cx="273.0" cy="145.4" r="2.8" fill="#2563eb" fill-opacity="0.34"/>
+<circle cx="273.9" cy="144.8" r="2.8" fill="#2563eb" fill-opacity="0.34"/>
+<circle cx="273.2" cy="147.7" r="2.8" fill="#2563eb" fill-opacity="0.34"/>
+<circle cx="273.5" cy="147.5" r="2.8" fill="#2563eb" fill-opacity="0.34"/>
+<circle cx="272.9" cy="142.4" r="2.8" fill="#2563eb" fill-opacity="0.34"/>
+<circle cx="272.2" cy="141.0" r="2.8" fill="#2563eb" fill-opacity="0.34"/>
+<circle cx="273.6" cy="135.1" r="2.8" fill="#2563eb" fill-opacity="0.34"/>
+<circle cx="273.1" cy="137.7" r="2.8" fill="#2563eb" fill-opacity="0.34"/>
+<rect x="271.2" y="134.0" width="4.0" height="14.0" rx="3" fill="#2563eb" fill-opacity="0.30" stroke="#2563eb" stroke-width="1.6"/>
+<circle cx="273.2" cy="141.0" r="5.0" fill="#2563eb" stroke="#ffffff" stroke-width="1.5"/>
+<text x="544.0" y="145.8" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="500" fill="#0f172a">6.75 ms<tspan dx="3" font-weight="400" font-size="11" fill="#64748b">±0.037</tspan></text>
+<line x1="218.0" y1="160.0" x2="534.0" y2="160.0" stroke="#f1f5f9" stroke-width="1"/>
+<text x="208.0" y="183.8" text-anchor="end" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="500" fill="#0f172a">JAX jit</text>
+<line x1="356.3" y1="179.0" x2="357.1" y2="179.0" stroke="#7c3aed" stroke-opacity="0.55" stroke-width="2.0"/>
+<circle cx="357.1" cy="184.0" r="2.8" fill="#7c3aed" fill-opacity="0.34"/>
+<circle cx="357.1" cy="174.8" r="2.8" fill="#7c3aed" fill-opacity="0.34"/>
+<circle cx="357.0" cy="177.4" r="2.8" fill="#7c3aed" fill-opacity="0.34"/>
+<circle cx="357.0" cy="174.7" r="2.8" fill="#7c3aed" fill-opacity="0.34"/>
+<circle cx="356.7" cy="184.1" r="2.8" fill="#7c3aed" fill-opacity="0.34"/>
+<circle cx="357.0" cy="173.7" r="2.8" fill="#7c3aed" fill-opacity="0.34"/>
+<circle cx="356.9" cy="185.5" r="2.8" fill="#7c3aed" fill-opacity="0.34"/>
+<circle cx="356.8" cy="177.3" r="2.8" fill="#7c3aed" fill-opacity="0.34"/>
+<circle cx="356.8" cy="173.9" r="2.8" fill="#7c3aed" fill-opacity="0.34"/>
+<circle cx="356.5" cy="175.0" r="2.8" fill="#7c3aed" fill-opacity="0.34"/>
+<circle cx="356.6" cy="175.5" r="2.8" fill="#7c3aed" fill-opacity="0.34"/>
+<circle cx="356.4" cy="175.1" r="2.8" fill="#7c3aed" fill-opacity="0.34"/>
+<circle cx="356.7" cy="182.8" r="2.8" fill="#7c3aed" fill-opacity="0.34"/>
+<circle cx="356.4" cy="180.2" r="2.8" fill="#7c3aed" fill-opacity="0.34"/>
+<circle cx="356.3" cy="174.4" r="2.8" fill="#7c3aed" fill-opacity="0.34"/>
+<circle cx="356.6" cy="184.2" r="2.8" fill="#7c3aed" fill-opacity="0.34"/>
+<circle cx="356.7" cy="184.6" r="2.8" fill="#7c3aed" fill-opacity="0.34"/>
+<circle cx="356.6" cy="182.7" r="2.8" fill="#7c3aed" fill-opacity="0.34"/>
+<circle cx="356.4" cy="172.9" r="2.8" fill="#7c3aed" fill-opacity="0.34"/>
+<circle cx="356.4" cy="181.5" r="2.8" fill="#7c3aed" fill-opacity="0.34"/>
+<circle cx="356.7" cy="179.6" r="2.8" fill="#7c3aed" fill-opacity="0.34"/>
+<rect x="354.7" y="172.0" width="4.0" height="14.0" rx="3" fill="#7c3aed" fill-opacity="0.30" stroke="#7c3aed" stroke-width="1.6"/>
+<circle cx="356.7" cy="179.0" r="5.0" fill="#7c3aed" stroke="#ffffff" stroke-width="1.5"/>
+<text x="544.0" y="183.8" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="500" fill="#0f172a">14.9 ms<tspan dx="3" font-weight="400" font-size="11" fill="#64748b">±0.032</tspan></text>
+<rect x="219.0" y="200.3" width="314.0" height="33.4" rx="3" fill="#f0fdfa"/>
+<line x1="218.0" y1="198.0" x2="534.0" y2="198.0" stroke="#f1f5f9" stroke-width="1"/>
+<text x="208.0" y="221.8" text-anchor="end" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#0f766e">Parakeet (_helpers)</text>
+<line x1="404.5" y1="217.0" x2="405.8" y2="217.0" stroke="#0f766e" stroke-opacity="0.55" stroke-width="2.0"/>
+<circle cx="404.9" cy="212.7" r="2.8" fill="#0f766e" fill-opacity="0.34"/>
+<circle cx="405.2" cy="215.3" r="2.8" fill="#0f766e" fill-opacity="0.34"/>
+<circle cx="404.9" cy="221.8" r="2.8" fill="#0f766e" fill-opacity="0.34"/>
+<circle cx="404.8" cy="210.7" r="2.8" fill="#0f766e" fill-opacity="0.34"/>
+<circle cx="404.7" cy="214.8" r="2.8" fill="#0f766e" fill-opacity="0.34"/>
+<circle cx="405.8" cy="219.1" r="2.8" fill="#0f766e" fill-opacity="0.34"/>
+<circle cx="405.0" cy="210.9" r="2.8" fill="#0f766e" fill-opacity="0.34"/>
+<circle cx="404.9" cy="211.8" r="2.8" fill="#0f766e" fill-opacity="0.34"/>
+<circle cx="405.2" cy="216.9" r="2.8" fill="#0f766e" fill-opacity="0.34"/>
+<circle cx="404.9" cy="219.3" r="2.8" fill="#0f766e" fill-opacity="0.34"/>
+<circle cx="404.6" cy="210.9" r="2.8" fill="#0f766e" fill-opacity="0.34"/>
+<circle cx="405.0" cy="222.6" r="2.8" fill="#0f766e" fill-opacity="0.34"/>
+<circle cx="405.0" cy="218.0" r="2.8" fill="#0f766e" fill-opacity="0.34"/>
+<circle cx="405.5" cy="223.4" r="2.8" fill="#0f766e" fill-opacity="0.34"/>
+<circle cx="405.0" cy="220.5" r="2.8" fill="#0f766e" fill-opacity="0.34"/>
+<circle cx="405.2" cy="212.3" r="2.8" fill="#0f766e" fill-opacity="0.34"/>
+<circle cx="405.0" cy="222.0" r="2.8" fill="#0f766e" fill-opacity="0.34"/>
+<circle cx="404.5" cy="221.8" r="2.8" fill="#0f766e" fill-opacity="0.34"/>
+<circle cx="404.9" cy="213.3" r="2.8" fill="#0f766e" fill-opacity="0.34"/>
+<circle cx="405.1" cy="214.3" r="2.8" fill="#0f766e" fill-opacity="0.34"/>
+<circle cx="404.7" cy="213.3" r="2.8" fill="#0f766e" fill-opacity="0.34"/>
+<rect x="403.0" y="210.0" width="4.0" height="14.0" rx="3" fill="#0f766e" fill-opacity="0.30" stroke="#0f766e" stroke-width="1.6"/>
+<circle cx="405.0" cy="217.0" r="5.0" fill="#0f766e" stroke="#ffffff" stroke-width="1.5"/>
+<text x="544.0" y="221.8" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="700" fill="#0f766e">23.5 ms<tspan dx="3" font-weight="400" font-size="11" fill="#64748b">±0.033</tspan></text>
+<rect x="219.0" y="238.3" width="314.0" height="33.4" rx="3" fill="#f0fdfa"/>
+<line x1="218.0" y1="236.0" x2="534.0" y2="236.0" stroke="#f1f5f9" stroke-width="1"/>
+<text x="208.0" y="259.8" text-anchor="end" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#0f766e">Parakeet (_numpy)</text>
+<line x1="404.7" y1="255.0" x2="430.8" y2="255.0" stroke="#0d9488" stroke-opacity="0.55" stroke-width="2.0"/>
+<circle cx="430.3" cy="250.4" r="2.8" fill="#0d9488" fill-opacity="0.34"/>
+<circle cx="430.8" cy="254.9" r="2.8" fill="#0d9488" fill-opacity="0.34"/>
+<circle cx="430.1" cy="258.1" r="2.8" fill="#0d9488" fill-opacity="0.34"/>
+<circle cx="430.6" cy="259.0" r="2.8" fill="#0d9488" fill-opacity="0.34"/>
+<circle cx="413.8" cy="254.1" r="2.8" fill="#0d9488" fill-opacity="0.34"/>
+<circle cx="405.4" cy="253.9" r="2.8" fill="#0d9488" fill-opacity="0.34"/>
+<circle cx="405.0" cy="253.7" r="2.8" fill="#0d9488" fill-opacity="0.34"/>
+<circle cx="405.4" cy="249.0" r="2.8" fill="#0d9488" fill-opacity="0.34"/>
+<circle cx="405.5" cy="258.6" r="2.8" fill="#0d9488" fill-opacity="0.34"/>
+<circle cx="405.1" cy="251.4" r="2.8" fill="#0d9488" fill-opacity="0.34"/>
+<circle cx="405.0" cy="253.8" r="2.8" fill="#0d9488" fill-opacity="0.34"/>
+<circle cx="404.7" cy="257.2" r="2.8" fill="#0d9488" fill-opacity="0.34"/>
+<circle cx="404.8" cy="251.0" r="2.8" fill="#0d9488" fill-opacity="0.34"/>
+<circle cx="405.0" cy="250.8" r="2.8" fill="#0d9488" fill-opacity="0.34"/>
+<circle cx="405.6" cy="249.1" r="2.8" fill="#0d9488" fill-opacity="0.34"/>
+<circle cx="405.0" cy="254.2" r="2.8" fill="#0d9488" fill-opacity="0.34"/>
+<circle cx="405.0" cy="250.3" r="2.8" fill="#0d9488" fill-opacity="0.34"/>
+<circle cx="404.9" cy="259.6" r="2.8" fill="#0d9488" fill-opacity="0.34"/>
+<circle cx="404.9" cy="258.0" r="2.8" fill="#0d9488" fill-opacity="0.34"/>
+<circle cx="405.1" cy="250.6" r="2.8" fill="#0d9488" fill-opacity="0.34"/>
+<circle cx="405.2" cy="253.4" r="2.8" fill="#0d9488" fill-opacity="0.34"/>
+<rect x="403.1" y="248.0" width="4.0" height="14.0" rx="3" fill="#0d9488" fill-opacity="0.30" stroke="#0d9488" stroke-width="1.6"/>
+<circle cx="405.1" cy="255.0" r="5.0" fill="#0d9488" stroke="#ffffff" stroke-width="1.5"/>
+<text x="544.0" y="259.8" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="700" fill="#0f766e">23.6 ms<tspan dx="3" font-weight="400" font-size="11" fill="#64748b">±0.067</tspan></text>
+<line x1="218.0" y1="274.0" x2="534.0" y2="274.0" stroke="#f1f5f9" stroke-width="1"/>
+<text x="208.0" y="297.8" text-anchor="end" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="500" fill="#0f172a">CuPy</text>
+<line x1="508.6" y1="293.0" x2="509.1" y2="293.0" stroke="#64748b" stroke-opacity="0.55" stroke-width="2.0"/>
+<circle cx="508.8" cy="286.9" r="2.8" fill="#64748b" fill-opacity="0.34"/>
+<circle cx="508.9" cy="287.9" r="2.8" fill="#64748b" fill-opacity="0.34"/>
+<circle cx="508.9" cy="290.2" r="2.8" fill="#64748b" fill-opacity="0.34"/>
+<circle cx="508.8" cy="290.4" r="2.8" fill="#64748b" fill-opacity="0.34"/>
+<circle cx="508.6" cy="294.2" r="2.8" fill="#64748b" fill-opacity="0.34"/>
+<circle cx="508.6" cy="293.9" r="2.8" fill="#64748b" fill-opacity="0.34"/>
+<circle cx="508.8" cy="289.2" r="2.8" fill="#64748b" fill-opacity="0.34"/>
+<circle cx="508.8" cy="291.3" r="2.8" fill="#64748b" fill-opacity="0.34"/>
+<circle cx="509.1" cy="288.3" r="2.8" fill="#64748b" fill-opacity="0.34"/>
+<circle cx="508.7" cy="296.0" r="2.8" fill="#64748b" fill-opacity="0.34"/>
+<circle cx="508.7" cy="286.4" r="2.8" fill="#64748b" fill-opacity="0.34"/>
+<circle cx="508.8" cy="291.2" r="2.8" fill="#64748b" fill-opacity="0.34"/>
+<circle cx="508.8" cy="288.9" r="2.8" fill="#64748b" fill-opacity="0.34"/>
+<circle cx="508.8" cy="298.3" r="2.8" fill="#64748b" fill-opacity="0.34"/>
+<circle cx="508.8" cy="298.6" r="2.8" fill="#64748b" fill-opacity="0.34"/>
+<circle cx="508.8" cy="297.1" r="2.8" fill="#64748b" fill-opacity="0.34"/>
+<circle cx="508.8" cy="293.6" r="2.8" fill="#64748b" fill-opacity="0.34"/>
+<circle cx="508.8" cy="288.6" r="2.8" fill="#64748b" fill-opacity="0.34"/>
+<circle cx="508.8" cy="297.8" r="2.8" fill="#64748b" fill-opacity="0.34"/>
+<circle cx="508.8" cy="288.2" r="2.8" fill="#64748b" fill-opacity="0.34"/>
+<circle cx="508.8" cy="294.1" r="2.8" fill="#64748b" fill-opacity="0.34"/>
+<rect x="506.8" y="286.0" width="4.0" height="14.0" rx="3" fill="#64748b" fill-opacity="0.30" stroke="#64748b" stroke-width="1.6"/>
+<circle cx="508.8" cy="293.0" r="5.0" fill="#64748b" stroke="#ffffff" stroke-width="1.5"/>
+<text x="544.0" y="297.8" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="500" fill="#0f172a">63.0 ms<tspan dx="3" font-weight="400" font-size="11" fill="#64748b">±0.015</tspan></text>
+<text x="20" y="362" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" fill="#64748b">Source: docs/assets/colab-a100-large.json · NVIDIA A100-SXM4-40GB, TF32, n=21 (CuPy OOMs 137 GB on 1-NN/RBF)</text>
+</svg>

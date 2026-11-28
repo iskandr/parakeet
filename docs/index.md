@@ -44,7 +44,7 @@ Parakeet streams distances a tile at a time on both CPU and GPU, keeping only
 the winning index per tile rather than allocating the `N × M` distance matrix.
 Ties preserve NumPy's exact first-index rule.
 
-[Compare timings, scaling, and memory](release-benchmarks.md#at-a-glance-nvidia-l4-4-thread-cpu)
+[Compare timings, scaling, and memory](release-benchmarks.md#at-a-glance-nvidia-a100-24-core-amd-epyc)
 
 </div>
 </div>

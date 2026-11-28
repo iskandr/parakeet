@@ -44,8 +44,8 @@ nav:
           - Errors and debugging: debugging.md
       - How Parakeet optimizes:
           - Operators & compilation walkthrough: primitives.md
-          - Algebraic laws: algebra.md
-          - Rewrite rules catalog: rewrites.md
+          - Algebraic optimization: algebra.md
+          - Rewrite rules & thesis lineage: rewrites.md
           - Compiler architecture: internals.md
           - Design, boundaries, and history: philosophy.md
   - Gallery:
