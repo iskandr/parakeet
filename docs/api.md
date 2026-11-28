@@ -91,6 +91,20 @@ examples in [Data-parallel operators](operators.md#operator-reference):
 [`par.batched_wavefront`](operators.md#batched_wavefront),
 [`par.soft_align`](operators.md#soft_align).
 
+## Neural-network helpers, optimizers, trees, and sequences
+
+* **Neural network primitives (`par.nn`):** `par.nn.Module`, `Linear`,
+  `LayerNorm`, `Embedding`, `MLP`, `CausalSelfAttention`, `TransformerBlock`,
+  plus functional `relu`, `gelu`, `silu`, `softmax`, `log_softmax`,
+  `layer_norm`, `rms_norm`, `causal_mask`, `scaled_dot_product_attention`, and
+  `cross_entropy`.
+* **Optimizers (`par.optim`):** `par.optim.sgd_step`, `par.optim.adam_init`,
+  `par.optim.adam_step`, and stateful `par.optim.Adam`.
+* **Parameter trees:** `par.tree_map`, `par.tree_map_arrays`, `par.tree_leaves`,
+  `par.tree_array_leaves`.
+* **Categorical sequence & text encoders:** `par.Alphabet` (including
+  `par.Alphabet.mask`) and `par.Vocab` (including `par.Vocab.from_text`).
+
 ## Structured folds and rewrite inspection
 
 ::: parakeet.show_rewrite

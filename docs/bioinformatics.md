@@ -15,11 +15,30 @@ python -m examples.bio_gallery
 python benchmarks/bio_workloads.py
 ```
 
+## Categorical encoding for sequences and tokens
+
+Working with character sequences in compiled code—whether DNA bases (`ACGT`),
+amino acids, GC indicator masks, or text tokens for a language model—comes down
+to the same operation: mapping ASCII bytes to compact integer codes through a
+256-entry lookup table.
+
+Rather than defining an `IntEnum` and a separate dict mapping characters to
+enum members, Parakeet provides two lightweight categorical encoders:
+
+* **`par.Alphabet("ACGT")`** maps ASCII characters to `uint8` codes `0..3`
+  (case-insensitive by default), and **`par.Alphabet.mask("GC")`** builds a
+  0/1 indicator table. Both work outside `@par.jit` (`DNA.encode(reads)`) and
+  inside `@par.jit` (`DNA[seq]`, `GC[seq]`), compiling to a single L1-resident
+  256-byte gather.
+* **`par.Vocab.from_text(text)`** builds the same 256-entry LUT from a text
+  corpus for language-model tokenization (`vocab.encode(text)` /
+  `vocab.decode(ids)`), as shown in [Train nanoGPT](gallery/nanogpt.md).
+
 ## How Parakeet compiles bio workloads
 
 | Domain task | Operators & compiler passes | What is eliminated |
 |---|---|---|
-| FASTQ k-mers & read QC | Multi-output [`par.map`](operators.md#map) + `IntEnum` + ASCII-dict LUT | Manual `parfor`, scratch buffers, and ASCII bit-twiddling |
+| FASTQ k-mers & read QC | Multi-output [`par.map`](operators.md#map) + `par.Alphabet` LUT | Manual `parfor`, scratch buffers, and ASCII bit-twiddling |
 | Multi-channel BAM pileup | Keyed [`IndexScatter`](primitives.md#scatter) fusion | Redundant passes over alignment positions (`6 → 1`) |
 | 2048-bit Tanimoto screening | `par.popcount` + [`par.allpairs`](operators.md#allpairs) + ordered [`par.fold`](operators.md#fold) | `O(N · M)` similarity matrix allocation |
 | 3D protein RBF message passing | [Law 1 monoidal tiling](algebra.md#law-1-rescaled-semiring-monoids) + `par.grad` | `O(N²)` pairwise distance & weight matrices |
@@ -30,9 +49,9 @@ python benchmarks/bio_workloads.py
 ## 1. FASTQ 2-bit canonical k-mers and read QC
 
 Parakeet accepts `list[str]` directly (packing fixed-length strings into 2D
-`uint8` or variable-length strings into `RaggedArray[uint8]`), compiles constant
-single-char dicts (`BASE_CODE`) into 256-byte LUTs, supports `IntEnum`
-alphabets, and unboxes multi-output `par.map` tuples into one parallel pass:
+`uint8` or variable-length strings into `RaggedArray[uint8]`), compiles
+`DNA[seq]` and `GC[seq]` to 256-byte LUT gathers, and unboxes multi-output
+`par.map` tuples into one parallel pass:
 
 ```python
 --8<-- "examples/bio_gallery.py:fastq_kmer_gc"
@@ -85,13 +104,13 @@ exponential recurrences rewrite automatically into
 
 [`examples/bio_algorithms.py`](https://github.com/iskandr/parakeet/blob/master/examples/bio_algorithms.py)
 implements seven textbook algorithms in compiled Python/NumPy
-([see Apple M1 Pro head-to-head timings](release-benchmarks.md#bioinformatics-and-structural-biology-apple-m1-pro-10-cores)):
+([see head-to-head timings](release-benchmarks.md#bioinformatics-and-structural-biology-apple-m1-pro-10-cores)):
 
 | Algorithm | Function | Key Parakeet mechanisms |
 |---|---|---|
 | 3-state affine-gap Gotoh + traceback | `gotoh_global_align` | `M`/`Ix`/`Iy` DP tables, packed traceback, local growable CIGAR lists |
 | Multi-word Myers bit-vector edit distance | `myers_edit_distance` | 64-bit `uint64` bit-parallel blocks (`Pv`, `Mv`, `Peq`) |
-| `O(N)` monotone-deque minimizer sketch | `minimizer_sketch` | Canonical 2-bit k-mers, SplitMix64 hash, circular monotone deque |
+| `O(N)` monotone-deque minimizer sketch | `minimizer_sketch` | `par.Alphabet("ACGT", unknown=4)`, SplitMix64 hash, circular monotone deque |
 | FM-index / BWT backward search | `build_fm_index`, `fm_backward_search_batch` | Sampled `Occ` checkpoints + parallel `RaggedArray[uint8]` batch queries |
 | Parallel CIGAR expansion | `expand_cigar` | One-line `par.flatmap` (`IndexExpand`) |
 | Profile HMM Viterbi + Forward-Backward | `hmm_viterbi_and_posterior` | Log-space decoding and posterior probabilities |

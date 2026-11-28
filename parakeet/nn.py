@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from .tree import tree_array_leaves
+from .tree import tree_floating_leaves
 
 # ---------------------------------------------------------------------------
 # Functional primitives
@@ -103,7 +103,7 @@ def cross_entropy(logits, targets):
 
 
 def _default_rng(rng):
-  return np.random.default_rng(0) if rng is None else rng
+  return np.random.default_rng() if rng is None else rng
 
 
 class Module:
@@ -112,8 +112,8 @@ class Module:
   __parakeet_record__ = True
 
   def parameters(self) -> list:
-    """Return all parameter arrays in deterministic depth-first order."""
-    return tree_array_leaves(self)
+    """Return all floating/complex parameter arrays in deterministic depth-first order."""
+    return tree_floating_leaves(self)
 
   def __repr__(self) -> str:
     parts = [
@@ -179,6 +179,8 @@ class MLP(Module):
     dtype=np.float32,
     std: float = 0.02,
   ):
+    if activation not in ("tanh", "gelu", "silu", "relu"):
+      raise ValueError(f"unsupported activation {activation!r}; expected one of 'tanh', 'gelu', 'silu', 'relu'")
     g = _default_rng(rng)
     h = 4 * width if hidden is None else hidden
     self.fc1 = Linear(width, h, rng=g, dtype=dtype, std=std)

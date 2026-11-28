@@ -785,8 +785,21 @@ class PtxEmitter:
     ty = _PTX_ARITH_TYPE[iv_t.name]
     iv_r = self.ensure_var_reg(s.var)
     start_r = self.expr(s.start)
-    stop_r = self.expr(s.stop)
-    step_r = self.expr(s.step) if s.step is not None else None
+    stop_raw = self.expr(s.stop)
+    if isinstance(s.stop, ir.Var):
+      stop_r = self.new_reg(iv_t)
+      self.emit_mov(stop_r, stop_raw, iv_t)
+    else:
+      stop_r = stop_raw
+    if s.step is not None:
+      step_raw = self.expr(s.step)
+      if isinstance(s.step, ir.Var):
+        step_r = self.new_reg(iv_t)
+        self.emit_mov(step_r, step_raw, iv_t)
+      else:
+        step_r = step_raw
+    else:
+      step_r = None
     self.emit_mov(iv_r, start_r, iv_t)
 
     l_head = self.new_label("L_for_head")
@@ -844,11 +857,15 @@ class PtxEmitter:
 
   def _emit_fail_body(self, eid: int, arg_regs: list[str], l_ret: str) -> None:
     old = self.new_b32()
+    zero_r = self.new_b32()
+    eid_r = self.new_b32()
     p_lost = self.new_pred()
+    self.emit(f"mov.b32 {zero_r}, 0;", defs=(zero_r,))
+    self.emit(f"mov.b32 {eid_r}, {eid + 1};", defs=(eid_r,))
     self.emit(
-      f"atom.global.cas.b32 {old}, [{self.flag_reg}], 0, {eid + 1};",
+      f"atom.global.cas.b32 {old}, [{self.flag_reg}], {zero_r}, {eid_r};",
       defs=(old,),
-      uses=(self.flag_reg,),
+      uses=(self.flag_reg, zero_r, eid_r),
       side_effect=True,
     )
     self.emit(f"setp.ne.u32 {p_lost}, {old}, 0;", defs=(p_lost,), uses=(old,))
@@ -1199,9 +1216,9 @@ def _emit_warp_reduce_entry(plan: KernelPlan, entry_name: str) -> PtxEntry:
 
     k_var = red.index[0]
     k_var_r = em.ensure_var_reg(k_var)
-    _init_locals(red.body, {k_var.uid})
 
     def _emit_fold_iter():
+      _init_locals(red.body, {k_var.uid})
       em.block(red.body)
       for fi, f in enumerate(folds):
         if f.value.type.name != f.a.type.name:
@@ -1285,9 +1302,10 @@ def _emit_warp_reduce_entry(plan: KernelPlan, entry_name: str) -> PtxEntry:
           (f.op == "add" and f.init.value == 0) or (f.op == "mul" and f.init.value == 1)
         )
         if not is_triv_id:
-          init_r = em.expr(f.init)
           if f.init.type.name != f.a.type.name:
             init_r = em._emit_cast(ir.Cast(f.init, f.a.type))
+          else:
+            init_r = em.expr(f.init)
           if f.op in ("add", "mul"):
             comb = em.emit_combine(f.op, init_r, ar, f.a.type)
             em.emit_mov(ar, comb, f.a.type)
@@ -1317,13 +1335,13 @@ def _emit_warp_reduce_entry(plan: KernelPlan, entry_name: str) -> PtxEntry:
     ep_k = ep.index[0]
     ep_k_r = em.ensure_var_reg(ep_k)
     ep_body = [t for t in ep.body if not (isinstance(t, ir.ReleaseScope) and t.scope is ep.scope)]
-    _init_locals(ep_body, {ep_k.uid})
     if k_unroll_iters > 0:
       for ki in range(k_unroll_iters):
         if ki == 0:
           em.emit(f"mov.b64 {ep_k_r}, {lane64_r};", defs=(ep_k_r,), uses=(lane64_r,))
         else:
           em.emit(f"add.s64 {ep_k_r}, {lane64_r}, {ki * 32};", defs=(ep_k_r,), uses=(lane64_r,))
+        _init_locals(ep_body, {ep_k.uid})
         em.block(ep_body)
     else:
       em.emit(f"mov.b64 {ep_k_r}, {lane64_r};", defs=(ep_k_r,), uses=(lane64_r,))
@@ -1333,6 +1351,7 @@ def _emit_warp_reduce_entry(plan: KernelPlan, entry_name: str) -> PtxEntry:
       p_ed = em.new_pred()
       em.emit(f"setp.ge.s64 {p_ed}, {ep_k_r}, {k_r};", defs=(p_ed,), uses=(ep_k_r, k_r))
       em.emit(f"@{p_ed} bra {l_ee};", uses=(p_ed,), side_effect=True)
+      _init_locals(ep_body, {ep_k.uid})
       em.block(ep_body)
       em.emit(f"add.s64 {ep_k_r}, {ep_k_r}, 32;", defs=(ep_k_r,), uses=(ep_k_r,))
       em.emit(f"bra {l_eh};", side_effect=True)
@@ -1558,6 +1577,12 @@ def ptx_check(ptx_source: str) -> list[str]:
         suffix = op_tok.split(".")[-1]
         if suffix not in ("pred", "b16", "b32", "b64"):
           errors.append(f"{entry_name}: bitwise op {op_tok} requires .pred/.b* type: {inst}")
+      if op_tok.startswith("atom.") and ".cas." in op_tok:
+        rhs = inst.rstrip(";").split(",", 2)
+        if len(rhs) == 3:
+          for arg_tok in rhs[2].split(","):
+            if not arg_tok.strip().startswith("%"):
+              errors.append(f"{entry_name}: {op_tok} requires register operands, got {arg_tok.strip()!r}: {inst}")
 
     for lbl in used_labels:
       if lbl not in defined_labels:

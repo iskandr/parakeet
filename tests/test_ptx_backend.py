@@ -252,6 +252,20 @@ def test_ptx_check_catches_invalid_ptx():
   assert any("mul requires .lo" in e for e in errs)
   assert any("bitwise op" in e for e in errs)
   assert any("undefined label L_missing" in e for e in errs)
+  bad_cas = """
+.version 7.8
+.target sm_80
+.address_size 64
+.visible .entry k(.param .u64 p0)
+{
+  .reg .b64 %rd0;
+  .reg .b32 %r0;
+  ld.param.u64 %rd0, [p0];
+  atom.global.cas.b32 %r0, [%rd0], 0, 1;
+  ret;
+}
+"""
+  assert any("requires register operands" in e for e in ptx_check(bad_cas))
   with pytest.raises(PtxCheckError):
     verify_ptx(bad_op)
 
@@ -266,11 +280,10 @@ def test_ptx_nanogpt_coverage_and_bundled_module(monkeypatch):
     from examples import nanogpt
 
     rng = np.random.default_rng(0)
-    model = nanogpt.init(vocab=65, context=64, width=128, layers=2, rng=rng)
-    model = nanogpt.tree_map(lambda a: a.astype(np.float32), model)
+    model = nanogpt.NanoGPT(vocab=65, context=64, width=128, layers=2, heads=4, rng=rng, dtype=np.float32)
     tok = rng.integers(0, 65, size=(16, 64), dtype=np.int64)
     tgt = rng.integers(0, 65, size=(16, 64), dtype=np.int64)
-    cas = np.tril(np.ones((64, 64), dtype=bool))
+    cas = par.nn.causal_mask(64)
 
     @par.jit
     def compiled_vg(m, t, y, c):

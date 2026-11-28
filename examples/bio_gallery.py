@@ -5,14 +5,13 @@ Run directly to verify every workload against a reference implementation::
     python -m examples.bio_gallery
 
 The five workloads map sequences, alignments, chemical fingerprints, and 3D
-protein coordinates onto Parakeet's general algebraic operators (IndexScatter,
+protein coordinates onto Parakeet's algebraic operators (``IndexScatter``,
 ordered structured folds, online rescaled-monoid tiling, chunkwise scans,
-and reverse-mode AD) without hand-writing C, CUDA, or Metal kernels.
+and reverse-mode AD) using ``par.Alphabet`` for compact categorical encoding.
 """
 
 from __future__ import annotations
 
-from enum import IntEnum
 from typing import NamedTuple
 
 import numpy as np
@@ -25,14 +24,9 @@ import parakeet as par
 
 
 # --8<-- [start:fastq_kmer_gc]
-class Base(IntEnum):
-  A = 0
-  C = 1
-  G = 2
-  T = 3
-
-
-BASE_CODE = {"A": Base.A, "C": Base.C, "G": Base.G, "T": Base.T}
+DNA = par.Alphabet("ACGT")
+GC = par.Alphabet.mask("GC")
+A, C, G, T = (DNA.code(b) for b in "ACGT")
 
 
 @par.jit
@@ -46,8 +40,8 @@ def encode_canonical_kmers_and_gc(reads, quals, k):
   rev_shift = np.uint64(2 * (k - 1))
 
   def encode_read(seq, qual):
-    codes = BASE_CODE[seq]
-    gc = np.mean((codes == Base.C) | (codes == Base.G)).astype(np.float32)
+    codes = DNA[seq]
+    gc = np.mean(GC[seq].astype(np.float32))
     mean_q = np.mean(qual.astype(np.float32) - 33.0)
     out = np.empty(len(seq) - k + 1, dtype=np.uint64)
     fwd = np.uint64(0)
@@ -77,10 +71,10 @@ def single_pass_pileup(ref_pos, base_code, phred_q, is_rev, contig_len):
   """Accumulate A/C/G/T counts, quality sums, and reverse-strand counts across
   aligned base observations in one keyed IndexScatter traversal."""
   # All six histograms share ref_pos, so Parakeet fuses them into one pass.
-  cnt_a = par.scatter_add(contig_len, ref_pos, (base_code == Base.A).astype(np.int64))
-  cnt_c = par.scatter_add(contig_len, ref_pos, (base_code == Base.C).astype(np.int64))
-  cnt_g = par.scatter_add(contig_len, ref_pos, (base_code == Base.G).astype(np.int64))
-  cnt_t = par.scatter_add(contig_len, ref_pos, (base_code == Base.T).astype(np.int64))
+  cnt_a = par.scatter_add(contig_len, ref_pos, (base_code == A).astype(np.int64))
+  cnt_c = par.scatter_add(contig_len, ref_pos, (base_code == C).astype(np.int64))
+  cnt_g = par.scatter_add(contig_len, ref_pos, (base_code == G).astype(np.int64))
+  cnt_t = par.scatter_add(contig_len, ref_pos, (base_code == T).astype(np.int64))
   qual_sum = par.scatter_add(contig_len, ref_pos, phred_q.astype(np.int64))
   rev_cnt = par.scatter_add(contig_len, ref_pos, is_rev.astype(np.int64))
   return cnt_a, cnt_c, cnt_g, cnt_t, qual_sum, rev_cnt

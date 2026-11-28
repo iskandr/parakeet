@@ -795,61 +795,101 @@ def gen_chunkwise_scan() -> str:
 # ---------------------------------------------------------------------------
 
 
-def gen_autodiff() -> str:
-  w, h = 680, 272
-  out = [_svg_open(w, h, "Forward-mode JVP vs reverse-mode VJP and algebraic rematerialization")]
+def gen_autodiff_modes() -> str:
+  w, h = 680, 236
+  out = [_svg_open(w, h, "Forward-mode JVP vs reverse-mode VJP data flow")]
   out.append(
     _title(
-      "Automatic Differentiation: Forward, Reverse, and Rematerialization",
-      "Choose mode by input/output shape; Law 2 avoids saving O(T²) or O(M·V) tapes.",
+      "Forward Mode (JVP) vs. Reverse Mode (VJP)",
+      "Choose forward mode when outputs m >> inputs n, and reverse mode when inputs n >> outputs m.",
     )
   )
 
-  # Left panel: Forward vs Reverse
-  out.append(_box(20, 62, 326, 194, fill=BG_SOFT, stroke=BORDER))
-  out.append(_text(34, 83, "Forward Mode (jvp / jacfwd)", size=11.8, weight="700", fill=BLUE_DARK))
-  out.append(_text(34, 98, "Best when outputs m >> inputs n · O(1) memory", size=10.2, fill=SUB))
+  # Forward mode row
+  out.append(_box(20, 62, 640, 70, fill=BG_SOFT, stroke=BORDER))
+  out.append(_text(36, 84, "Forward Mode  (par.jvp / par.jacfwd)", size=12, weight="700", fill=BLUE_DARK))
+  out.append(_text(36, 100, "Cost scales with inputs n · O(1) memory, no backward tape", size=10.5, fill=SUB))
+  out.append(_pill(340, 82, 82, 28, "(x, v)", fill=BLUE_BG, stroke=BLUE_BD, ink=BLUE_DARK, mono=True, size=10.5))
+  out.append(_arrow(422, 96, 450, 96, color=BLUE_DARK, marker="arr-blue", width=1.6))
+  out.append(_pill(452, 82, 80, 28, "f  +  df", fill="#ffffff", stroke=BLUE_BD, ink=INK, mono=True, size=10.5))
+  out.append(_arrow(532, 96, 560, 96, color=BLUE_DARK, marker="arr-blue", width=1.6))
+  out.append(_pill(562, 82, 84, 28, "(y, J·v)", fill=BLUE_BG, stroke=BLUE_BD, ink=BLUE_DARK, mono=True, size=10.5))
 
-  out.append(_pill(34, 108, 76, 26, "(x, v)", fill=BLUE_BG, stroke=BLUE_BD, ink=BLUE_DARK, mono=True, size=10))
-  out.append(_arrow(110, 121, 134, 121, color=BLUE_DARK, marker="arr-blue", width=1.6))
-  out.append(_pill(136, 108, 72, 26, "f  +  df", fill="#ffffff", stroke=BLUE_BD, ink=INK, mono=True, size=10))
-  out.append(_arrow(208, 121, 232, 121, color=BLUE_DARK, marker="arr-blue", width=1.6))
-  out.append(_pill(234, 108, 96, 26, "(y, J · v)", fill=BLUE_BG, stroke=BLUE_BD, ink=BLUE_DARK, mono=True, size=10))
+  # Reverse mode row
+  out.append(_box(20, 144, 640, 78, fill=GREEN_BG, stroke=GREEN_BD))
+  out.append(_text(36, 166, "Reverse Mode  (par.grad / par.vjp / par.jacrev)", size=12, weight="700", fill=GREEN_DARK))
+  out.append(_text(36, 182, "Cost scales with outputs m · ideal for scalar training losses", size=10.5, fill=SUB))
+  out.append(_pill(340, 154, 82, 24, "x", fill="#ffffff", stroke=BORDER, ink=INK, mono=True, size=10))
+  out.append(_arrow(422, 166, 450, 166, color=MUTED, marker="arr", width=1.4))
+  out.append(_pill(452, 154, 80, 24, "forward f", fill="#ffffff", stroke=BORDER, ink=INK, mono=True, size=9.8))
+  out.append(_arrow(532, 166, 560, 166, color=MUTED, marker="arr", width=1.4))
+  out.append(_pill(562, 154, 84, 24, "y (+ stats)", fill="#ffffff", stroke=BORDER, ink=INK, mono=True, size=9.5))
 
-  out.append(f'<line x1="34" y1="150" x2="332" y2="150" stroke="{BORDER}" stroke-width="1"/>\n')
+  out.append(_pill(340, 188, 82, 24, "uᵀ · J", fill="#ffffff", stroke=GREEN, ink=GREEN_DARK, mono=True, size=10))
+  out.append(_arrow(450, 200, 424, 200, color=GREEN_DARK, marker="arr-green", width=1.5))
+  out.append(_pill(452, 188, 80, 24, "pullback", fill="#ffffff", stroke=GREEN, ink=GREEN_DARK, mono=True, size=9.8))
+  out.append(_arrow(560, 200, 534, 200, color=GREEN_DARK, marker="arr-green", width=1.5))
+  out.append(_pill(562, 188, 84, 24, "seed u", fill="#ffffff", stroke=GREEN, ink=GREEN_DARK, mono=True, size=9.8))
 
-  out.append(_text(34, 171, "Reverse Mode (grad / vjp / jacrev)", size=11.8, weight="700", fill=GREEN_DARK))
-  out.append(_text(34, 186, "Best when inputs n >> outputs m (e.g. scalar loss)", size=10.2, fill=SUB))
+  out.append("</svg>\n")
+  return "".join(out)
 
-  out.append(_pill(34, 198, 76, 24, "x", fill="#ffffff", stroke=BORDER, ink=INK, mono=True, size=10))
-  out.append(_arrow(110, 210, 134, 210, color=MUTED, marker="arr", width=1.4))
-  out.append(_pill(136, 198, 72, 24, "forward f", fill="#ffffff", stroke=BORDER, ink=INK, mono=True, size=9.6))
-  out.append(_arrow(208, 210, 232, 210, color=MUTED, marker="arr", width=1.4))
-  out.append(_pill(234, 198, 96, 24, "y  (+ stats)", fill="#ffffff", stroke=BORDER, ink=INK, mono=True, size=9.6))
 
-  # Return arrow below
-  out.append(_pill(34, 228, 76, 22, "uᵀ · J", fill=GREEN_BG, stroke=GREEN_BD, ink=GREEN_DARK, mono=True, size=9.8))
-  out.append(_arrow(134, 239, 112, 239, color=GREEN_DARK, marker="arr-green", width=1.5))
-  out.append(_pill(136, 228, 72, 22, "pullback", fill=GREEN_BG, stroke=GREEN_BD, ink=GREEN_DARK, mono=True, size=9.6))
-  out.append(_arrow(232, 239, 210, 239, color=GREEN_DARK, marker="arr-green", width=1.5))
-  out.append(_pill(234, 228, 96, 22, "seed u", fill=GREEN_BG, stroke=GREEN_BD, ink=GREEN_DARK, mono=True, size=9.6))
+def gen_rematerialization() -> str:
+  w, h = 680, 204
+  out = [
+    _svg_open(w, h, "Law 2 algebraic rematerialization replaces O(T^2) backward tapes with on-chip tile recomputation")
+  ]
+  out.append(
+    _title(
+      "Law 2: Algebraic Rematerialization in Reverse-Mode AD",
+      "Substitutes sufficient-statistic adjoints before lowering so backward never allocates O(T²) or O(M·V) tapes.",
+    )
+  )
 
-  # Right panel: Law 2 Rematerialization
-  out.append(_box(360, 62, 300, 194, fill=GREEN_BG, stroke=GREEN_BD))
-  out.append(_text(376, 83, "Law 2: Algebraic Rematerialization", size=11.8, weight="700", fill=GREEN_DARK))
-  out.append(_text(376, 98, "Recompute score tiles on-chip instead of saving them.", size=10.2, fill=SUB))
+  # Left box: Naive tape
+  out.append(_box(20, 64, 294, 122, fill=RED_BG, stroke=RED_BD))
+  out.append(_text(36, 86, "Naive Reverse-Mode Tape", size=12, weight="700", fill=RED_DARK))
+  out.append(_text(36, 108, "Saves full score & probability matrices:", size=10.5, fill=SUB))
+  out.append(
+    _pill(
+      36,
+      118,
+      260,
+      26,
+      "S (T×T), P (T×T)  or  logits (M×V)",
+      fill="#ffffff",
+      stroke=RED_BD,
+      ink=RED_DARK,
+      mono=True,
+      size=9.8,
+    )
+  )
+  out.append(_text(36, 168, "O(T²) / O(M·V) DRAM traffic & memory blow-up", size=10.2, weight="600", fill=RED_DARK))
 
-  out.append(_box(376, 110, 268, 56, fill=RED_BG, stroke=RED_BD, rx=6))
-  out.append(_text(388, 128, "Naive Reverse Tape", size=10.8, weight="700", fill=RED_DARK))
-  out.append(_text(388, 145, "Saves S (T×T) & P (T×T)  or  logits (M×V)", size=10, fill=SUB))
-  out.append(_text(388, 159, "O(T²) / O(M·V) memory blow-up", size=9.8, weight="600", fill=RED_DARK))
+  out.append(_arrow(318, 125, 358, 125, color=GREEN_DARK, marker="arr-green", width=2.2))
 
-  out.append(_arrow(510, 166, 510, 182, color=GREEN_DARK, marker="arr-green", width=1.8))
-
-  out.append(_box(376, 184, 268, 60, fill="#ffffff", stroke=GREEN, rx=6, stroke_width=1.4))
-  out.append(_text(388, 202, "Parakeet Algebraic VJP / HVP", size=10.8, weight="700", fill=GREEN_DARK))
-  out.append(_text(388, 219, "Saves only (Q, K, V, O, lse)  —  O(T·D)", size=10, fill=INK, mono=True))
-  out.append(_text(388, 235, "Recomputes P = exp(S − lse) tile-by-tile", size=10, fill=GREEN_DARK))
+  # Right box: Algebraic VJP
+  out.append(_box(364, 64, 296, 122, fill=GREEN_BG, stroke=GREEN_BD))
+  out.append(_text(380, 86, "Parakeet Algebraic VJP / HVP", size=12, weight="700", fill=GREEN_DARK))
+  out.append(_text(380, 108, "Saves only compact O(T·D) sufficient stats:", size=10.5, fill=SUB))
+  out.append(
+    _pill(
+      380,
+      118,
+      264,
+      26,
+      "(Q, K, V, O, lse)  or  (H, W, y, lse)",
+      fill="#ffffff",
+      stroke=GREEN,
+      ink=INK,
+      mono=True,
+      size=9.8,
+    )
+  )
+  out.append(
+    _text(380, 168, "Recomputes P = exp(S − lse) tile-by-tile on-chip", size=10.2, weight="600", fill=GREEN_DARK)
+  )
 
   out.append("</svg>\n")
   return "".join(out)
@@ -864,7 +904,8 @@ def main() -> None:
     "diag-attention-tiling.svg": gen_attention_tiling(),
     "diag-pairwise-1nn.svg": gen_pairwise_1nn(),
     "diag-chunkwise-scan.svg": gen_chunkwise_scan(),
-    "diag-autodiff.svg": gen_autodiff(),
+    "diag-autodiff-modes.svg": gen_autodiff_modes(),
+    "diag-rematerialization.svg": gen_rematerialization(),
   }
   for name, svg in diagrams.items():
     path = ASSETS / name

@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 204" width="680" height="204" role="img" aria-label="Law 2 algebraic rematerialization replaces O(T^2) backward tapes with on-chip tile recomputation">
+<defs>
+  <marker id="arr" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+    <path d="M 1 1.5 L 9 5 L 1 8.5 z" fill="#64748b"/>
+  </marker>
+  <marker id="arr-green" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+    <path d="M 1 1.5 L 9 5 L 1 8.5 z" fill="#245744"/>
+  </marker>
+  <marker id="arr-blue" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+    <path d="M 1 1.5 L 9 5 L 1 8.5 z" fill="#176083"/>
+  </marker>
+  <marker id="arr-red" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+    <path d="M 1 1.5 L 9 5 L 1 8.5 z" fill="#dc2626"/>
+  </marker>
+  <pattern id="hatch" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+    <line x1="0" y1="0" x2="0" y2="7" stroke="#cbd5e1" stroke-width="1.5"/>
+  </pattern>
+</defs>
+<rect x="0.5" y="0.5" width="679" height="203" rx="10" fill="#ffffff" stroke="#cbd5e1"/>
+<text x="20" y="28" font-family="'Source Sans 3', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15.5" font-weight="700" fill="#0f172a">Law 2: Algebraic Rematerialization in Reverse-Mode AD</text>
+<text x="20" y="46" font-family="'Source Sans 3', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#475569">Substitutes sufficient-statistic adjoints before lowering so backward never allocates O(T²) or O(M·V) tapes.</text>
+<rect x="20.0" y="64.0" width="294.0" height="122.0" rx="7" fill="#fef2f2" stroke="#fca5a5" stroke-width="1.2"/>
+<text x="36.0" y="86.0" text-anchor="start" font-family="'Source Sans 3', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#991b1b">Naive Reverse-Mode Tape</text>
+<text x="36.0" y="108.0" text-anchor="start" font-family="'Source Sans 3', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10.5" font-weight="500" fill="#475569">Saves full score &amp; probability matrices:</text>
+<rect x="36.0" y="118.0" width="260.0" height="26.0" rx="13.0" fill="#ffffff" stroke="#fca5a5" stroke-width="1.0"/>
+<text x="166.0" y="134.3" text-anchor="middle" font-family="'IBM Plex Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9.8" font-weight="600" fill="#991b1b">S (T×T), P (T×T)  or  logits (M×V)</text>
+<text x="36.0" y="168.0" text-anchor="start" font-family="'Source Sans 3', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10.2" font-weight="600" fill="#991b1b">O(T²) / O(M·V) DRAM traffic &amp; memory blow-up</text>
+<line x1="318.0" y1="125.0" x2="358.0" y2="125.0" stroke="#245744" stroke-width="2.2" marker-end="url(#arr-green)"/>
+<rect x="364.0" y="64.0" width="296.0" height="122.0" rx="7" fill="#edf4ef" stroke="#86c5a8" stroke-width="1.2"/>
+<text x="380.0" y="86.0" text-anchor="start" font-family="'Source Sans 3', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#245744">Parakeet Algebraic VJP / HVP</text>
+<text x="380.0" y="108.0" text-anchor="start" font-family="'Source Sans 3', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10.5" font-weight="500" fill="#475569">Saves only compact O(T·D) sufficient stats:</text>
+<rect x="380.0" y="118.0" width="264.0" height="26.0" rx="13.0" fill="#ffffff" stroke="#0d9488" stroke-width="1.0"/>
+<text x="512.0" y="134.3" text-anchor="middle" font-family="'IBM Plex Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9.8" font-weight="600" fill="#0f172a">(Q, K, V, O, lse)  or  (H, W, y, lse)</text>
+<text x="380.0" y="168.0" text-anchor="start" font-family="'Source Sans 3', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10.2" font-weight="600" fill="#245744">Recomputes P = exp(S − lse) tile-by-tile on-chip</text>
+</svg>

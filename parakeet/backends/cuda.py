@@ -607,11 +607,8 @@ class CuPyDriver:
       return "nvcc_unknown"
 
   def _effective_compiler(self) -> str:
-    if config.cuda_compiler == "nvcc":
-      return "nvcc"
-    if config.cuda_compiler == "ptx" or config.cuda_ptx:
-      return "ptx"
-    return "nvrtc"
+    mode = str(config.cuda_compiler).strip().lower()
+    return mode if mode in ("nvrtc", "ptx", "nvcc") else "nvrtc"
 
   def _compile_nvcc_binary(self, code: str) -> bytes | None:
     """Compile zero-header CUDA C++ with ``nvcc --cubin -O3`` and cache on disk."""
@@ -773,29 +770,32 @@ class CuPyDriver:
       prefer_interchange=False,
     )
 
-  def compile(self, plan: KernelPlan):
+  def compile(self, plan: KernelPlan, *, allow_ptx: bool = True):
     mode = self._effective_compiler()
     canon = _canonicalize_cuda_kernel(plan.source)
     cache_key = f"{mode}:{canon}"
-    cached = self._compiled_cache.get(cache_key)
+    with self._cache_lock:
+      cached = self._compiled_cache.get(cache_key)
     if cached is not None:
       return cached
-    if mode == "ptx":
+    if mode == "ptx" and allow_ptx:
       ptx_body = emit_ptx_entry_body(plan, entry_name="pk_kernel")
       if ptx_body is not None:
         loaded = self._load_ptx_entries([ptx_body], ["pk_kernel"])
         if loaded is not None:
           kernel = loaded[0]
-          self._compiled_cache[cache_key] = kernel
-          self.ptx_compiled_count += 1
+          with self._cache_lock:
+            self._compiled_cache[cache_key] = kernel
+            self.ptx_compiled_count += 1
           return kernel
     if mode == "nvcc":
       binary = self._compile_nvcc_binary(canon)
       if binary is not None:
         mod = self._load_binary_module(binary)
         kernel = mod.get_function("pk_kernel")
-        self._compiled_cache[cache_key] = kernel
-        self.nvcc_compiled_count += 1
+        with self._cache_lock:
+          self._compiled_cache[cache_key] = kernel
+          self.nvcc_compiled_count += 1
         return kernel
     binary = self._compile_nvrtc_binary(canon)
     if binary is not None:
@@ -804,8 +804,9 @@ class CuPyDriver:
     else:
       kernel = self.cp.RawKernel(canon, "pk_kernel")
       kernel.compile()  # surface compilation problems here, not at first launch
-    self._compiled_cache[cache_key] = kernel
-    self.nvrtc_compiled_count += 1
+    with self._cache_lock:
+      self._compiled_cache[cache_key] = kernel
+      self.nvrtc_compiled_count += 1
     return kernel
 
   def compile_module(self, plans: list[KernelPlan]) -> None:
@@ -861,28 +862,31 @@ class CuPyDriver:
     if ptx_todo:
       loaded = self._load_ptx_entries([b for _, _, _, _, b in ptx_todo], [n for _, _, _, n, _ in ptx_todo])
       if loaded is not None:
-        for (_, _, ckey, _, _), fn in zip(ptx_todo, loaded):
-          self._compiled_cache[ckey] = fn
-        self.ptx_compiled_count += len(ptx_todo)
+        with self._cache_lock:
+          for (_, _, ckey, _, _), fn in zip(ptx_todo, loaded):
+            self._compiled_cache[ckey] = fn
+          self.ptx_compiled_count += len(ptx_todo)
       else:
         c_todo.extend((p, canon, ckey) for p, canon, ckey, _, _ in ptx_todo)
 
     if len(c_todo) <= 1:
       for p, _canon, _ckey in c_todo:
-        p.compiled = self.compile(p)
-      for p, ckey in plan_keys:
-        if p.compiled is None:
-          p.compiled = self._compiled_cache.get(ckey)
+        p.compiled = self.compile(p, allow_ptx=False)
+      with self._cache_lock:
+        for p, ckey in plan_keys:
+          if p.compiled is None:
+            p.compiled = self._compiled_cache.get(ckey)
       return
 
     marker = _KERNEL_MARKER
     for _, canon, _ in c_todo:
       if canon.find(marker) < 0:
         for q, _, _ in c_todo:
-          q.compiled = self.compile(q)
-        for p, ck in plan_keys:
-          if p.compiled is None:
-            p.compiled = self._compiled_cache.get(ck)
+          q.compiled = self.compile(q, allow_ptx=False)
+        with self._cache_lock:
+          for p, ck in plan_keys:
+            if p.compiled is None:
+              p.compiled = self._compiled_cache.get(ck)
         return
 
     def _build_chunk(chunk: list[tuple[KernelPlan, str, str]]) -> tuple[str, list[tuple[str, object]]]:
@@ -927,16 +931,17 @@ class CuPyDriver:
       with ThreadPoolExecutor(max_workers=min(len(chunks), max_workers)) as pool:
         chunk_outs = list(pool.map(_worker, chunks))
 
-    for used_kind, pairs in chunk_outs:
-      for ckey, fn in pairs:
-        self._compiled_cache[ckey] = fn
-      if used_kind == "nvcc":
-        self.nvcc_compiled_count += len(pairs)
-      else:
-        self.nvrtc_compiled_count += len(pairs)
-    for p, ckey in plan_keys:
-      if p.compiled is None:
-        p.compiled = self._compiled_cache.get(ckey)
+    with self._cache_lock:
+      for used_kind, pairs in chunk_outs:
+        for ckey, fn in pairs:
+          self._compiled_cache[ckey] = fn
+        if used_kind == "nvcc":
+          self.nvcc_compiled_count += len(pairs)
+        else:
+          self.nvrtc_compiled_count += len(pairs)
+      for p, ckey in plan_keys:
+        if p.compiled is None:
+          p.compiled = self._compiled_cache.get(ckey)
 
   def to_device(self, host: np.ndarray):
     return self.cp.asarray(host)

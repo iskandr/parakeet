@@ -1,115 +1,104 @@
-# Train nanoGPT from scratch
+# Train nanoGPT in Parakeet
 
 This character-level GPT learns to predict the next character in a short passage.
 For the fragment `para`, one training sequence has inputs `p a r` and targets
-`a r a`. At the second position, the model can see `p a` and must predict `r`.
-A causal mask enforces that rule even though the model computes predictions for
-every position at once.
+`a r a`. A lower-triangular causal mask ensures position `t` only attends to
+positions `0..t` while computing every position's logits in parallel.
 
-The six Python blocks below make one complete file. You can copy them in order
-into `train_gpt.py` and run `python train_gpt.py`, or run the [same file from
-the repository](https://github.com/iskandr/parakeet/blob/master/examples/nanogpt.py).
-To run the repository version, use Python 3.11 or newer and a C compiler.
+Below we show **two complete implementations** of the exact same model:
+
+1. **Pythonic objects with `par.nn` and `par.optim`**
+   ([`examples/nanogpt.py`](https://github.com/iskandr/parakeet/blob/master/examples/nanogpt.py)):
+   a normal Python class inheriting from `par.nn.Module` with a standard
+   `__init__`, `par.nn.TransformerBlock`, `par.nn.cross_entropy`,
+   `par.optim.Adam`, and `par.Vocab.from_text`.
+2. **Minimalist functional from scratch**
+   ([`examples/nanogpt_functional.py`](https://github.com/iskandr/parakeet/blob/master/examples/nanogpt_functional.py)):
+   plain dicts and tuples of NumPy arrays with every layer (layer norm, softmax,
+   multi-head attention, cross-entropy, and Adam) written inline in raw NumPy—no
+   `par.nn` or `par.optim` helpers at all.
+
+Run either version directly from a checkout:
 
 ```bash
-git clone https://github.com/iskandr/parakeet.git
-cd parakeet
-python -m pip install -e .
 python -m examples.nanogpt
+python -m examples.nanogpt_functional
 ```
 
-The text is embedded in the script. The default run trains on batches of 16
-sequences, each 32 characters long, for 60 steps.
+---
 
-## Normalize one position at a time
+## How `par.nn.Module` compiles Python objects
 
-One input sequence becomes a matrix of shape `(context, width)`. Each row holds
-one character's embedding. `LayerNorm` is a plain `@dataclass` with a `__call__`
-method that normalizes across the features of each row. Parakeet lowers
-`@dataclass` modules and their pure methods directly during compilation with no
-`PyObject` overhead. Later, each row passed to `softmax` holds attention scores
-from one position to every position in the sequence; subtracting the row
-maximum keeps the exponential stable.
+Parakeet does not require external `init()` factories or manual dataclass
+unpacking to compile neural networks. Any class inheriting from `par.nn.Module`
+(or setting `__parakeet_record__ = True`) is lowered at `@par.jit` and
+`par.value_and_grad` boundaries into a flat compile-time record of its
+`self.__dict__` attributes:
 
-```python
---8<-- "examples/nanogpt.py:gpt_setup"
-```
+* **Array attributes** (`weight`, `bias`, `gain`, `wpe`) become native typed
+  array parameters that receive gradients under `par.value_and_grad`, transfer
+  cleanly with `par.to_device`, and update via `par.tree_map_arrays` /
+  `par.optim`.
+* **Static attributes** (`heads`, `eps`, `activation`) become compile-time
+  constants—zero runtime memory and untouched by optimizers.
+* **Methods** (`__call__`, helper methods) inline completely during elaboration
+  with zero `PyObject` overhead.
 
-## Mix information across visible characters
+Because every layer in `par.nn` (`Linear`, `LayerNorm`, `Embedding`, `MLP`,
+`CausalSelfAttention`, `TransformerBlock`) is just plain NumPy under the hood,
+Parakeet's monoidal FlashAttention tiling, warp-row LayerNorm reduction, and
+rematerialized AD trigger automatically on both versions.
 
-`Block` groups one transformer layer's norms, attention projections (`wq`, `wk`,
-`wv`, `wo`), and feed-forward weights (`w1`, `b1`, `w2`, `b2`). Each attention
-head uses part of the model width, computes a `(context, context)` score matrix,
-masks future positions before softmax, and projects back through `wo`. The
-block adds the attention output to its input, runs a two-layer `tanh` MLP on
-each position, and adds that residual too.
+---
 
-```python
---8<-- "examples/nanogpt.py:gpt_attention"
-```
+## Model definition
 
-## Score one sequence, then a batch
+=== "With `par.nn` and `par.optim`"
 
-`NanoGPT.sequence_loss` embeds the token IDs (`self.wte[tokens] + self.wpe`),
-runs each block in `self.blocks`, projects to vocabulary logits with
-`self.ln_f(x) @ self.head`, and computes the mean negative log-probability of
-the next character at each position.
+    ```python
+    --8<-- "examples/nanogpt.py:gpt_model"
+    ```
 
-In `loss`, both `tokens` and `targets` have shape `(batch, context)`.
-`par.map` applies `model.sequence_loss` across every `(inp, tgt)` pair in the
-batch, and `np.mean` averages the per-sequence losses.
-`par.value_and_grad(loss)` compiles one native function returning both the
-scalar loss and a `NanoGPT` dataclass holding the gradient of every parameter
-array.
+=== "Minimalist functional from scratch"
 
-```python
---8<-- "examples/nanogpt.py:gpt_loss"
-```
+    ```python
+    --8<-- "examples/nanogpt_functional.py:gpt_functional_primitives"
+    ```
 
-## Build the model
+    ```python
+    --8<-- "examples/nanogpt_functional.py:gpt_functional_loss"
+    ```
 
-`init` constructs a `NanoGPT` instance containing the token and position
-embedding tables, a tuple of `Block` modules, the final `LayerNorm`, and the
-output projection `head`. With the defaults, `wte` has shape `(vocab, 32)` and
-`head` has shape `(32, vocab)`.
+---
 
-```python
---8<-- "examples/nanogpt.py:gpt_params"
-```
+## Tokenization and training loop
 
-## Update every parameter with Adam
-
-`loss_and_grad` returns the batch loss and a `NanoGPT` gradient tree matching
-the structure of `model`. `tree_map` walks matching tuples and dataclass fields
-together so Adam can update embeddings, norms, biases, and projections with the
-same few lines. `m` tracks the moving average of gradients and `v` tracks the
-moving average of squared gradients.
-
-```python
---8<-- "examples/nanogpt.py:gpt_update"
-```
-
-## Train on shifted character windows
-
-`main` assigns one integer ID to each distinct character in `TEXT`. For a
-sample starting at offset `i`, `tokens` starts at `i` and `targets` starts at
-`i + 1`. Stacking those windows gives the two arrays consumed by `par.map`.
-The lower triangle of `causal` includes the diagonal, so each position can read
-its own input when predicting the following character.
+`par.Vocab.from_text(TEXT)` builds a compact character vocabulary backed by a
+256-entry lookup table—the exact same categorical encoding pattern as
+`par.Alphabet("ACGT")` in the [bioinformatics gallery](../bioinformatics.md).
+Calling `vocab.encode(TEXT)` returns a 1D `int64` token array ready for
+windowed batching.
 
 ```python
 --8<-- "examples/nanogpt.py:gpt_train"
 ```
 
-The first training step compiles the forward and gradient kernels; subsequent
-steps reuse the compiled native code. With `--verbose` (the default when run as
-a script), `main` prints the cross-entropy loss at steps 1, 20, 40, and 60 and
-asserts that training makes progress (final loss below 80% of step 1). Using
-the fixed `seed=0` above, the printed loss drops from **3.173** at step 1 to
-**2.307** (step 20), **1.796** (step 40), and **1.250** (step 60) on GPU (with
-nearly identical values on CPU).
+### Fusing the optimizer step on GPU
 
-For larger four-head training runs where the Adam update is also compiled into
-the training step, see the [nanoGPT training benchmark](../release-benchmarks.md#end-to-end-nanogpt-training-nvidia-l4).
-The compact two-head walkthrough above keeps Adam in plain Python so every line
-is easy to follow.
+In the walkthrough above, `optimizer.update(model, grads)` runs in Python so
+each step is easy to inspect. When training on a GPU, wrap both
+`par.value_and_grad(loss)` and `par.optim.adam_step` inside one `@par.jit`
+function and keep `(model, m, v)` resident on the device with `par.to_device`:
+
+```python
+@par.jit(backend="cuda", tensor_cores=True)
+def train_step(model, m, v, step, tokens, targets, mask):
+  value, grads = par.value_and_grad(loss)(model, tokens, targets, mask)
+  model, m, v = par.optim.adam_step(model, grads, m, v, step, lr=3e-3)
+  return value, model, m, v
+```
+
+That compiles forward, backward, and Adam into a single zero-round-trip device
+step. See the [nanoGPT GPU benchmarks](../release-benchmarks.md#end-to-end-nanogpt-training-nvidia-l4)
+for full timings comparing Parakeet FP32/TF32, PyTorch (`eager`, `SDPA`,
+`torch.compile`), and JAX.

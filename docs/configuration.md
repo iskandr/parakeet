@@ -20,7 +20,8 @@ names raise `AttributeError` listing valid settings.
 | `device_threshold` | `32768` | `PARAKEET_DEVICE_THRESHOLD` | Minimum work (`elements × inner_iters`) to dispatch a loop to GPU (also requires `≥ 1024` elements) |
 | `device_reduce_chunks` | `8192` | – | Number of partial results for GPU reductions |
 | `device_fallback` | `"warn"` | `PARAKEET_DEVICE_FALLBACK` | Action when a loop cannot run on GPU: `"warn"`, `"silent"`, or `"error"` |
-| `tensor_cores` | `False` | `PARAKEET_TENSOR_CORES` | Enable TF32 Tensor Cores (`nvcuda::wmma`) on CUDA `sm_80+` (Metal FP32 `simdgroup_matrix` is exact IEEE FP32 and always enabled) |
+| `tensor_cores` | `False` | `PARAKEET_TENSOR_CORES` | Enable TF32 Tensor Cores (inline PTX `mma.sync`) on CUDA `sm_80+` (Metal FP32 `simdgroup_matrix` is exact IEEE FP32 and always enabled) |
+| `cuda_compiler` | `"nvrtc"` | `PARAKEET_CUDA_COMPILER` | CUDA kernel compiler: `"nvrtc"` (default, zero-header NVRTC + CUBIN cache), `"ptx"` (direct PTX 7.8 + NVRTC fallback), or `"nvcc"` (`nvcc --cubin -O3`) |
 | `cc` | auto | `PARAKEET_CC`, `CC` | C compiler executable |
 | `cflags` | `()` | – | Extra C compiler flags |
 | `opt_level` | `3` | – | C compiler optimization level (`-O3`) |

@@ -70,10 +70,22 @@ def distances(X, C):
   return par.allpairs(lambda a, b: np.sum((a - b) ** 2), X, C)
 ```
 
-Kernels compile at runtime via CuPy's `RawKernel` (NVRTC), so only an NVIDIA
-driver and matching CuPy wheel are required (no standalone `nvcc` install). All
-dtypes including `float64` are supported. Enable TF32 Tensor Cores (`nvcuda::wmma`)
-on `sm_80+` GPUs with `par.config.tensor_cores = True` (or
+Kernels are zero-header CUDA C++ (TF32 Tensor Cores use inline PTX
+`mma.sync.aligned.m16n8k8` with register-direct epilogues, avoiding `#include
+<mma.h>`) and compiled CUBIN binaries are cached persistently on disk under
+`config.cache_dir`. Select the CUDA kernel compiler via `config.cuda_compiler`
+(`PARAKEET_CUDA_COMPILER`):
+
+* **`"nvrtc"` (default):** compiles via NVRTC with LLVM IR optimizations and
+  caches CUBINs on disk. Requires only an NVIDIA driver and matching CuPy wheel.
+* **`"ptx"`:** emits PTX 7.8 directly from Parakeet's flat `ParLoop` IR for
+  elementwise, loop, atomic, and warp-reduce kernels (loaded through the CUDA
+  driver JIT), falling back to NVRTC for tiled GEMMs and libm ops.
+* **`"nvcc"`:** compiles via standalone `nvcc --cubin -O3` when installed on
+  `PATH`.
+
+All dtypes including `float64` are supported. Enable TF32 Tensor Cores on
+`sm_80+` GPUs with `par.config.tensor_cores = True` (or
 `PARAKEET_TENSOR_CORES=1`).
 
 *(TPUs are not supported: TPUs require XLA whole-program static-shape graphs,

@@ -4496,11 +4496,14 @@ class Elaborator(ArrayMixin):
         return None
       from ..lib import numpy_lib
 
+      np_sum = getattr(numpy_lib, "sum_", None)
       if (
         fn_val is builtins.sum
         or fn_val is _np.sum
-        or fn_val is numpy_lib.sum
-        or getattr(fn_val, "impl", None) is getattr(numpy_lib.sum, "impl", object())
+        or (
+          np_sum is not None
+          and (fn_val is np_sum or getattr(fn_val, "impl", None) is getattr(np_sum, "impl", object()))
+        )
       ):
         sum_arg = elt.args[0]
     if sum_arg is None:

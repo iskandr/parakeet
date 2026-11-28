@@ -1,23 +1,20 @@
-"""A small convolutional network trained with parakeet.value_and_grad.
+"""A small convolutional network trained with ``par.nn.Module`` and ``par.optim.sgd_step``.
 
-Convolution is written the way it is defined: for every offset of the kernel,
-a matrix product between the filters and a shifted view of the image. The loop
-over offsets runs over the shape of the kernel, so it is unrolled, and each
-specialization of the network is for one kernel size.
+Convolution is written directly as a sum of shifted matrix products over the
+``K x K`` kernel offsets. Because the kernel size is static, the inner offset
+loop unrolls cleanly during compilation.
 """
-
-from dataclasses import dataclass, fields
 
 import numpy as np
 
 import parakeet as par
 
 
-def conv(x, w):
+def conv2d(x, w):
   """Valid cross-correlation: x is (C, H, W), w is (F, C, K, K)."""
   c, k = w.shape[1], w.shape[2]
   rows, cols = x.shape[1] - k + 1, x.shape[2] - k + 1
-  out = np.zeros((w.shape[0], rows * cols))
+  out = np.zeros((w.shape[0], rows * cols), dtype=x.dtype)
   for i in range(k):
     for j in range(k):
       patch = x[:, i : i + rows, j : j + cols].reshape(c, rows * cols)
@@ -25,30 +22,29 @@ def conv(x, w):
   return out.reshape(w.shape[0], rows, cols)
 
 
-def pool(x):
+def avg_pool2x2(x):
   """2x2 mean pooling of (F, H, W)."""
   f, rows, cols = x.shape[0], x.shape[1] // 2, x.shape[2] // 2
   return np.mean(x[:, : 2 * rows, : 2 * cols].reshape(f, rows, 2, cols, 2), axis=(2, 4))
 
 
-@dataclass
-class ConvNet:
-  w1: np.ndarray
-  b1: np.ndarray
-  w2: np.ndarray
-  b2: np.ndarray
-  wd: np.ndarray
-  bd: np.ndarray
+class ConvNet(par.nn.Module):
+  def __init__(self, *, size=16, filters=6, classes=3, rng=None):
+    g = np.random.default_rng(0) if rng is None else rng
+    after = ((size - 2) // 2 - 2) // 2
+    self.w1 = g.normal(0.0, 0.9, (filters, 1, 3, 3))
+    self.b1 = np.zeros(filters)
+    self.w2 = g.normal(0.0, 0.3, (filters, filters, 3, 3))
+    self.b2 = np.zeros(filters)
+    self.head = par.nn.Linear(filters * after * after, classes, rng=g, dtype=np.float64, std=0.3)
 
   def __call__(self, image):
-    h = pool(np.maximum(conv(image, self.w1) + self.b1[:, None, None], 0.0))
-    h = pool(np.maximum(conv(h, self.w2) + self.b2[:, None, None], 0.0))
-    return h.ravel() @ self.wd + self.bd
+    h = avg_pool2x2(par.nn.relu(conv2d(image, self.w1) + self.b1[:, None, None]))
+    h = avg_pool2x2(par.nn.relu(conv2d(h, self.w2) + self.b2[:, None, None]))
+    return self.head(h.ravel())
 
   def image_loss(self, image, label):
-    z = self(image)
-    z = z - np.max(z)
-    return np.log(np.sum(np.exp(z))) - z[label]
+    return -par.nn.log_softmax(self(image), axis=0)[label]
 
 
 def loss(model, images, labels):
@@ -74,27 +70,15 @@ def bars(n, size, rng):
   return images, labels
 
 
-def init(rng, size=16, filters=6, classes=3):
-  after = ((size - 2) // 2 - 2) // 2
-  return ConvNet(
-    w1=rng.normal(0.0, 0.9, (filters, 1, 3, 3)),
-    b1=np.zeros(filters),
-    w2=rng.normal(0.0, 0.3, (filters, filters, 3, 3)),
-    b2=np.zeros(filters),
-    wd=rng.normal(0.0, 0.3, (filters * after * after, classes)),
-    bd=np.zeros(classes),
-  )
-
-
 def main(steps=60, batch=32, rate=0.3, seed=0):
   rng = np.random.default_rng(seed)
-  model = init(rng)
+  model = ConvNet(size=16, filters=6, classes=3, rng=rng)
   step = par.value_and_grad(loss)
   first = None
   for _ in range(steps):
     images, labels = bars(batch, 16, rng)
     value, grads = step(model, images, labels)
-    model = ConvNet(*(getattr(model, f.name) - rate * getattr(grads, f.name) for f in fields(model)))
+    model = par.optim.sgd_step(model, grads, lr=rate)
     first = value if first is None else first
   images, labels = bars(200, 16, rng)
   accuracy = float(np.mean(predict(model, images) == labels))
